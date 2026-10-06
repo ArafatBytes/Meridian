@@ -1,0 +1,607 @@
+name,district,division,latitude,longitude,email,phone
+"Ramna Police Station","Dhaka","Dhaka",23.8103,90.4125,noorlabib@iut-dhaka.edu,01886709707
+"Motijheel Police Station","Dhaka","Dhaka",23.8592,90.4302,noorlabib@iut-dhaka.edu,01886709707
+"Gulshan Police Station","Dhaka","Dhaka",23.7621,90.3951,noorlabib@iut-dhaka.edu,01886709707
+"Dhanmondi Police Station","Dhaka","Dhaka",23.8205,90.3751,noorlabib@iut-dhaka.edu,01886709707
+"Mirpur Police Station","Dhaka","Dhaka",23.7838,90.4785,noorlabib@iut-dhaka.edu,01886709707
+"Pallabi Police Station","Dhaka","Dhaka",23.8849,90.3689,noorlabib@iut-dhaka.edu,01886709707
+"Uttara Police Station","Dhaka","Dhaka",23.8832,90.3384,noorlabib@iut-dhaka.edu,01886709707
+"Cantonment Police Station","Dhaka","Dhaka",23.8174,90.3455,noorlabib@iut-dhaka.edu,01886709707
+"Tejgaon Police Station","Dhaka","Dhaka",23.7572,90.3925,noorlabib@iut-dhaka.edu,01886709707
+"Badda Police Station","Dhaka","Dhaka",23.7940,90.4533,noorlabib@iut-dhaka.edu,01886709707
+"Khilgaon Police Station","Dhaka","Dhaka",23.8743,90.4767,noorlabib@iut-dhaka.edu,01886709707
+"Shahbagh Police Station","Dhaka","Dhaka",23.8829,90.3940,noorlabib@iut-dhaka.edu,01886709707
+"Lalbagh Police Station","Dhaka","Dhaka",23.7414,90.4113,noorlabib@iut-dhaka.edu,01886709707
+"Kotwali Police Station","Dhaka","Dhaka",23.7787,90.3753,noorlabib@iut-dhaka.edu,01886709707
+"Sutrapur Police Station","Dhaka","Dhaka",23.8566,90.4517,noorlabib@iut-dhaka.edu,01886709707
+"Demra Police Station","Dhaka","Dhaka",23.7900,90.4294,noorlabib@iut-dhaka.edu,01886709707
+"Jatrabari Police Station","Dhaka","Dhaka",23.8671,90.3685,noorlabib@iut-dhaka.edu,01886709707
+"Kadamtali Police Station","Dhaka","Dhaka",23.7672,90.3769,noorlabib@iut-dhaka.edu,01886709707
+"Shyampur Police Station","Dhaka","Dhaka",23.7865,90.3375,noorlabib@iut-dhaka.edu,01886709707
+"Sabujbagh Police Station","Dhaka","Dhaka",23.8573,90.3929,noorlabib@iut-dhaka.edu,01886709707
+"Mohammadpur Police Station","Dhaka","Dhaka",23.8357,90.4023,noorlabib@iut-dhaka.edu,01886709707
+"Adabor Police Station","Dhaka","Dhaka",23.7872,90.4801,noorlabib@iut-dhaka.edu,01886709707
+"Sher-e-Bangla Nagar Police Station","Dhaka","Dhaka",23.7939,90.3574,noorlabib@iut-dhaka.edu,01886709707
+"Hazaribagh Police Station","Dhaka","Dhaka",23.7677,90.4463,noorlabib@iut-dhaka.edu,01886709707
+"New Market Police Station","Dhaka","Dhaka",23.7358,90.3952,noorlabib@iut-dhaka.edu,01886709707
+"Chawkbazar Police Station","Dhaka","Dhaka",23.7641,90.3940,noorlabib@iut-dhaka.edu,01886709707
+"Bangshal Police Station","Dhaka","Dhaka",23.8628,90.4503,noorlabib@iut-dhaka.edu,01886709707
+"Gendaria Police Station","Dhaka","Dhaka",23.8407,90.4860,noorlabib@iut-dhaka.edu,01886709707
+"Wari Police Station","Dhaka","Dhaka",23.8268,90.4199,noorlabib@iut-dhaka.edu,01886709707
+"Kamrangirchar Police Station","Dhaka","Dhaka",23.8516,90.4223,noorlabib@iut-dhaka.edu,01886709707
+"Turag Police Station","Dhaka","Dhaka",23.7754,90.4498,noorlabib@iut-dhaka.edu,01886709707
+"Kafrul Police Station","Dhaka","Dhaka",23.7884,90.3917,noorlabib@iut-dhaka.edu,01886709707
+"Shah Ali Police Station","Dhaka","Dhaka",23.8088,90.3618,noorlabib@iut-dhaka.edu,01886709707
+"Dakshinkhan Police Station","Dhaka","Dhaka",23.8239,90.4744,noorlabib@iut-dhaka.edu,01886709707
+"Uttarkhan Police Station","Dhaka","Dhaka",23.8695,90.3629,noorlabib@iut-dhaka.edu,01886709707
+"Bhatara Police Station","Dhaka","Dhaka",23.7775,90.4033,noorlabib@iut-dhaka.edu,01886709707
+"Khilkhet Police Station","Dhaka","Dhaka",23.8003,90.4615,noorlabib@iut-dhaka.edu,01886709707
+"Vatara Police Station","Dhaka","Dhaka",23.8770,90.3910,noorlabib@iut-dhaka.edu,01886709707
+"Banani Police Station","Dhaka","Dhaka",23.8052,90.4324,noorlabib@iut-dhaka.edu,01886709707
+"Rampura Police Station","Dhaka","Dhaka",23.8711,90.3790,noorlabib@iut-dhaka.edu,01886709707
+"Hatirjheel Police Station","Dhaka","Dhaka",23.8625,90.3529,noorlabib@iut-dhaka.edu,01886709707
+"Mugda Police Station","Dhaka","Dhaka",23.7445,90.3640,noorlabib@iut-dhaka.edu,01886709707
+"Rupnagar Police Station","Dhaka","Dhaka",23.8358,90.4100,noorlabib@iut-dhaka.edu,01886709707
+"Bhashantek Police Station","Dhaka","Dhaka",23.8313,90.4433,noorlabib@iut-dhaka.edu,01886709707
+"Darussalam Police Station","Dhaka","Dhaka",23.7621,90.3420,noorlabib@iut-dhaka.edu,01886709707
+"Gandaria Police Station","Dhaka","Dhaka",23.8205,90.4813,noorlabib@iut-dhaka.edu,01886709707
+"Hazaribagh Police Station","Dhaka","Dhaka",23.8067,90.4076,noorlabib@iut-dhaka.edu,01886709707
+"Kalabagan Police Station","Dhaka","Dhaka",23.7977,90.4155,noorlabib@iut-dhaka.edu,01886709707
+"Paltan Police Station","Dhaka","Dhaka",23.7796,90.3851,noorlabib@iut-dhaka.edu,01886709707
+"Shahjahanpur Police Station","Dhaka","Dhaka",23.7621,90.3577,noorlabib@iut-dhaka.edu,01886709707
+"Vatara Police Station","Dhaka","Dhaka",23.8816,90.3817,noorlabib@iut-dhaka.edu,01886709707
+"Gazipur Sadar Police Station","Gazipur","Dhaka",24.0023,90.4264,noorlabib@iut-dhaka.edu,01886709707
+"Tongi Police Station","Gazipur","Dhaka",23.9614,90.4486,noorlabib@iut-dhaka.edu,01886709707
+"Kaliakair Police Station","Gazipur","Dhaka",24.0591,90.4269,noorlabib@iut-dhaka.edu,01886709707
+"Kapasia Police Station","Gazipur","Dhaka",23.9482,90.4318,noorlabib@iut-dhaka.edu,01886709707
+"Sreepur Police Station","Gazipur","Dhaka",23.9496,90.3785,noorlabib@iut-dhaka.edu,01886709707
+"Kaliganj Police Station","Gazipur","Dhaka",24.0510,90.3624,noorlabib@iut-dhaka.edu,01886709707
+"Joydebpur Police Station","Gazipur","Dhaka",23.9523,90.4988,noorlabib@iut-dhaka.edu,01886709707
+"Gacha Police Station","Gazipur","Dhaka",24.0250,90.4823,noorlabib@iut-dhaka.edu,01886709707
+"Bason Police Station","Gazipur","Dhaka",24.0555,90.4063,noorlabib@iut-dhaka.edu,01886709707
+"Konabari Police Station","Gazipur","Dhaka",24.0260,90.4527,noorlabib@iut-dhaka.edu,01886709707
+"Kashimpur Police Station","Gazipur","Dhaka",24.0699,90.4705,noorlabib@iut-dhaka.edu,01886709707
+"Pubail Police Station","Gazipur","Dhaka",24.0637,90.3818,noorlabib@iut-dhaka.edu,01886709707
+"Narayanganj Sadar Police Station","Narayanganj","Dhaka",23.6337,90.4965,noorlabib@iut-dhaka.edu,01886709707
+"Fatullah Police Station","Narayanganj","Dhaka",23.6254,90.5004,noorlabib@iut-dhaka.edu,01886709707
+"Siddhirganj Police Station","Narayanganj","Dhaka",23.6508,90.4570,noorlabib@iut-dhaka.edu,01886709707
+"Bandar Police Station","Narayanganj","Dhaka",23.6855,90.4828,noorlabib@iut-dhaka.edu,01886709707
+"Rupganj Police Station","Narayanganj","Dhaka",23.5590,90.4772,noorlabib@iut-dhaka.edu,01886709707
+"Araihazar Police Station","Narayanganj","Dhaka",23.6761,90.4909,noorlabib@iut-dhaka.edu,01886709707
+"Sonargaon Police Station","Narayanganj","Dhaka",23.6991,90.4731,noorlabib@iut-dhaka.edu,01886709707
+"Tangail Sadar Police Station","Tangail","Dhaka",24.2636,89.9179,noorlabib@iut-dhaka.edu,01886709707
+"Sakhipur Police Station","Tangail","Dhaka",24.2364,89.9855,noorlabib@iut-dhaka.edu,01886709707
+"Basail Police Station","Tangail","Dhaka",24.2059,89.9612,noorlabib@iut-dhaka.edu,01886709707
+"Madhupur Police Station","Tangail","Dhaka",24.2628,89.8868,noorlabib@iut-dhaka.edu,01886709707
+"Ghatail Police Station","Tangail","Dhaka",24.2497,89.9545,noorlabib@iut-dhaka.edu,01886709707
+"Kalihati Police Station","Tangail","Dhaka",24.3139,89.9359,noorlabib@iut-dhaka.edu,01886709707
+"Nagarpur Police Station","Tangail","Dhaka",24.2994,89.8814,noorlabib@iut-dhaka.edu,01886709707
+"Mirzapur Police Station","Tangail","Dhaka",24.1942,89.8655,noorlabib@iut-dhaka.edu,01886709707
+"Gopalpur Police Station","Tangail","Dhaka",24.3045,89.8821,noorlabib@iut-dhaka.edu,01886709707
+"Delduar Police Station","Tangail","Dhaka",24.3245,89.8449,noorlabib@iut-dhaka.edu,01886709707
+"Bhuapur Police Station","Tangail","Dhaka",24.2251,89.8876,noorlabib@iut-dhaka.edu,01886709707
+"Dhanbari Police Station","Tangail","Dhaka",24.3180,89.9579,noorlabib@iut-dhaka.edu,01886709707
+"Narsingdi Sadar Police Station","Narsingdi","Dhaka",23.9322,90.7154,noorlabib@iut-dhaka.edu,01886709707
+"Belabo Police Station","Narsingdi","Dhaka",23.9034,90.7096,noorlabib@iut-dhaka.edu,01886709707
+"Monohardi Police Station","Narsingdi","Dhaka",23.9495,90.7674,noorlabib@iut-dhaka.edu,01886709707
+"Palash Police Station","Narsingdi","Dhaka",23.9764,90.6832,noorlabib@iut-dhaka.edu,01886709707
+"Raipura Police Station","Narsingdi","Dhaka",23.8681,90.7901,noorlabib@iut-dhaka.edu,01886709707
+"Shibpur Police Station","Narsingdi","Dhaka",23.8920,90.7099,noorlabib@iut-dhaka.edu,01886709707
+"Manikganj Sadar Police Station","Manikganj","Dhaka",23.8644,90.0047,noorlabib@iut-dhaka.edu,01886709707
+"Singair Police Station","Manikganj","Dhaka",23.8759,90.0177,noorlabib@iut-dhaka.edu,01886709707
+"Shibalaya Police Station","Manikganj","Dhaka",23.9194,90.0048,noorlabib@iut-dhaka.edu,01886709707
+"Saturia Police Station","Manikganj","Dhaka",23.8492,90.0745,noorlabib@iut-dhaka.edu,01886709707
+"Harirampur Police Station","Manikganj","Dhaka",23.7945,89.9347,noorlabib@iut-dhaka.edu,01886709707
+"Ghior Police Station","Manikganj","Dhaka",23.8029,90.0078,noorlabib@iut-dhaka.edu,01886709707
+"Daulatpur Police Station","Manikganj","Dhaka",23.8290,90.0486,noorlabib@iut-dhaka.edu,01886709707
+"Munshiganj Sadar Police Station","Munshiganj","Dhaka",23.5422,90.5305,noorlabib@iut-dhaka.edu,01886709707
+"Sreenagar Police Station","Munshiganj","Dhaka",23.5603,90.5014,noorlabib@iut-dhaka.edu,01886709707
+"Sirajdikhan Police Station","Munshiganj","Dhaka",23.6152,90.5446,noorlabib@iut-dhaka.edu,01886709707
+"Louhajang Police Station","Munshiganj","Dhaka",23.6144,90.4991,noorlabib@iut-dhaka.edu,01886709707
+"Gajaria Police Station","Munshiganj","Dhaka",23.4926,90.5588,noorlabib@iut-dhaka.edu,01886709707
+"Tongibari Police Station","Munshiganj","Dhaka",23.5614,90.4907,noorlabib@iut-dhaka.edu,01886709707
+"Faridpur Sadar Police Station","Faridpur","Dhaka",23.6071,89.8429,noorlabib@iut-dhaka.edu,01886709707
+"Boalmari Police Station","Faridpur","Dhaka",23.5456,89.8695,noorlabib@iut-dhaka.edu,01886709707
+"Alfadanga Police Station","Faridpur","Dhaka",23.6690,89.8787,noorlabib@iut-dhaka.edu,01886709707
+"Madhukhali Police Station","Faridpur","Dhaka",23.6263,89.8138,noorlabib@iut-dhaka.edu,01886709707
+"Bhanga Police Station","Faridpur","Dhaka",23.5434,89.8120,noorlabib@iut-dhaka.edu,01886709707
+"Nagarkanda Police Station","Faridpur","Dhaka",23.6156,89.9051,noorlabib@iut-dhaka.edu,01886709707
+"Charbhadrasan Police Station","Faridpur","Dhaka",23.5828,89.9048,noorlabib@iut-dhaka.edu,01886709707
+"Sadarpur Police Station","Faridpur","Dhaka",23.6665,89.7710,noorlabib@iut-dhaka.edu,01886709707
+"Saltha Police Station","Faridpur","Dhaka",23.6540,89.8556,noorlabib@iut-dhaka.edu,01886709707
+"Gopalganj Sadar Police Station","Gopalganj","Dhaka",23.0051,89.8266,noorlabib@iut-dhaka.edu,01886709707
+"Kashiani Police Station","Gopalganj","Dhaka",22.9789,89.7906,noorlabib@iut-dhaka.edu,01886709707
+"Kotalipara Police Station","Gopalganj","Dhaka",23.0180,89.9000,noorlabib@iut-dhaka.edu,01886709707
+"Muksudpur Police Station","Gopalganj","Dhaka",23.0171,89.8556,noorlabib@iut-dhaka.edu,01886709707
+"Tungipara Police Station","Gopalganj","Dhaka",23.0467,89.7519,noorlabib@iut-dhaka.edu,01886709707
+"Madaripur Sadar Police Station","Madaripur","Dhaka",23.1641,90.1897,noorlabib@iut-dhaka.edu,01886709707
+"Kalkini Police Station","Madaripur","Dhaka",23.2261,90.2366,noorlabib@iut-dhaka.edu,01886709707
+"Rajoir Police Station","Madaripur","Dhaka",23.1331,90.1578,noorlabib@iut-dhaka.edu,01886709707
+"Shibchar Police Station","Madaripur","Dhaka",23.1524,90.1775,noorlabib@iut-dhaka.edu,01886709707
+"Rajbari Sadar Police Station","Rajbari","Dhaka",23.7574,89.6445,noorlabib@iut-dhaka.edu,01886709707
+"Goalanda Police Station","Rajbari","Dhaka",23.7225,89.5916,noorlabib@iut-dhaka.edu,01886709707
+"Pangsha Police Station","Rajbari","Dhaka",23.7356,89.5932,noorlabib@iut-dhaka.edu,01886709707
+"Baliakandi Police Station","Rajbari","Dhaka",23.7488,89.6193,noorlabib@iut-dhaka.edu,01886709707
+"Kalukhali Police Station","Rajbari","Dhaka",23.7174,89.6968,noorlabib@iut-dhaka.edu,01886709707
+"Shariatpur Sadar Police Station","Shariatpur","Dhaka",23.2423,90.4348,noorlabib@iut-dhaka.edu,01886709707
+"Naria Police Station","Shariatpur","Dhaka",23.3019,90.3714,noorlabib@iut-dhaka.edu,01886709707
+"Zajira Police Station","Shariatpur","Dhaka",23.1852,90.5086,noorlabib@iut-dhaka.edu,01886709707
+"Gosairhat Police Station","Shariatpur","Dhaka",23.2490,90.4566,noorlabib@iut-dhaka.edu,01886709707
+"Bhedarganj Police Station","Shariatpur","Dhaka",23.2540,90.4893,noorlabib@iut-dhaka.edu,01886709707
+"Damudya Police Station","Shariatpur","Dhaka",23.2016,90.4960,noorlabib@iut-dhaka.edu,01886709707
+"Kishoreganj Sadar Police Station","Kishoreganj","Dhaka",24.4449,90.7766,noorlabib@iut-dhaka.edu,01886709707
+"Hossainpur Police Station","Kishoreganj","Dhaka",24.3993,90.8174,noorlabib@iut-dhaka.edu,01886709707
+"Pakundia Police Station","Kishoreganj","Dhaka",24.4732,90.7218,noorlabib@iut-dhaka.edu,01886709707
+"Katiadi Police Station","Kishoreganj","Dhaka",24.3831,90.7410,noorlabib@iut-dhaka.edu,01886709707
+"Karimganj Police Station","Kishoreganj","Dhaka",24.5013,90.7214,noorlabib@iut-dhaka.edu,01886709707
+"Tarail Police Station","Kishoreganj","Dhaka",24.5106,90.8494,noorlabib@iut-dhaka.edu,01886709707
+"Itna Police Station","Kishoreganj","Dhaka",24.4315,90.7323,noorlabib@iut-dhaka.edu,01886709707
+"Mithamain Police Station","Kishoreganj","Dhaka",24.5030,90.7608,noorlabib@iut-dhaka.edu,01886709707
+"Austagram Police Station","Kishoreganj","Dhaka",24.3810,90.7071,noorlabib@iut-dhaka.edu,01886709707
+"Nikli Police Station","Kishoreganj","Dhaka",24.4842,90.8023,noorlabib@iut-dhaka.edu,01886709707
+"Bajitpur Police Station","Kishoreganj","Dhaka",24.4674,90.7207,noorlabib@iut-dhaka.edu,01886709707
+"Kuliarchar Police Station","Kishoreganj","Dhaka",24.5146,90.7421,noorlabib@iut-dhaka.edu,01886709707
+"Bhairab Police Station","Kishoreganj","Dhaka",24.3767,90.8197,noorlabib@iut-dhaka.edu,01886709707
+"Kotwali Police Station","Chattogram","Chattogram",22.3569,91.7832,noorlabib@iut-dhaka.edu,01886709707
+"Panchlaish Police Station","Chattogram","Chattogram",22.3203,91.8139,noorlabib@iut-dhaka.edu,01886709707
+"Double Mooring Police Station","Chattogram","Chattogram",22.3957,91.8399,noorlabib@iut-dhaka.edu,01886709707
+"Pahartali Police Station","Chattogram","Chattogram",22.3493,91.7625,noorlabib@iut-dhaka.edu,01886709707
+"Khulshi Police Station","Chattogram","Chattogram",22.3305,91.7884,noorlabib@iut-dhaka.edu,01886709707
+"Patenga Police Station","Chattogram","Chattogram",22.4156,91.8028,noorlabib@iut-dhaka.edu,01886709707
+"Halishahar Police Station","Chattogram","Chattogram",22.4028,91.7581,noorlabib@iut-dhaka.edu,01886709707
+"Bandar Police Station","Chattogram","Chattogram",22.3838,91.8443,noorlabib@iut-dhaka.edu,01886709707
+"Chandgaon Police Station","Chattogram","Chattogram",22.4144,91.7992,noorlabib@iut-dhaka.edu,01886709707
+"Karnaphuli Police Station","Chattogram","Chattogram",22.4296,91.7451,noorlabib@iut-dhaka.edu,01886709707
+"Bakalia Police Station","Chattogram","Chattogram",22.3618,91.7339,noorlabib@iut-dhaka.edu,01886709707
+"Akbarshah Police Station","Chattogram","Chattogram",22.3400,91.7154,noorlabib@iut-dhaka.edu,01886709707
+"Bayazid Bostami Police Station","Chattogram","Chattogram",22.3449,91.7828,noorlabib@iut-dhaka.edu,01886709707
+"EPZ Police Station","Chattogram","Chattogram",22.3842,91.7840,noorlabib@iut-dhaka.edu,01886709707
+"Sadarghat Police Station","Chattogram","Chattogram",22.4143,91.7445,noorlabib@iut-dhaka.edu,01886709707
+"Raozan Police Station","Chattogram","Chattogram",22.4010,91.7986,noorlabib@iut-dhaka.edu,01886709707
+"Rangunia Police Station","Chattogram","Chattogram",22.3057,91.7707,noorlabib@iut-dhaka.edu,01886709707
+"Fatikchhari Police Station","Chattogram","Chattogram",22.3515,91.8072,noorlabib@iut-dhaka.edu,01886709707
+"Hathazari Police Station","Chattogram","Chattogram",22.3066,91.8555,noorlabib@iut-dhaka.edu,01886709707
+"Mirsharai Police Station","Chattogram","Chattogram",22.3486,91.8015,noorlabib@iut-dhaka.edu,01886709707
+"Sitakunda Police Station","Chattogram","Chattogram",22.3042,91.7097,noorlabib@iut-dhaka.edu,01886709707
+"Lohagara Police Station","Chattogram","Chattogram",22.3714,91.7318,noorlabib@iut-dhaka.edu,01886709707
+"Satkania Police Station","Chattogram","Chattogram",22.4262,91.8338,noorlabib@iut-dhaka.edu,01886709707
+"Boalkhali Police Station","Chattogram","Chattogram",22.3142,91.7191,noorlabib@iut-dhaka.edu,01886709707
+"Anwara Police Station","Chattogram","Chattogram",22.2925,91.7466,noorlabib@iut-dhaka.edu,01886709707
+"Banshkhali Police Station","Chattogram","Chattogram",22.4197,91.7099,noorlabib@iut-dhaka.edu,01886709707
+"Patiya Police Station","Chattogram","Chattogram",22.4280,91.7873,noorlabib@iut-dhaka.edu,01886709707
+"Sandwip Police Station","Chattogram","Chattogram",22.3928,91.8273,noorlabib@iut-dhaka.edu,01886709707
+"Bhujpur Police Station","Chattogram","Chattogram",22.3866,91.7867,noorlabib@iut-dhaka.edu,01886709707
+"Jorarganj Police Station","Chattogram","Chattogram",22.3979,91.7911,noorlabib@iut-dhaka.edu,01886709707
+"Cox's Bazar Sadar Police Station","Cox's Bazar","Chattogram",21.4272,92.0058,noorlabib@iut-dhaka.edu,01886709707
+"Chakaria Police Station","Cox's Bazar","Chattogram",21.4263,91.9440,noorlabib@iut-dhaka.edu,01886709707
+"Maheshkhali Police Station","Cox's Bazar","Chattogram",21.4488,92.0134,noorlabib@iut-dhaka.edu,01886709707
+"Teknaf Police Station","Cox's Bazar","Chattogram",21.4016,92.0405,noorlabib@iut-dhaka.edu,01886709707
+"Ramu Police Station","Cox's Bazar","Chattogram",21.4286,91.9821,noorlabib@iut-dhaka.edu,01886709707
+"Kutubdia Police Station","Cox's Bazar","Chattogram",21.4954,92.0446,noorlabib@iut-dhaka.edu,01886709707
+"Ukhiya Police Station","Cox's Bazar","Chattogram",21.3759,91.9601,noorlabib@iut-dhaka.edu,01886709707
+"Pekua Police Station","Cox's Bazar","Chattogram",21.4056,91.9718,noorlabib@iut-dhaka.edu,01886709707
+"Cumilla Sadar Police Station","Cumilla","Chattogram",23.4607,91.1809,noorlabib@iut-dhaka.edu,01886709707
+"Laksam Police Station","Cumilla","Chattogram",23.5111,91.2056,noorlabib@iut-dhaka.edu,01886709707
+"Debidwar Police Station","Cumilla","Chattogram",23.5054,91.1133,noorlabib@iut-dhaka.edu,01886709707
+"Muradnagar Police Station","Cumilla","Chattogram",23.5332,91.2300,noorlabib@iut-dhaka.edu,01886709707
+"Daudkandi Police Station","Cumilla","Chattogram",23.3968,91.1305,noorlabib@iut-dhaka.edu,01886709707
+"Chauddagram Police Station","Cumilla","Chattogram",23.4830,91.1376,noorlabib@iut-dhaka.edu,01886709707
+"Brahmanpara Police Station","Cumilla","Chattogram",23.5090,91.1455,noorlabib@iut-dhaka.edu,01886709707
+"Burichang Police Station","Cumilla","Chattogram",23.5275,91.2367,noorlabib@iut-dhaka.edu,01886709707
+"Chandina Police Station","Cumilla","Chattogram",23.5110,91.1278,noorlabib@iut-dhaka.edu,01886709707
+"Barura Police Station","Cumilla","Chattogram",23.5181,91.1767,noorlabib@iut-dhaka.edu,01886709707
+"Monohargonj Police Station","Cumilla","Chattogram",23.5037,91.2341,noorlabib@iut-dhaka.edu,01886709707
+"Homna Police Station","Cumilla","Chattogram",23.4369,91.1587,noorlabib@iut-dhaka.edu,01886709707
+"Titas Police Station","Cumilla","Chattogram",23.5314,91.1247,noorlabib@iut-dhaka.edu,01886709707
+"Meghna Police Station","Cumilla","Chattogram",23.4282,91.1131,noorlabib@iut-dhaka.edu,01886709707
+"Nangalkot Police Station","Cumilla","Chattogram",23.4750,91.1684,noorlabib@iut-dhaka.edu,01886709707
+"Sadar South Police Station","Cumilla","Chattogram",23.5333,91.2369,noorlabib@iut-dhaka.edu,01886709707
+"Brahmanbaria Sadar Police Station","Brahmanbaria","Chattogram",23.9570,91.1119,noorlabib@iut-dhaka.edu,01886709707
+"Ashuganj Police Station","Brahmanbaria","Chattogram",24.0035,91.1359,noorlabib@iut-dhaka.edu,01886709707
+"Nasirnagar Police Station","Brahmanbaria","Chattogram",23.8849,91.0658,noorlabib@iut-dhaka.edu,01886709707
+"Nabinagar Police Station","Brahmanbaria","Chattogram",23.9012,91.0496,noorlabib@iut-dhaka.edu,01886709707
+"Sarail Police Station","Brahmanbaria","Chattogram",23.9754,91.0389,noorlabib@iut-dhaka.edu,01886709707
+"Shahbazpur Police Station","Brahmanbaria","Chattogram",23.9018,91.0371,noorlabib@iut-dhaka.edu,01886709707
+"Kasba Police Station","Brahmanbaria","Chattogram",23.9407,91.0531,noorlabib@iut-dhaka.edu,01886709707
+"Akhaura Police Station","Brahmanbaria","Chattogram",23.9363,91.1850,noorlabib@iut-dhaka.edu,01886709707
+"Bancharampur Police Station","Brahmanbaria","Chattogram",23.9457,91.1828,noorlabib@iut-dhaka.edu,01886709707
+"Bijoynagar Police Station","Brahmanbaria","Chattogram",24.0150,91.1661,noorlabib@iut-dhaka.edu,01886709707
+"Chandpur Sadar Police Station","Chandpur","Chattogram",23.2333,90.6667,noorlabib@iut-dhaka.edu,01886709707
+"Faridganj Police Station","Chandpur","Chattogram",23.1714,90.6040,noorlabib@iut-dhaka.edu,01886709707
+"Haimchar Police Station","Chandpur","Chattogram",23.1779,90.6645,noorlabib@iut-dhaka.edu,01886709707
+"Haziganj Police Station","Chandpur","Chattogram",23.2351,90.6491,noorlabib@iut-dhaka.edu,01886709707
+"Kachua Police Station","Chandpur","Chattogram",23.2672,90.6060,noorlabib@iut-dhaka.edu,01886709707
+"Matlab North Police Station","Chandpur","Chattogram",23.1980,90.7360,noorlabib@iut-dhaka.edu,01886709707
+"Matlab South Police Station","Chandpur","Chattogram",23.2698,90.6445,noorlabib@iut-dhaka.edu,01886709707
+"Shahrasti Police Station","Chandpur","Chattogram",23.1949,90.7255,noorlabib@iut-dhaka.edu,01886709707
+"Feni Sadar Police Station","Feni","Chattogram",23.0186,91.3966,noorlabib@iut-dhaka.edu,01886709707
+"Daganbhuiyan Police Station","Feni","Chattogram",23.0273,91.4239,noorlabib@iut-dhaka.edu,01886709707
+"Sonagazi Police Station","Feni","Chattogram",22.9779,91.3551,noorlabib@iut-dhaka.edu,01886709707
+"Chhagalnaiya Police Station","Feni","Chattogram",22.9529,91.3758,noorlabib@iut-dhaka.edu,01886709707
+"Parshuram Police Station","Feni","Chattogram",22.9857,91.3272,noorlabib@iut-dhaka.edu,01886709707
+"Fulgazi Police Station","Feni","Chattogram",23.0826,91.4345,noorlabib@iut-dhaka.edu,01886709707
+"Noakhali Sadar Police Station","Noakhali","Chattogram",22.8696,91.0993,noorlabib@iut-dhaka.edu,01886709707
+"Begumganj Police Station","Noakhali","Chattogram",22.9366,91.1613,noorlabib@iut-dhaka.edu,01886709707
+"Chatkhil Police Station","Noakhali","Chattogram",22.8324,91.1039,noorlabib@iut-dhaka.edu,01886709707
+"Companiganj Police Station","Noakhali","Chattogram",22.9235,91.0413,noorlabib@iut-dhaka.edu,01886709707
+"Hatiya Police Station","Noakhali","Chattogram",22.9319,91.0392,noorlabib@iut-dhaka.edu,01886709707
+"Senbagh Police Station","Noakhali","Chattogram",22.9420,91.0955,noorlabib@iut-dhaka.edu,01886709707
+"Sonaimuri Police Station","Noakhali","Chattogram",22.9400,91.0484,noorlabib@iut-dhaka.edu,01886709707
+"Subarnachar Police Station","Noakhali","Chattogram",22.8360,91.1404,noorlabib@iut-dhaka.edu,01886709707
+"Kabirhat Police Station","Noakhali","Chattogram",22.8095,91.1239,noorlabib@iut-dhaka.edu,01886709707
+"Lakshmipur Sadar Police Station","Lakshmipur","Chattogram",22.9424,90.8411,noorlabib@iut-dhaka.edu,01886709707
+"Raipur Police Station","Lakshmipur","Chattogram",22.9532,90.8174,noorlabib@iut-dhaka.edu,01886709707
+"Ramganj Police Station","Lakshmipur","Chattogram",22.8798,90.8639,noorlabib@iut-dhaka.edu,01886709707
+"Ramgati Police Station","Lakshmipur","Chattogram",22.9195,90.8812,noorlabib@iut-dhaka.edu,01886709707
+"Kamalnagar Police Station","Lakshmipur","Chattogram",22.8874,90.8626,noorlabib@iut-dhaka.edu,01886709707
+"Khagrachhari Sadar Police Station","Khagrachhari","Chattogram",23.1192,91.9841,noorlabib@iut-dhaka.edu,01886709707
+"Dighinala Police Station","Khagrachhari","Chattogram",23.1514,91.9119,noorlabib@iut-dhaka.edu,01886709707
+"Panchhari Police Station","Khagrachhari","Chattogram",23.1606,92.0177,noorlabib@iut-dhaka.edu,01886709707
+"Laxmichhari Police Station","Khagrachhari","Chattogram",23.1591,92.0164,noorlabib@iut-dhaka.edu,01886709707
+"Mahalchhari Police Station","Khagrachhari","Chattogram",23.0986,91.9422,noorlabib@iut-dhaka.edu,01886709707
+"Manikchhari Police Station","Khagrachhari","Chattogram",23.1279,92.0513,noorlabib@iut-dhaka.edu,01886709707
+"Ramgarh Police Station","Khagrachhari","Chattogram",23.1550,91.9497,noorlabib@iut-dhaka.edu,01886709707
+"Matiranga Police Station","Khagrachhari","Chattogram",23.1615,92.0562,noorlabib@iut-dhaka.edu,01886709707
+"Guimara Police Station","Khagrachhari","Chattogram",23.0548,92.0108,noorlabib@iut-dhaka.edu,01886709707
+"Rangamati Sadar Police Station","Rangamati","Chattogram",22.6533,92.1789,noorlabib@iut-dhaka.edu,01886709707
+"Belaichhari Police Station","Rangamati","Chattogram",22.5861,92.2363,noorlabib@iut-dhaka.edu,01886709707
+"Bagaichhari Police Station","Rangamati","Chattogram",22.6521,92.1061,noorlabib@iut-dhaka.edu,01886709707
+"Barkal Police Station","Rangamati","Chattogram",22.7165,92.1251,noorlabib@iut-dhaka.edu,01886709707
+"Juraichhari Police Station","Rangamati","Chattogram",22.6732,92.1278,noorlabib@iut-dhaka.edu,01886709707
+"Rajasthali Police Station","Rangamati","Chattogram",22.6923,92.1460,noorlabib@iut-dhaka.edu,01886709707
+"Kaptai Police Station","Rangamati","Chattogram",22.5787,92.1828,noorlabib@iut-dhaka.edu,01886709707
+"Langadu Police Station","Rangamati","Chattogram",22.5919,92.1160,noorlabib@iut-dhaka.edu,01886709707
+"Naniarchar Police Station","Rangamati","Chattogram",22.5960,92.1152,noorlabib@iut-dhaka.edu,01886709707
+"Kaukhali Police Station","Rangamati","Chattogram",22.6458,92.1041,noorlabib@iut-dhaka.edu,01886709707
+"Bandarban Sadar Police Station","Bandarban","Chattogram",22.1953,92.2184,noorlabib@iut-dhaka.edu,01886709707
+"Thanchi Police Station","Bandarban","Chattogram",22.1339,92.2510,noorlabib@iut-dhaka.edu,01886709707
+"Lama Police Station","Bandarban","Chattogram",22.1746,92.1806,noorlabib@iut-dhaka.edu,01886709707
+"Naikhongchhari Police Station","Bandarban","Chattogram",22.1894,92.1452,noorlabib@iut-dhaka.edu,01886709707
+"Ali Kadam Police Station","Bandarban","Chattogram",22.1889,92.2883,noorlabib@iut-dhaka.edu,01886709707
+"Rowangchhari Police Station","Bandarban","Chattogram",22.2453,92.1733,noorlabib@iut-dhaka.edu,01886709707
+"Ruma Police Station","Bandarban","Chattogram",22.2013,92.1747,noorlabib@iut-dhaka.edu,01886709707
+"Boalia Police Station","Rajshahi","Rajshahi",24.3636,88.6241,noorlabib@iut-dhaka.edu,01886709707
+"Rajpara Police Station","Rajshahi","Rajshahi",24.3111,88.6783,noorlabib@iut-dhaka.edu,01886709707
+"Motihar Police Station","Rajshahi","Rajshahi",24.3620,88.5901,noorlabib@iut-dhaka.edu,01886709707
+"Shah Makhdum Police Station","Rajshahi","Rajshahi",24.3934,88.5566,noorlabib@iut-dhaka.edu,01886709707
+"Chandrima Police Station","Rajshahi","Rajshahi",24.3464,88.6914,noorlabib@iut-dhaka.edu,01886709707
+"Katakhali Police Station","Rajshahi","Rajshahi",24.3898,88.5589,noorlabib@iut-dhaka.edu,01886709707
+"Belpukur Police Station","Rajshahi","Rajshahi",24.3582,88.5599,noorlabib@iut-dhaka.edu,01886709707
+"Airport Police Station","Rajshahi","Rajshahi",24.4295,88.6891,noorlabib@iut-dhaka.edu,01886709707
+"Kashiadanga Police Station","Rajshahi","Rajshahi",24.2933,88.6335,noorlabib@iut-dhaka.edu,01886709707
+"Kornohar Police Station","Rajshahi","Rajshahi",24.3284,88.5504,noorlabib@iut-dhaka.edu,01886709707
+"Damkura Police Station","Rajshahi","Rajshahi",24.4071,88.6278,noorlabib@iut-dhaka.edu,01886709707
+"Paba Police Station","Rajshahi","Rajshahi",24.4027,88.5705,noorlabib@iut-dhaka.edu,01886709707
+"Durgapur Police Station","Rajshahi","Rajshahi",24.4365,88.6818,noorlabib@iut-dhaka.edu,01886709707
+"Mohonpur Police Station","Rajshahi","Rajshahi",24.4063,88.6071,noorlabib@iut-dhaka.edu,01886709707
+"Charghat Police Station","Rajshahi","Rajshahi",24.4165,88.6690,noorlabib@iut-dhaka.edu,01886709707
+"Puthia Police Station","Rajshahi","Rajshahi",24.3814,88.6891,noorlabib@iut-dhaka.edu,01886709707
+"Bagha Police Station","Rajshahi","Rajshahi",24.3706,88.6470,noorlabib@iut-dhaka.edu,01886709707
+"Godagari Police Station","Rajshahi","Rajshahi",24.4310,88.6233,noorlabib@iut-dhaka.edu,01886709707
+"Tanore Police Station","Rajshahi","Rajshahi",24.3586,88.5983,noorlabib@iut-dhaka.edu,01886709707
+"Bagmara Police Station","Rajshahi","Rajshahi",24.3128,88.6123,noorlabib@iut-dhaka.edu,01886709707
+"Bogura Sadar Police Station","Bogura","Rajshahi",24.8481,89.3730,noorlabib@iut-dhaka.edu,01886709707
+"Shajahanpur Police Station","Bogura","Rajshahi",24.8909,89.3343,noorlabib@iut-dhaka.edu,01886709707
+"Sherpur Police Station","Bogura","Rajshahi",24.9161,89.3944,noorlabib@iut-dhaka.edu,01886709707
+"Dhunat Police Station","Bogura","Rajshahi",24.8562,89.3380,noorlabib@iut-dhaka.edu,01886709707
+"Dhupchanchia Police Station","Bogura","Rajshahi",24.8689,89.4125,noorlabib@iut-dhaka.edu,01886709707
+"Gabtali Police Station","Bogura","Rajshahi",24.8815,89.3224,noorlabib@iut-dhaka.edu,01886709707
+"Kahaloo Police Station","Bogura","Rajshahi",24.8897,89.4055,noorlabib@iut-dhaka.edu,01886709707
+"Nandigram Police Station","Bogura","Rajshahi",24.8966,89.3803,noorlabib@iut-dhaka.edu,01886709707
+"Sariakandi Police Station","Bogura","Rajshahi",24.8899,89.4052,noorlabib@iut-dhaka.edu,01886709707
+"Sonatala Police Station","Bogura","Rajshahi",24.9093,89.4276,noorlabib@iut-dhaka.edu,01886709707
+"Shibganj Police Station","Bogura","Rajshahi",24.8656,89.4322,noorlabib@iut-dhaka.edu,01886709707
+"Adamdighi Police Station","Bogura","Rajshahi",24.8920,89.3080,noorlabib@iut-dhaka.edu,01886709707
+"Pabna Sadar Police Station","Pabna","Rajshahi",24.0063,89.2493,noorlabib@iut-dhaka.edu,01886709707
+"Atgharia Police Station","Pabna","Rajshahi",23.9395,89.2392,noorlabib@iut-dhaka.edu,01886709707
+"Bera Police Station","Pabna","Rajshahi",24.0232,89.2595,noorlabib@iut-dhaka.edu,01886709707
+"Bhangura Police Station","Pabna","Rajshahi",23.9699,89.3216,noorlabib@iut-dhaka.edu,01886709707
+"Chatmohar Police Station","Pabna","Rajshahi",23.9771,89.2860,noorlabib@iut-dhaka.edu,01886709707
+"Faridpur Police Station","Pabna","Rajshahi",24.0306,89.2153,noorlabib@iut-dhaka.edu,01886709707
+"Ishwardi Police Station","Pabna","Rajshahi",23.9894,89.3095,noorlabib@iut-dhaka.edu,01886709707
+"Santhia Police Station","Pabna","Rajshahi",24.0311,89.3064,noorlabib@iut-dhaka.edu,01886709707
+"Sujanagar Police Station","Pabna","Rajshahi",24.0532,89.2199,noorlabib@iut-dhaka.edu,01886709707
+"Sirajganj Sadar Police Station","Sirajganj","Rajshahi",24.3141,89.5700,noorlabib@iut-dhaka.edu,01886709707
+"Belkuchi Police Station","Sirajganj","Rajshahi",24.3438,89.5073,noorlabib@iut-dhaka.edu,01886709707
+"Chauhali Police Station","Sirajganj","Rajshahi",24.3339,89.6255,noorlabib@iut-dhaka.edu,01886709707
+"Kamarkhanda Police Station","Sirajganj","Rajshahi",24.3823,89.5396,noorlabib@iut-dhaka.edu,01886709707
+"Kazipur Police Station","Sirajganj","Rajshahi",24.2636,89.5103,noorlabib@iut-dhaka.edu,01886709707
+"Raiganj Police Station","Sirajganj","Rajshahi",24.2546,89.5867,noorlabib@iut-dhaka.edu,01886709707
+"Shahjadpur Police Station","Sirajganj","Rajshahi",24.2848,89.5943,noorlabib@iut-dhaka.edu,01886709707
+"Tarash Police Station","Sirajganj","Rajshahi",24.3594,89.6221,noorlabib@iut-dhaka.edu,01886709707
+"Ullahpara Police Station","Sirajganj","Rajshahi",24.3001,89.6009,noorlabib@iut-dhaka.edu,01886709707
+"Naogaon Sadar Police Station","Naogaon","Rajshahi",24.8105,88.9439,noorlabib@iut-dhaka.edu,01886709707
+"Mohadevpur Police Station","Naogaon","Rajshahi",24.7629,88.9511,noorlabib@iut-dhaka.edu,01886709707
+"Manda Police Station","Naogaon","Rajshahi",24.8824,88.9223,noorlabib@iut-dhaka.edu,01886709707
+"Niamatpur Police Station","Naogaon","Rajshahi",24.8650,88.9990,noorlabib@iut-dhaka.edu,01886709707
+"Porsha Police Station","Naogaon","Rajshahi",24.8153,88.9748,noorlabib@iut-dhaka.edu,01886709707
+"Sapahar Police Station","Naogaon","Rajshahi",24.7844,88.9362,noorlabib@iut-dhaka.edu,01886709707
+"Patnitala Police Station","Naogaon","Rajshahi",24.8314,88.8741,noorlabib@iut-dhaka.edu,01886709707
+"Dhamoirhat Police Station","Naogaon","Rajshahi",24.8539,88.9662,noorlabib@iut-dhaka.edu,01886709707
+"Badalgachhi Police Station","Naogaon","Rajshahi",24.8164,88.9620,noorlabib@iut-dhaka.edu,01886709707
+"Raninagar Police Station","Naogaon","Rajshahi",24.7511,88.8970,noorlabib@iut-dhaka.edu,01886709707
+"Atrai Police Station","Naogaon","Rajshahi",24.8281,88.9476,noorlabib@iut-dhaka.edu,01886709707
+"Natore Sadar Police Station","Natore","Rajshahi",24.4102,89.0076,noorlabib@iut-dhaka.edu,01886709707
+"Baraigram Police Station","Natore","Rajshahi",24.4150,88.9890,noorlabib@iut-dhaka.edu,01886709707
+"Bagatipara Police Station","Natore","Rajshahi",24.4303,88.9547,noorlabib@iut-dhaka.edu,01886709707
+"Lalpur Police Station","Natore","Rajshahi",24.3880,89.0753,noorlabib@iut-dhaka.edu,01886709707
+"Naldanga Police Station","Natore","Rajshahi",24.3768,89.0592,noorlabib@iut-dhaka.edu,01886709707
+"Singra Police Station","Natore","Rajshahi",24.4730,89.0665,noorlabib@iut-dhaka.edu,01886709707
+"Gurudaspur Police Station","Natore","Rajshahi",24.3938,89.0382,noorlabib@iut-dhaka.edu,01886709707
+"Chapainawabganj Sadar Police Station","Chapainawabganj","Rajshahi",24.5902,88.2774,noorlabib@iut-dhaka.edu,01886709707
+"Gomastapur Police Station","Chapainawabganj","Rajshahi",24.5190,88.3132,noorlabib@iut-dhaka.edu,01886709707
+"Nachole Police Station","Chapainawabganj","Rajshahi",24.5498,88.2493,noorlabib@iut-dhaka.edu,01886709707
+"Bholahat Police Station","Chapainawabganj","Rajshahi",24.6533,88.2597,noorlabib@iut-dhaka.edu,01886709707
+"Shibganj Police Station","Chapainawabganj","Rajshahi",24.5527,88.3001,noorlabib@iut-dhaka.edu,01886709707
+"Joypurhat Sadar Police Station","Joypurhat","Rajshahi",25.0968,89.0227,noorlabib@iut-dhaka.edu,01886709707
+"Akkelpur Police Station","Joypurhat","Rajshahi",25.0507,89.0830,noorlabib@iut-dhaka.edu,01886709707
+"Kalai Police Station","Joypurhat","Rajshahi",25.0535,89.0755,noorlabib@iut-dhaka.edu,01886709707
+"Khetlal Police Station","Joypurhat","Rajshahi",25.0668,88.9484,noorlabib@iut-dhaka.edu,01886709707
+"Panchbibi Police Station","Joypurhat","Rajshahi",25.1158,89.0060,noorlabib@iut-dhaka.edu,01886709707
+"Khulna Sadar Police Station","Khulna","Khulna",22.8456,89.5403,noorlabib@iut-dhaka.edu,01886709707
+"Sonadanga Police Station","Khulna","Khulna",22.8337,89.5809,noorlabib@iut-dhaka.edu,01886709707
+"Khalishpur Police Station","Khulna","Khulna",22.9158,89.4661,noorlabib@iut-dhaka.edu,01886709707
+"Daulatpur Police Station","Khulna","Khulna",22.8122,89.5893,noorlabib@iut-dhaka.edu,01886709707
+"Khan Jahan Ali Police Station","Khulna","Khulna",22.8355,89.5854,noorlabib@iut-dhaka.edu,01886709707
+"Aranghata Police Station","Khulna","Khulna",22.8827,89.4996,noorlabib@iut-dhaka.edu,01886709707
+"Harintana Police Station","Khulna","Khulna",22.8288,89.4968,noorlabib@iut-dhaka.edu,01886709707
+"Labanchara Police Station","Khulna","Khulna",22.7909,89.5344,noorlabib@iut-dhaka.edu,01886709707
+"Koyra Police Station","Khulna","Khulna",22.8992,89.5149,noorlabib@iut-dhaka.edu,01886709707
+"Dumuria Police Station","Khulna","Khulna",22.7949,89.5514,noorlabib@iut-dhaka.edu,01886709707
+"Terokhada Police Station","Khulna","Khulna",22.8838,89.5141,noorlabib@iut-dhaka.edu,01886709707
+"Rupsha Police Station","Khulna","Khulna",22.9024,89.5298,noorlabib@iut-dhaka.edu,01886709707
+"Paikgachha Police Station","Khulna","Khulna",22.7962,89.5621,noorlabib@iut-dhaka.edu,01886709707
+"Phultala Police Station","Khulna","Khulna",22.8621,89.5836,noorlabib@iut-dhaka.edu,01886709707
+"Batiaghata Police Station","Khulna","Khulna",22.8526,89.5170,noorlabib@iut-dhaka.edu,01886709707
+"Dacope Police Station","Khulna","Khulna",22.8442,89.5853,noorlabib@iut-dhaka.edu,01886709707
+"Dighalia Police Station","Khulna","Khulna",22.7774,89.4857,noorlabib@iut-dhaka.edu,01886709707
+"Kotwali Police Station","Jashore","Khulna",23.1634,89.2182,noorlabib@iut-dhaka.edu,01886709707
+"Jhikargachha Police Station","Jashore","Khulna",23.2346,89.1535,noorlabib@iut-dhaka.edu,01886709707
+"Sharsha Police Station","Jashore","Khulna",23.1084,89.2275,noorlabib@iut-dhaka.edu,01886709707
+"Benapole Port Police Station","Jashore","Khulna",23.1349,89.2713,noorlabib@iut-dhaka.edu,01886709707
+"Chaugachha Police Station","Jashore","Khulna",23.2248,89.1932,noorlabib@iut-dhaka.edu,01886709707
+"Abhaynagar Police Station","Jashore","Khulna",23.1330,89.2435,noorlabib@iut-dhaka.edu,01886709707
+"Manirampur Police Station","Jashore","Khulna",23.1734,89.2419,noorlabib@iut-dhaka.edu,01886709707
+"Bagherpara Police Station","Jashore","Khulna",23.1414,89.1582,noorlabib@iut-dhaka.edu,01886709707
+"Keshabpur Police Station","Jashore","Khulna",23.1111,89.2509,noorlabib@iut-dhaka.edu,01886709707
+"Satkhira Sadar Police Station","Satkhira","Khulna",22.7234,89.0552,noorlabib@iut-dhaka.edu,01886709707
+"Assasuni Police Station","Satkhira","Khulna",22.7314,88.9840,noorlabib@iut-dhaka.edu,01886709707
+"Debhata Police Station","Satkhira","Khulna",22.7429,89.0382,noorlabib@iut-dhaka.edu,01886709707
+"Kalaroa Police Station","Satkhira","Khulna",22.7709,89.0407,noorlabib@iut-dhaka.edu,01886709707
+"Kaliganj Police Station","Satkhira","Khulna",22.6489,89.1106,noorlabib@iut-dhaka.edu,01886709707
+"Shyamnagar Police Station","Satkhira","Khulna",22.6843,89.0261,noorlabib@iut-dhaka.edu,01886709707
+"Tala Police Station","Satkhira","Khulna",22.7623,89.0814,noorlabib@iut-dhaka.edu,01886709707
+"Patkelghata Police Station","Satkhira","Khulna",22.7962,89.0472,noorlabib@iut-dhaka.edu,01886709707
+"Bagerhat Sadar Police Station","Bagerhat","Khulna",22.6515,89.7859,noorlabib@iut-dhaka.edu,01886709707
+"Chitalmari Police Station","Bagerhat","Khulna",22.6335,89.7164,noorlabib@iut-dhaka.edu,01886709707
+"Fakirhat Police Station","Bagerhat","Khulna",22.6708,89.7846,noorlabib@iut-dhaka.edu,01886709707
+"Kachua Police Station","Bagerhat","Khulna",22.5840,89.8493,noorlabib@iut-dhaka.edu,01886709707
+"Mollahat Police Station","Bagerhat","Khulna",22.6956,89.7711,noorlabib@iut-dhaka.edu,01886709707
+"Mongla Police Station","Bagerhat","Khulna",22.6709,89.7444,noorlabib@iut-dhaka.edu,01886709707
+"Morrelganj Police Station","Bagerhat","Khulna",22.6245,89.7113,noorlabib@iut-dhaka.edu,01886709707
+"Rampal Police Station","Bagerhat","Khulna",22.6018,89.7592,noorlabib@iut-dhaka.edu,01886709707
+"Sarankhola Police Station","Bagerhat","Khulna",22.5879,89.7306,noorlabib@iut-dhaka.edu,01886709707
+"Chuadanga Sadar Police Station","Chuadanga","Khulna",23.6402,88.8418,noorlabib@iut-dhaka.edu,01886709707
+"Alamdanga Police Station","Chuadanga","Khulna",23.6752,88.8121,noorlabib@iut-dhaka.edu,01886709707
+"Damurhuda Police Station","Chuadanga","Khulna",23.6046,88.8707,noorlabib@iut-dhaka.edu,01886709707
+"Jibannagar Police Station","Chuadanga","Khulna",23.6299,88.8054,noorlabib@iut-dhaka.edu,01886709707
+"Darshana Police Station","Chuadanga","Khulna",23.5754,88.7790,noorlabib@iut-dhaka.edu,01886709707
+"Kushtia Sadar Police Station","Kushtia","Khulna",23.9013,89.1204,noorlabib@iut-dhaka.edu,01886709707
+"Kumarkhali Police Station","Kushtia","Khulna",23.8843,89.1282,noorlabib@iut-dhaka.edu,01886709707
+"Khoksa Police Station","Kushtia","Khulna",23.8664,89.1192,noorlabib@iut-dhaka.edu,01886709707
+"Mirpur Police Station","Kushtia","Khulna",23.9099,89.1843,noorlabib@iut-dhaka.edu,01886709707
+"Daulatpur Police Station","Kushtia","Khulna",23.8492,89.1264,noorlabib@iut-dhaka.edu,01886709707
+"Bheramara Police Station","Kushtia","Khulna",23.8408,89.1712,noorlabib@iut-dhaka.edu,01886709707
+"Islami University Police Station","Kushtia","Khulna",23.8866,89.1704,noorlabib@iut-dhaka.edu,01886709707
+"Magura Sadar Police Station","Magura","Khulna",23.4873,89.4199,noorlabib@iut-dhaka.edu,01886709707
+"Mohammadpur Police Station","Magura","Khulna",23.4967,89.4594,noorlabib@iut-dhaka.edu,01886709707
+"Shalikha Police Station","Magura","Khulna",23.4816,89.4561,noorlabib@iut-dhaka.edu,01886709707
+"Sreepur Police Station","Magura","Khulna",23.4534,89.3958,noorlabib@iut-dhaka.edu,01886709707
+"Meherpur Sadar Police Station","Meherpur","Khulna",23.7622,88.6318,noorlabib@iut-dhaka.edu,01886709707
+"Gangni Police Station","Meherpur","Khulna",23.7995,88.6730,noorlabib@iut-dhaka.edu,01886709707
+"Mujibnagar Police Station","Meherpur","Khulna",23.7570,88.6065,noorlabib@iut-dhaka.edu,01886709707
+"Narail Sadar Police Station","Narail","Khulna",23.1725,89.5127,noorlabib@iut-dhaka.edu,01886709707
+"Lohagara Police Station","Narail","Khulna",23.2357,89.4599,noorlabib@iut-dhaka.edu,01886709707
+"Kalia Police Station","Narail","Khulna",23.1365,89.5747,noorlabib@iut-dhaka.edu,01886709707
+"Naragati Police Station","Narail","Khulna",23.2188,89.5610,noorlabib@iut-dhaka.edu,01886709707
+"Jhenaidah Sadar Police Station","Jhenaidah","Khulna",23.5450,89.1726,noorlabib@iut-dhaka.edu,01886709707
+"Shailkupa Police Station","Jhenaidah","Khulna",23.6144,89.2046,noorlabib@iut-dhaka.edu,01886709707
+"Harinakunda Police Station","Jhenaidah","Khulna",23.5590,89.1534,noorlabib@iut-dhaka.edu,01886709707
+"Kaliganj Police Station","Jhenaidah","Khulna",23.5225,89.1278,noorlabib@iut-dhaka.edu,01886709707
+"Kotchandpur Police Station","Jhenaidah","Khulna",23.5309,89.2000,noorlabib@iut-dhaka.edu,01886709707
+"Maheshpur Police Station","Jhenaidah","Khulna",23.5646,89.2438,noorlabib@iut-dhaka.edu,01886709707
+"Kotwali Police Station","Barishal","Barishal",22.7010,90.3535,noorlabib@iut-dhaka.edu,01886709707
+"Kawnia Police Station","Barishal","Barishal",22.7667,90.3895,noorlabib@iut-dhaka.edu,01886709707
+"Airport Police Station","Barishal","Barishal",22.6275,90.3842,noorlabib@iut-dhaka.edu,01886709707
+"Bandar Police Station","Barishal","Barishal",22.7248,90.3375,noorlabib@iut-dhaka.edu,01886709707
+"Agailjhara Police Station","Barishal","Barishal",22.6398,90.3307,noorlabib@iut-dhaka.edu,01886709707
+"Babuganj Police Station","Barishal","Barishal",22.6574,90.3649,noorlabib@iut-dhaka.edu,01886709707
+"Bakerganj Police Station","Barishal","Barishal",22.6633,90.3010,noorlabib@iut-dhaka.edu,01886709707
+"Banaripara Police Station","Barishal","Barishal",22.7623,90.3908,noorlabib@iut-dhaka.edu,01886709707
+"Gaurnadi Police Station","Barishal","Barishal",22.6766,90.3322,noorlabib@iut-dhaka.edu,01886709707
+"Hizla Police Station","Barishal","Barishal",22.6497,90.3996,noorlabib@iut-dhaka.edu,01886709707
+"Mehendiganj Police Station","Barishal","Barishal",22.6434,90.3385,noorlabib@iut-dhaka.edu,01886709707
+"Muladi Police Station","Barishal","Barishal",22.6542,90.2828,noorlabib@iut-dhaka.edu,01886709707
+"Wazirpur Police Station","Barishal","Barishal",22.6804,90.2941,noorlabib@iut-dhaka.edu,01886709707
+"Patuakhali Sadar Police Station","Patuakhali","Barishal",22.3596,90.3299,noorlabib@iut-dhaka.edu,01886709707
+"Bauphal Police Station","Patuakhali","Barishal",22.4051,90.3508,noorlabib@iut-dhaka.edu,01886709707
+"Dashmina Police Station","Patuakhali","Barishal",22.4126,90.3566,noorlabib@iut-dhaka.edu,01886709707
+"Galachipa Police Station","Patuakhali","Barishal",22.3362,90.3992,noorlabib@iut-dhaka.edu,01886709707
+"Kalapara Police Station","Patuakhali","Barishal",22.3394,90.3929,noorlabib@iut-dhaka.edu,01886709707
+"Mirzaganj Police Station","Patuakhali","Barishal",22.3907,90.3482,noorlabib@iut-dhaka.edu,01886709707
+"Rangabali Police Station","Patuakhali","Barishal",22.4174,90.3010,noorlabib@iut-dhaka.edu,01886709707
+"Dumki Police Station","Patuakhali","Barishal",22.3851,90.2884,noorlabib@iut-dhaka.edu,01886709707
+"Mohipur Police Station","Patuakhali","Barishal",22.3469,90.2812,noorlabib@iut-dhaka.edu,01886709707
+"Bhola Sadar Police Station","Bhola","Barishal",22.6859,90.6482,noorlabib@iut-dhaka.edu,01886709707
+"Burhanuddin Police Station","Bhola","Barishal",22.6656,90.7074,noorlabib@iut-dhaka.edu,01886709707
+"Char Fasson Police Station","Bhola","Barishal",22.7474,90.5918,noorlabib@iut-dhaka.edu,01886709707
+"Daulatkhan Police Station","Bhola","Barishal",22.6772,90.5784,noorlabib@iut-dhaka.edu,01886709707
+"Lalmohan Police Station","Bhola","Barishal",22.7548,90.7199,noorlabib@iut-dhaka.edu,01886709707
+"Manpura Police Station","Bhola","Barishal",22.7498,90.6796,noorlabib@iut-dhaka.edu,01886709707
+"Tazumuddin Police Station","Bhola","Barishal",22.6997,90.5877,noorlabib@iut-dhaka.edu,01886709707
+"Sashibhusan Police Station","Bhola","Barishal",22.7000,90.6196,noorlabib@iut-dhaka.edu,01886709707
+"South Aicha Police Station","Bhola","Barishal",22.7525,90.6277,noorlabib@iut-dhaka.edu,01886709707
+"Pirojpur Sadar Police Station","Pirojpur","Barishal",22.5841,89.9720,noorlabib@iut-dhaka.edu,01886709707
+"Bhandaria Police Station","Pirojpur","Barishal",22.5093,90.0099,noorlabib@iut-dhaka.edu,01886709707
+"Kawkhali Police Station","Pirojpur","Barishal",22.5784,89.9590,noorlabib@iut-dhaka.edu,01886709707
+"Mathbaria Police Station","Pirojpur","Barishal",22.5235,90.0289,noorlabib@iut-dhaka.edu,01886709707
+"Nazirpur Police Station","Pirojpur","Barishal",22.5825,89.9055,noorlabib@iut-dhaka.edu,01886709707
+"Nesarabad Police Station","Pirojpur","Barishal",22.5823,89.9830,noorlabib@iut-dhaka.edu,01886709707
+"Indurkani Police Station","Pirojpur","Barishal",22.5908,89.9714,noorlabib@iut-dhaka.edu,01886709707
+"Barguna Sadar Police Station","Barguna","Barishal",22.1573,90.1224,noorlabib@iut-dhaka.edu,01886709707
+"Amtali Police Station","Barguna","Barishal",22.1968,90.1544,noorlabib@iut-dhaka.edu,01886709707
+"Bamna Police Station","Barguna","Barishal",22.1340,90.1454,noorlabib@iut-dhaka.edu,01886709707
+"Betagi Police Station","Barguna","Barishal",22.1688,90.1610,noorlabib@iut-dhaka.edu,01886709707
+"Patharghata Police Station","Barguna","Barishal",22.1936,90.1726,noorlabib@iut-dhaka.edu,01886709707
+"Taltali Police Station","Barguna","Barishal",22.1971,90.0628,noorlabib@iut-dhaka.edu,01886709707
+"Jhalokati Sadar Police Station","Jhalokati","Barishal",22.6406,90.1987,noorlabib@iut-dhaka.edu,01886709707
+"Kathalia Police Station","Jhalokati","Barishal",22.5932,90.1926,noorlabib@iut-dhaka.edu,01886709707
+"Nalchity Police Station","Jhalokati","Barishal",22.6621,90.1908,noorlabib@iut-dhaka.edu,01886709707
+"Rajapur Police Station","Jhalokati","Barishal",22.5977,90.1468,noorlabib@iut-dhaka.edu,01886709707
+"Kotwali Police Station","Sylhet","Sylhet",24.8949,91.8687,noorlabib@iut-dhaka.edu,01886709707
+"Jalalabad Police Station","Sylhet","Sylhet",24.9197,91.8469,noorlabib@iut-dhaka.edu,01886709707
+"Airport Police Station","Sylhet","Sylhet",24.8406,91.8440,noorlabib@iut-dhaka.edu,01886709707
+"Moglabazar Police Station","Sylhet","Sylhet",24.9536,91.9076,noorlabib@iut-dhaka.edu,01886709707
+"South Surma Police Station","Sylhet","Sylhet",24.8571,91.9258,noorlabib@iut-dhaka.edu,01886709707
+"Shahparan Police Station","Sylhet","Sylhet",24.9070,91.9190,noorlabib@iut-dhaka.edu,01886709707
+"Balaganj Police Station","Sylhet","Sylhet",24.9080,91.7942,noorlabib@iut-dhaka.edu,01886709707
+"Beanibazar Police Station","Sylhet","Sylhet",24.8795,91.8020,noorlabib@iut-dhaka.edu,01886709707
+"Bishwanath Police Station","Sylhet","Sylhet",24.8758,91.7991,noorlabib@iut-dhaka.edu,01886709707
+"Companiganj Police Station","Sylhet","Sylhet",24.9150,91.8409,noorlabib@iut-dhaka.edu,01886709707
+"Fenchuganj Police Station","Sylhet","Sylhet",24.8603,91.8275,noorlabib@iut-dhaka.edu,01886709707
+"Golapganj Police Station","Sylhet","Sylhet",24.9250,91.9210,noorlabib@iut-dhaka.edu,01886709707
+"Gowainghat Police Station","Sylhet","Sylhet",24.8926,91.8857,noorlabib@iut-dhaka.edu,01886709707
+"Jaintiapur Police Station","Sylhet","Sylhet",24.8440,91.8784,noorlabib@iut-dhaka.edu,01886709707
+"Kanaighat Police Station","Sylhet","Sylhet",24.9518,91.8693,noorlabib@iut-dhaka.edu,01886709707
+"Osmani Nagar Police Station","Sylhet","Sylhet",24.9293,91.8777,noorlabib@iut-dhaka.edu,01886709707
+"Zakiganj Police Station","Sylhet","Sylhet",24.9411,91.8601,noorlabib@iut-dhaka.edu,01886709707
+"Moulvibazar Sadar Police Station","Moulvibazar","Sylhet",24.4829,91.7774,noorlabib@iut-dhaka.edu,01886709707
+"Barlekha Police Station","Moulvibazar","Sylhet",24.5549,91.7744,noorlabib@iut-dhaka.edu,01886709707
+"Juri Police Station","Moulvibazar","Sylhet",24.4694,91.7185,noorlabib@iut-dhaka.edu,01886709707
+"Kamalganj Police Station","Moulvibazar","Sylhet",24.4683,91.7440,noorlabib@iut-dhaka.edu,01886709707
+"Kulaura Police Station","Moulvibazar","Sylhet",24.4670,91.7942,noorlabib@iut-dhaka.edu,01886709707
+"Rajnagar Police Station","Moulvibazar","Sylhet",24.4540,91.7482,noorlabib@iut-dhaka.edu,01886709707
+"Sreemangal Police Station","Moulvibazar","Sylhet",24.5518,91.8473,noorlabib@iut-dhaka.edu,01886709707
+"Sherpur Police Station","Moulvibazar","Sylhet",24.4291,91.8362,noorlabib@iut-dhaka.edu,01886709707
+"Habiganj Sadar Police Station","Habiganj","Sylhet",24.3749,91.4155,noorlabib@iut-dhaka.edu,01886709707
+"Ajmiriganj Police Station","Habiganj","Sylhet",24.4215,91.4471,noorlabib@iut-dhaka.edu,01886709707
+"Bahubal Police Station","Habiganj","Sylhet",24.3484,91.4527,noorlabib@iut-dhaka.edu,01886709707
+"Baniyachong Police Station","Habiganj","Sylhet",24.4284,91.4482,noorlabib@iut-dhaka.edu,01886709707
+"Chunarughat Police Station","Habiganj","Sylhet",24.3126,91.4279,noorlabib@iut-dhaka.edu,01886709707
+"Lakhai Police Station","Habiganj","Sylhet",24.3152,91.4195,noorlabib@iut-dhaka.edu,01886709707
+"Madhabpur Police Station","Habiganj","Sylhet",24.4318,91.3660,noorlabib@iut-dhaka.edu,01886709707
+"Nabiganj Police Station","Habiganj","Sylhet",24.4265,91.3567,noorlabib@iut-dhaka.edu,01886709707
+"Shayestaganj Police Station","Habiganj","Sylhet",24.3729,91.3820,noorlabib@iut-dhaka.edu,01886709707
+"Sunamganj Sadar Police Station","Sunamganj","Sylhet",25.0658,91.3956,noorlabib@iut-dhaka.edu,01886709707
+"Bishwamvarpur Police Station","Sunamganj","Sylhet",25.1310,91.4052,noorlabib@iut-dhaka.edu,01886709707
+"Chhatak Police Station","Sunamganj","Sylhet",25.0986,91.4271,noorlabib@iut-dhaka.edu,01886709707
+"Derai Police Station","Sunamganj","Sylhet",25.1320,91.3917,noorlabib@iut-dhaka.edu,01886709707
+"Dharamapasha Police Station","Sunamganj","Sylhet",25.0117,91.4686,noorlabib@iut-dhaka.edu,01886709707
+"Dowarabazar Police Station","Sunamganj","Sylhet",25.0282,91.3268,noorlabib@iut-dhaka.edu,01886709707
+"Jagannathpur Police Station","Sunamganj","Sylhet",25.0412,91.4298,noorlabib@iut-dhaka.edu,01886709707
+"Jamalganj Police Station","Sunamganj","Sylhet",25.1009,91.4179,noorlabib@iut-dhaka.edu,01886709707
+"Sullah Police Station","Sunamganj","Sylhet",25.0760,91.3931,noorlabib@iut-dhaka.edu,01886709707
+"Tahirpur Police Station","Sunamganj","Sylhet",25.0301,91.3517,noorlabib@iut-dhaka.edu,01886709707
+"South Sunamganj Police Station","Sunamganj","Sylhet",25.1265,91.3585,noorlabib@iut-dhaka.edu,01886709707
+"Madhyanagar Police Station","Sunamganj","Sylhet",25.0022,91.4087,noorlabib@iut-dhaka.edu,01886709707
+"Kotwali Police Station","Rangpur","Rangpur",25.7439,89.2752,noorlabib@iut-dhaka.edu,01886709707
+"Tajhat Police Station","Rangpur","Rangpur",25.7608,89.2762,noorlabib@iut-dhaka.edu,01886709707
+"Mahiganj Police Station","Rangpur","Rangpur",25.8187,89.2855,noorlabib@iut-dhaka.edu,01886709707
+"Haragach Police Station","Rangpur","Rangpur",25.7341,89.3250,noorlabib@iut-dhaka.edu,01886709707
+"Parsuram Police Station","Rangpur","Rangpur",25.7676,89.2053,noorlabib@iut-dhaka.edu,01886709707
+"Hazirhat Police Station","Rangpur","Rangpur",25.7884,89.2687,noorlabib@iut-dhaka.edu,01886709707
+"Badarganj Police Station","Rangpur","Rangpur",25.7420,89.2337,noorlabib@iut-dhaka.edu,01886709707
+"Gangachara Police Station","Rangpur","Rangpur",25.6774,89.2172,noorlabib@iut-dhaka.edu,01886709707
+"Kaunia Police Station","Rangpur","Rangpur",25.7907,89.3001,noorlabib@iut-dhaka.edu,01886709707
+"Rangpur Sadar Police Station","Rangpur","Rangpur",25.7175,89.3225,noorlabib@iut-dhaka.edu,01886709707
+"Mithapukur Police Station","Rangpur","Rangpur",25.7193,89.2338,noorlabib@iut-dhaka.edu,01886709707
+"Pirgachha Police Station","Rangpur","Rangpur",25.7592,89.2300,noorlabib@iut-dhaka.edu,01886709707
+"Pirganj Police Station","Rangpur","Rangpur",25.7006,89.2571,noorlabib@iut-dhaka.edu,01886709707
+"Taraganj Police Station","Rangpur","Rangpur",25.6879,89.3481,noorlabib@iut-dhaka.edu,01886709707
+"Kotwali Police Station","Dinajpur","Rangpur",25.6217,88.6355,noorlabib@iut-dhaka.edu,01886709707
+"Birampur Police Station","Dinajpur","Rangpur",25.6784,88.5857,noorlabib@iut-dhaka.edu,01886709707
+"Birganj Police Station","Dinajpur","Rangpur",25.6584,88.6150,noorlabib@iut-dhaka.edu,01886709707
+"Biral Police Station","Dinajpur","Rangpur",25.6888,88.6895,noorlabib@iut-dhaka.edu,01886709707
+"Bochaganj Police Station","Dinajpur","Rangpur",25.5691,88.6992,noorlabib@iut-dhaka.edu,01886709707
+"Chirirbandar Police Station","Dinajpur","Rangpur",25.6812,88.5689,noorlabib@iut-dhaka.edu,01886709707
+"Fulbari Police Station","Dinajpur","Rangpur",25.5601,88.6009,noorlabib@iut-dhaka.edu,01886709707
+"Ghoraghat Police Station","Dinajpur","Rangpur",25.6115,88.6850,noorlabib@iut-dhaka.edu,01886709707
+"Hakimpur Police Station","Dinajpur","Rangpur",25.5847,88.6996,noorlabib@iut-dhaka.edu,01886709707
+"Kaharole Police Station","Dinajpur","Rangpur",25.5906,88.6450,noorlabib@iut-dhaka.edu,01886709707
+"Khansama Police Station","Dinajpur","Rangpur",25.6362,88.6453,noorlabib@iut-dhaka.edu,01886709707
+"Nawabganj Police Station","Dinajpur","Rangpur",25.6195,88.6558,noorlabib@iut-dhaka.edu,01886709707
+"Parbatipur Police Station","Dinajpur","Rangpur",25.5700,88.6833,noorlabib@iut-dhaka.edu,01886709707
+"Gaibandha Sadar Police Station","Gaibandha","Rangpur",25.3288,89.5281,noorlabib@iut-dhaka.edu,01886709707
+"Fulchhari Police Station","Gaibandha","Rangpur",25.3945,89.5985,noorlabib@iut-dhaka.edu,01886709707
+"Gobindaganj Police Station","Gaibandha","Rangpur",25.3694,89.5543,noorlabib@iut-dhaka.edu,01886709707
+"Palashbari Police Station","Gaibandha","Rangpur",25.2862,89.5334,noorlabib@iut-dhaka.edu,01886709707
+"Sadullapur Police Station","Gaibandha","Rangpur",25.2860,89.5514,noorlabib@iut-dhaka.edu,01886709707
+"Saghata Police Station","Gaibandha","Rangpur",25.3245,89.4767,noorlabib@iut-dhaka.edu,01886709707
+"Sundarganj Police Station","Gaibandha","Rangpur",25.2549,89.4821,noorlabib@iut-dhaka.edu,01886709707
+"Kurigram Sadar Police Station","Kurigram","Rangpur",25.8054,89.6362,noorlabib@iut-dhaka.edu,01886709707
+"Nageshwari Police Station","Kurigram","Rangpur",25.7671,89.5857,noorlabib@iut-dhaka.edu,01886709707
+"Bhurungamari Police Station","Kurigram","Rangpur",25.7797,89.6823,noorlabib@iut-dhaka.edu,01886709707
+"Fulbari Police Station","Kurigram","Rangpur",25.8564,89.5995,noorlabib@iut-dhaka.edu,01886709707
+"Rajarhat Police Station","Kurigram","Rangpur",25.8104,89.6677,noorlabib@iut-dhaka.edu,01886709707
+"Ulipur Police Station","Kurigram","Rangpur",25.7556,89.6854,noorlabib@iut-dhaka.edu,01886709707
+"Chilmari Police Station","Kurigram","Rangpur",25.7655,89.6716,noorlabib@iut-dhaka.edu,01886709707
+"Rowmari Police Station","Kurigram","Rangpur",25.7416,89.6972,noorlabib@iut-dhaka.edu,01886709707
+"Char Rajibpur Police Station","Kurigram","Rangpur",25.8090,89.5676,noorlabib@iut-dhaka.edu,01886709707
+"Kachakata Police Station","Kurigram","Rangpur",25.7440,89.5696,noorlabib@iut-dhaka.edu,01886709707
+"Lalmonirhat Sadar Police Station","Lalmonirhat","Rangpur",25.9165,89.4532,noorlabib@iut-dhaka.edu,01886709707
+"Aditmari Police Station","Lalmonirhat","Rangpur",25.8842,89.3968,noorlabib@iut-dhaka.edu,01886709707
+"Kaliganj Police Station","Lalmonirhat","Rangpur",25.9672,89.4788,noorlabib@iut-dhaka.edu,01886709707
+"Hatibandha Police Station","Lalmonirhat","Rangpur",25.9538,89.4903,noorlabib@iut-dhaka.edu,01886709707
+"Patgram Police Station","Lalmonirhat","Rangpur",25.8633,89.4883,noorlabib@iut-dhaka.edu,01886709707
+"Nilphamari Sadar Police Station","Nilphamari","Rangpur",25.9318,88.8561,noorlabib@iut-dhaka.edu,01886709707
+"Saidpur Police Station","Nilphamari","Rangpur",26.0040,88.8392,noorlabib@iut-dhaka.edu,01886709707
+"Jaldhaka Police Station","Nilphamari","Rangpur",25.9925,88.8047,noorlabib@iut-dhaka.edu,01886709707
+"Kishoreganj Police Station","Nilphamari","Rangpur",25.8610,88.9062,noorlabib@iut-dhaka.edu,01886709707
+"Domar Police Station","Nilphamari","Rangpur",25.9847,88.9203,noorlabib@iut-dhaka.edu,01886709707
+"Dimla Police Station","Nilphamari","Rangpur",25.9599,88.8901,noorlabib@iut-dhaka.edu,01886709707
+"Panchagarh Sadar Police Station","Panchagarh","Rangpur",26.3411,88.5542,noorlabib@iut-dhaka.edu,01886709707
+"Boda Police Station","Panchagarh","Rangpur",26.2954,88.5956,noorlabib@iut-dhaka.edu,01886709707
+"Debiganj Police Station","Panchagarh","Rangpur",26.3271,88.5769,noorlabib@iut-dhaka.edu,01886709707
+"Atwari Police Station","Panchagarh","Rangpur",26.3014,88.5968,noorlabib@iut-dhaka.edu,01886709707
+"Tetulia Police Station","Panchagarh","Rangpur",26.3076,88.6145,noorlabib@iut-dhaka.edu,01886709707
+"Thakurgaon Sadar Police Station","Thakurgaon","Rangpur",26.0337,88.4617,noorlabib@iut-dhaka.edu,01886709707
+"Baliadangi Police Station","Thakurgaon","Rangpur",25.9963,88.5057,noorlabib@iut-dhaka.edu,01886709707
+"Haripur Police Station","Thakurgaon","Rangpur",26.0264,88.5054,noorlabib@iut-dhaka.edu,01886709707
+"Pirganj Police Station","Thakurgaon","Rangpur",25.9603,88.4026,noorlabib@iut-dhaka.edu,01886709707
+"Ranishankail Police Station","Thakurgaon","Rangpur",26.0048,88.5289,noorlabib@iut-dhaka.edu,01886709707
+"Kotwali Police Station","Mymensingh","Mymensingh",24.7471,90.4203,noorlabib@iut-dhaka.edu,01886709707
+"Muktagachha Police Station","Mymensingh","Mymensingh",24.7545,90.3680,noorlabib@iut-dhaka.edu,01886709707
+"Fulbaria Police Station","Mymensingh","Mymensingh",24.7064,90.4401,noorlabib@iut-dhaka.edu,01886709707
+"Trishal Police Station","Mymensingh","Mymensingh",24.7356,90.4371,noorlabib@iut-dhaka.edu,01886709707
+"Bhaluka Police Station","Mymensingh","Mymensingh",24.7634,90.3771,noorlabib@iut-dhaka.edu,01886709707
+"Gaffargaon Police Station","Mymensingh","Mymensingh",24.7305,90.4643,noorlabib@iut-dhaka.edu,01886709707
+"Nandail Police Station","Mymensingh","Mymensingh",24.7367,90.3756,noorlabib@iut-dhaka.edu,01886709707
+"Ishwarganj Police Station","Mymensingh","Mymensingh",24.7513,90.3657,noorlabib@iut-dhaka.edu,01886709707
+"Gouripur Police Station","Mymensingh","Mymensingh",24.8101,90.4440,noorlabib@iut-dhaka.edu,01886709707
+"Phulpur Police Station","Mymensingh","Mymensingh",24.7752,90.4252,noorlabib@iut-dhaka.edu,01886709707
+"Haluaghat Police Station","Mymensingh","Mymensingh",24.6887,90.4805,noorlabib@iut-dhaka.edu,01886709707
+"Dhobaura Police Station","Mymensingh","Mymensingh",24.7647,90.4122,noorlabib@iut-dhaka.edu,01886709707
+"Tara Khanda Police Station","Mymensingh","Mymensingh",24.7116,90.3993,noorlabib@iut-dhaka.edu,01886709707
+"Pagla Police Station","Mymensingh","Mymensingh",24.7808,90.4854,noorlabib@iut-dhaka.edu,01886709707
+"Jamalpur Sadar Police Station","Jamalpur","Mymensingh",24.9375,89.9378,noorlabib@iut-dhaka.edu,01886709707
+"Melandah Police Station","Jamalpur","Mymensingh",24.9720,90.0003,noorlabib@iut-dhaka.edu,01886709707
+"Islampur Police Station","Jamalpur","Mymensingh",24.8655,89.9572,noorlabib@iut-dhaka.edu,01886709707
+"Dewanganj Police Station","Jamalpur","Mymensingh",24.9303,89.9798,noorlabib@iut-dhaka.edu,01886709707
+"Sarishabari Police Station","Jamalpur","Mymensingh",24.9791,89.8656,noorlabib@iut-dhaka.edu,01886709707
+"Madarganj Police Station","Jamalpur","Mymensingh",24.9211,89.9594,noorlabib@iut-dhaka.edu,01886709707
+"Bakshiganj Police Station","Jamalpur","Mymensingh",25.0093,89.9757,noorlabib@iut-dhaka.edu,01886709707
+"Netrokona Sadar Police Station","Netrokona","Mymensingh",24.8709,90.7279,noorlabib@iut-dhaka.edu,01886709707
+"Barhatta Police Station","Netrokona","Mymensingh",24.8969,90.7777,noorlabib@iut-dhaka.edu,01886709707
+"Durgapur Police Station","Netrokona","Mymensingh",24.8328,90.7970,noorlabib@iut-dhaka.edu,01886709707
+"Khaliajuri Police Station","Netrokona","Mymensingh",24.8102,90.7683,noorlabib@iut-dhaka.edu,01886709707
+"Kalmakanda Police Station","Netrokona","Mymensingh",24.8563,90.7233,noorlabib@iut-dhaka.edu,01886709707
+"Kendua Police Station","Netrokona","Mymensingh",24.8498,90.7060,noorlabib@iut-dhaka.edu,01886709707
+"Madan Police Station","Netrokona","Mymensingh",24.8635,90.6888,noorlabib@iut-dhaka.edu,01886709707
+"Mohanganj Police Station","Netrokona","Mymensingh",24.8897,90.7855,noorlabib@iut-dhaka.edu,01886709707
+"Purbadhala Police Station","Netrokona","Mymensingh",24.9088,90.6724,noorlabib@iut-dhaka.edu,01886709707
+"Atpara Police Station","Netrokona","Mymensingh",24.8438,90.7905,noorlabib@iut-dhaka.edu,01886709707
+"Sherpur Sadar Police Station","Sherpur","Mymensingh",25.0205,90.0153,noorlabib@iut-dhaka.edu,01886709707
+"Nakatla Police Station","Sherpur","Mymensingh",24.9501,90.0730,noorlabib@iut-dhaka.edu,01886709707
+"Nalitabari Police Station","Sherpur","Mymensingh",24.9699,90.0777,noorlabib@iut-dhaka.edu,01886709707
+"Sreebardi Police Station","Sherpur","Mymensingh",24.9912,89.9464,noorlabib@iut-dhaka.edu,01886709707
+"Jhenaigati Police Station","Sherpur","Mymensingh",24.9962,90.0219,noorlabib@iut-dhaka.edu,01886709707

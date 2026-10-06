@@ -1,0 +1,146 @@
+{
+  "BMP": {
+    "risk_score": 10070.0,
+    "location": {
+      "lat": 22.701,
+      "lon": 90.3535,
+      "radius_km": 8
+    },
+    "normalized_risk": 4.761814691167709
+  },
+  "Barishal Range": {
+    "risk_score": 70807.0,
+    "location": {
+      "lat": 22.701,
+      "lon": 90.3535,
+      "radius_km": 60
+    },
+    "normalized_risk": 33.48260306231499
+  },
+  "CMP": {
+    "risk_score": 39021.0,
+    "location": {
+      "lat": 22.3569,
+      "lon": 91.7832,
+      "radius_km": 15
+    },
+    "normalized_risk": 18.45191371043249
+  },
+  "Chittagong Range": {
+    "risk_score": 160327.5,
+    "location": {
+      "lat": 22.3569,
+      "lon": 91.7832,
+      "radius_km": 100
+    },
+    "normalized_risk": 75.81428449833076
+  },
+  "DMP": {
+    "risk_score": 124652.0,
+    "location": {
+      "lat": 23.8103,
+      "lon": 90.4125,
+      "radius_km": 20
+    },
+    "normalized_risk": 58.9443619546611
+  },
+  "Dhaka Range": {
+    "risk_score": 211474.0,
+    "location": {
+      "lat": 23.8103,
+      "lon": 90.4125,
+      "radius_km": 100
+    },
+    "normalized_risk": 100.0
+  },
+  "GMP": {
+    "risk_score": 24717.0,
+    "location": {
+      "lat": 23.9999,
+      "lon": 90.4203,
+      "radius_km": 15
+    },
+    "normalized_risk": 11.687961640674503
+  },
+  "KMP": {
+    "risk_score": 10468.0,
+    "location": {
+      "lat": 22.8456,
+      "lon": 89.5403,
+      "radius_km": 10
+    },
+    "normalized_risk": 4.950017496240672
+  },
+  "Khulna Range": {
+    "risk_score": 106135.0,
+    "location": {
+      "lat": 22.8456,
+      "lon": 89.5403,
+      "radius_km": 80
+    },
+    "normalized_risk": 50.18820280507297
+  },
+  "Mymensingh Range": {
+    "risk_score": 90719.0,
+    "location": {
+      "lat": 24.7471,
+      "lon": 90.4203,
+      "radius_km": 60
+    },
+    "normalized_risk": 42.89841777239755
+  },
+  "RMP": {
+    "risk_score": 12037.0,
+    "location": {
+      "lat": 24.3636,
+      "lon": 88.6241,
+      "radius_km": 10
+    },
+    "normalized_risk": 5.691952675033337
+  },
+  "RPMP": {
+    "risk_score": 9084.0,
+    "location": {
+      "lat": 25.7439,
+      "lon": 89.2752,
+      "radius_km": 8
+    },
+    "normalized_risk": 4.2955635208110685
+  },
+  "Rajshahi Range": {
+    "risk_score": 131495.0,
+    "location": {
+      "lat": 24.3636,
+      "lon": 88.6241,
+      "radius_km": 80
+    },
+    "normalized_risk": 62.180220736355295
+  },
+  "Rangpur Range": {
+    "risk_score": 122607.0,
+    "location": {
+      "lat": 25.7439,
+      "lon": 89.2752,
+      "radius_km": 60
+    },
+    "normalized_risk": 57.977340003972124
+  },
+  "SMP": {
+    "risk_score": 13795.0,
+    "location": {
+      "lat": 24.8949,
+      "lon": 91.8687,
+      "radius_km": 10
+    },
+    "normalized_risk": 6.523260542667184
+  },
+  "Sylhet Range": {
+    "risk_score": 54393.0,
+    "location": {
+      "lat": 24.8949,
+      "lon": 91.8687,
+      "radius_km": 60
+    },
+    "normalized_risk": 25.720892402848577
+  }
+}

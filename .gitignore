@@ -1,0 +1,218 @@
+# Meridian - Root .gitignore
+
+# Environment files
+.env.*.local
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+.Spotlight-V100
+.Trashes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+server.log
+celery.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+backend/venv/
+backend/env/
+backend/ENV/
+backend/env.bak/
+backend/venv.bak/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Python Testing
+.pytest_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+.hypothesis/
+.pytype/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# AI Models (too large for git - download separately)
+*.pt
+*.pth
+*.onnx
+*.pb
+*.h5
+*.caffemodel
+*.weights
+backend/yolov9c.pt
+backend/models/*.pt
+backend/models/*.pth
+
+# HuggingFace & Model Cache
+.cache/
+.huggingface/
+backend/.cache/
+backend/torch/
+backend/hub/
+torch_extensions/
+
+# Backend specific
+backend/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/*.pyd
+backend/.pytest_cache/
+backend/htmlcov/
+backend/dist/
+backend/build/
+backend/*.egg-info/
+
+# Alembic
+backend/alembic/versions/__pycache__/
+
+# Redis dump
+dump.rdb
+*.rdb
+
+# React Native / Expo Frontend
+frontend/node_modules/
+frontend/.expo/
+frontend/.expo-shared/
+frontend/dist/
+frontend/build/
+frontend/web-build/
+frontend/npm-debug.*
+frontend/yarn-error.*
+frontend/.DS_Store
+
+# Node modules
+node_modules/
+package-lock.json
+yarn.lock
+
+# Android
+frontend/android/build/
+frontend/android/.gradle/
+frontend/android/.idea/
+frontend/android/app/build/
+frontend/android/app/.cxx/
+frontend/android/captures/
+frontend/android/local.properties
+frontend/android/*.iml
+frontend/android/*.hprof
+frontend/android/.externalNativeBuild
+frontend/android/.cxx
+frontend/android/app/debug.keystore
+
+# iOS
+frontend/ios/build/
+frontend/ios/Pods/
+frontend/ios/*.xcworkspace/xcuserdata/
+frontend/ios/*.xcodeproj/xcuserdata/
+frontend/ios/*.xcodeproj/project.xcworkspace/xcuserdata/
+frontend/ios/.xcode.env.local
+frontend/ios/Podfile.lock
+frontend/ios/DerivedData/
+*.ipa
+
+# Metro bundler
+frontend/.metro-health-check*
+frontend/.metro/
+
+# TypeScript
+*.tsbuildinfo
+frontend/*.tsbuildinfo
+
+# Testing
+coverage/
+.nyc_output/
+jest-coverage/
+
+# Firebase
+frontend/google-services.json
+frontend/ios/Runner/GoogleService-Info.plist
+backend/firebase-credentials.json
+firebase-debug.log
+.firebase/
+
+# Sensitive data
+*.key
+*.pem
+*.p12
+*.jks
+keystore.properties
+secrets.json
+credentials.json
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+postgresql-data/
+pgdata/
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+.cache/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Backup files
+*.bak
+*.backup
+*~
+config.bat
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat

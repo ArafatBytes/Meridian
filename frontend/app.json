@@ -1,0 +1,84 @@
+{
+  "expo": {
+    "name": "Meridian",
+    "slug": "Meridian",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.Meridian.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Meridian needs your location to show nearby safety alerts and calculate safe routes.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Meridian needs your location to send emergency alerts and track your safety even when the app is in the background.",
+        "NSCameraUsageDescription": "Meridian needs camera access to let you capture and report crime incidents.",
+        "NSMicrophoneUsageDescription": "Meridian needs microphone access for voice commands and emergency SOS features.",
+        "NSPhotoLibraryUsageDescription": "Meridian needs photo library access to attach images to crime reports."
+      },
+      "config": {
+        "googleMapsApiKey": "YOUR_GOOGLE_MAPS_API_KEY"
+      }
+    },
+    "android": {
+      "package": "com.Meridian.app",
+      "usesCleartextTraffic": true,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED",
+        "WAKE_LOCK"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY"
+        }
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Meridian to use your location for safety alerts and emergency features.",
+          "locationAlwaysPermission": "Allow Meridian to track your location in the background for continuous safety monitoring.",
+          "locationWhenInUsePermission": "Allow Meridian to access your location while using the app.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#FF5252",
+          "sounds": [
+            "./assets/sounds/emergency.wav",
+            "./assets/sounds/sos_alert.wav",
+            "./assets/sounds/danger_alert.wav"
+          ],
+          "mode": "production"
+        }
+      ],
+      "expo-secure-store",
+      "expo-asset",
+      "expo-font"
+    ],
+    "extra": {
+      "supabaseUrl": "https://lpfsoinrwkapkxwprhpc.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwZnNvaW5yd2thcGt4d3ByaHBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwNTI3MjIsImV4cCI6MjA4MDYyODcyMn0.5JKvblcBeyczyoWg6sj5qrZt0CRs0UCsU1PUOEw59wM"
+    }
+  }
+}

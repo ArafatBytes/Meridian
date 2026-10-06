@@ -1,0 +1,146 @@
+version: "3.8"
+
+services:
+  # PostgreSQL with PostGIS
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: Meridian-postgres
+    environment:
+      POSTGRES_USER: Meridian_user
+      POSTGRES_PASSWORD: Meridian_password
+      POSTGRES_DB: Meridian_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - Meridian-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U Meridian_user -d Meridian_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: Meridian-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - Meridian-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: Meridian-api
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - Meridian-network
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Celery Worker
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: Meridian-celery-worker
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+      - redis
+      - api
+    networks:
+      - Meridian-network
+    restart: unless-stopped
+    command: celery -A app.core.celery_app worker --loglevel=info
+
+  # Celery Beat (Scheduler)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: Meridian-celery-beat
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+      - redis
+      - celery-worker
+    networks:
+      - Meridian-network
+    restart: unless-stopped
+    command: celery -A app.core.celery_app beat --loglevel=info
+
+  # Flower (Celery Monitoring)
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: Meridian-flower
+    env_file:
+      - .env
+    ports:
+      - "5555:5555"
+    depends_on:
+      - celery-worker
+      - redis
+    networks:
+      - Meridian-network
+    restart: unless-stopped
+    command: celery -A app.core.celery_app flower --port=5555
+
+  # OSRM Backend (for routing)
+  osrm:
+    image: osrm/osrm-backend
+    container_name: Meridian-osrm
+    ports:
+      - "5000:5000"
+    volumes:
+      - osrm_data:/data
+    networks:
+      - Meridian-network
+    restart: unless-stopped
+    command: osrm-routed --algorithm mld /data/bangladesh-latest.osrm
+
+volumes:
+  postgres_data:
+  redis_data:
+  osrm_data:
+
+networks:
+  Meridian-network:
+    driver: bridge
