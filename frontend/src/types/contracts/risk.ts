@@ -87,8 +87,22 @@ export interface RiskFlag {
   lat: number;
   lon: number;
   radiusM: number;
-  /** Severity at `observedAt`, 0-100. Not the severity now; D02 adds that. */
+  /** Severity at `observedAt`, 0-100. Stored, and it never changes. */
   severity0: number;
+  /**
+   * Severity at the instant the surface was asked about, 0-100.
+   *
+   * Computed server-side on every read — the stored severity run down its half-life
+   * curve, then multiplied by an hour-of-day factor (`app/scoring/decay.py`). This is
+   * the number to colour a pin by and the number to show a user. `severity0` is
+   * context: "74 when it was reported, 42 now" is the claim that the surface decays,
+   * and one number cannot make it.
+   *
+   * Do not compute decay on the device. The arithmetic has exactly one home and a
+   * phone is not it — a client that halved the severity itself would disagree with the
+   * server about when a flag expires.
+   */
+  severityNow: number;
   halfLifeHours: number;
   observedAt: string;
   /** Derived server-side. Read-only in every sense. */

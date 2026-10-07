@@ -221,35 +221,47 @@ demonstrable in under a minute, not over three hours. D01's walkthrough still pa
 > **This is the most valuable sprint in the track and the one to protect.** The fixture makes beats
 > 1, 2, 4 and 5 demoable *even if live ingestion never lands*. Spend real time on it.
 
-- [ ] **`SeededRiskSurface` + `data/fixtures/risk_flags.json` — ~200 hand-built flags across
+- [x] **`SeededRiskSurface` + `data/fixtures/risk_flags.json` — ~200 hand-built flags across
       Dhaka**, behind the protocol D01 established. Mixed kinds, severities and half-lives; confirmed
       and unconfirmed; several already expired; **several deliberately placed on common commuting
       corridors** so D06 has something to route around *(S04)*
-- [ ] ⚠️ **Same fixture rule as D01: structured fields only, statement derived through
+- [x] ⚠️ **Same fixture rule as D01: structured fields only, statement derived through
       `framing.py`.** 200 rows is 200 chances to smuggle prose past the invariant
-- [ ] `RISK_SURFACE_IMPL` switch — `seeded` or `db` *(S04)*
-- [ ] **Risk Scoring Engine** — severity, spatial radius and half-life per event kind, to the concept
+- [x] `RISK_SURFACE_IMPL` switch — `seeded` or `db` *(S04)*
+- [x] **Risk Scoring Engine** — severity, spatial radius and half-life per event kind, to the concept
       document §5 table: accident ~1h, fire ~3–4h, clash ~6–12h, announced event = duration, chronic
       blackspot = months *(S19)*
-- [ ] **Time-of-day modulation** — the same flag scores differently at 03:00 and 15:00 *(S19)*
-- [ ] **Decay engine** — severity as a function of elapsed time and half-life, **computed on read**
+- [x] **Time-of-day modulation** — the same flag scores differently at 03:00 and 15:00 *(S19)*
+- [x] **Decay engine** — severity as a function of elapsed time and half-life, **computed on read**
       rather than by a cron job that can fall behind *(S19)*
-- [ ] **One source of truth for expiry.** Severity is computed; `expires_at` is *derived* from
+- [x] **One source of truth for expiry.** Severity is computed; `expires_at` is *derived* from
       `half_life_hours` and never hand-set (plan §6.1 says so). The sweep deletes, it does not decide
-- [ ] **Expiry** — flags below threshold stop being served, and are swept *(S20)*
-- [ ] Fill in the real `DbRiskSurface` behind D01's minimal one; a test asserts **both** surfaces
+- [x] **Expiry** — flags below threshold stop being served, and are swept *(S20)*
+- [x] Fill in the real `DbRiskSurface` behind D01's minimal one; a test asserts **both** surfaces
       satisfy the protocol *(S04, S20)*
-- [ ] Wire `scripts/crime_risk_model.json` (1,105 rows of real Bangladesh Police unit statistics) in
+- [x] Wire `scripts/crime_risk_model.json` (1,105 rows of real Bangladesh Police unit statistics) in
       as the **chronic baseline layer** — close to free, and it gives the demo a chronic layer
       without S24's archive mining
-- [ ] ⚠️ **Note for D06:** `route_service._get_regional_risk()` *already* applies this same model.
+- [x] ⚠️ **Note for D06:** `route_service._get_regional_risk()` *already* applies this same model.
       Once it is in the surface, that method must go, or regional risk is counted twice
-- [ ] 📱 **Flag detail sheet.** Tap a pin: kind, mobility statement, severity now, half-life, time
+- [x] 📱 **Flag detail sheet.** Tap a pin: kind, mobility statement, severity now, half-life, time
       remaining, confirmed/unconfirmed. Beat 2's container — D04 and D05 fill in the rest
-- [ ] 📱 **An "as of" time control, dev builds only**, driving D01's `as_of` parameter. This is what
+- [x] 📱 **An "as of" time control, dev builds only**, driving D01's `as_of` parameter. This is what
       makes decay *showable*. Without it, beat 5 means standing on stage saying "trust me, in three
       hours this will fade." D09 promotes it to a real forward-looking control
-- [ ] 📄 `docs/walkthroughs/D02.md`
+- [x] 📄 `docs/walkthroughs/D02.md`
+- [x] **Not planned, found while building this sprint:**
+      `route_service._get_regional_risk()` takes the **maximum** `normalized_risk` across every
+      overlapping police unit, and the dataset contains both metropolitan units *and* the ranges that
+      contain them — so every point in Dhaka scores 100.0 from `Dhaka Range` instead of 58.9 from
+      `DMP`. The chronic layer drops the range rows for that reason and says so. The method is now
+      both a double count *and* wrong on its own terms; D06 deletes it and it carries a comment
+      saying so.
+- [x] **Also found:** the framing invariant's AST check caught keyword arguments and assignments but
+      **not a string key in a dict literal**. Before D02 the only producers of `mobility_statement`
+      outside `framing.py` lived in `scripts/`, which that test does not scan — so a hand-written
+      statement in a dict under `app/` would have walked straight past it. The detector was
+      strengthened rather than the new modules being quietly excluded
 
 ---
 

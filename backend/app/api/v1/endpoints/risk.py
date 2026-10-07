@@ -15,10 +15,16 @@ makes short-lived flags **drop out of the response**: measured against the D01
 fixture, 20 flags now, 16 in six hours, 10 in twelve, 4 in two days. So the
 "no stale red zones" claim is demonstrable from D01 rather than D02.
 
-What `as_of` does **not** do yet is change `severity_0` in the response. A flag
-still reports the severity it had when it was observed, so a fading flag does not
-visibly fade before it disappears. That is D02's severity-on-read, and D09 reuses
-the same parameter to look forward past `valid_from`.
+`as_of` now also changes what the flags *say*. Every response carries
+`severity_now` alongside `severity_0`: the stored severity decayed to the instant
+asked about, with the hour-of-day multiplier applied
+(`app/scoring/decay.py`). So dragging the time control forward makes flags fade
+before they vanish, which is demo beat 5. D09 reuses the same parameter to look
+forward past `valid_from`.
+
+`severity_0` stays in the response and never changes. The detail sheet shows both,
+because "74 at 14:31, 42 now" is the provenance claim; a single number cannot say
+that the flag is decaying rather than simply being moderate.
 
 **A note for anyone testing with curl:** pass the instant with a `Z` suffix, not
 `+00:00`. A literal `+` in a query string decodes to a space, the value fails to
@@ -36,7 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.contracts.risk import RiskFlag
 from app.contracts.surface import RiskSurface
 from app.core.database import get_db
-from app.scoring.surface_db import DbRiskSurface
+from app.scoring.factory import get_risk_surface
 
 router = APIRouter()
 
@@ -171,15 +177,16 @@ async def get_risk_flags(
     public statistics — and the map is the one screen that must render before
     anything else has loaded.
 
-    Read through a `RiskSurface`, never by querying the table here. D02 adds
-    `SeededRiskSurface` and a `RISK_SURFACE_IMPL` setting to choose between them;
-    this line is the only one that changes, because `surface` is typed as the
-    protocol rather than the class.
+    Read through a `RiskSurface`, never by querying the table here. Which
+    implementation answers is `RISK_SURFACE_IMPL` — `db` or `seeded` — and this
+    function cannot tell the difference, because `surface` is typed as the protocol
+    rather than the class. That is what makes the offline demo path an environment
+    variable instead of a branch.
     """
     min_lat, min_lon, max_lat, max_lon = _parse_bbox(bbox)
     at = _resolve_as_of(as_of)
 
-    surface: RiskSurface = DbRiskSurface(db)
+    surface: RiskSurface = get_risk_surface(db)
     flags = await surface.flags_in_bbox(min_lat, min_lon, max_lat, max_lon, at)
 
     return RiskFlagsResponse(as_of=at, count=len(flags), flags=flags)

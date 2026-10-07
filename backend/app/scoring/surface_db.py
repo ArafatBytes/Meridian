@@ -27,6 +27,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.contracts.risk import IncidentKind, RiskFlag, SourceRef, TimeProfile
+from app.scoring.decay import severity_at
 
 POSTGIS_SCHEMA: Final[str] = "extensions"
 """
@@ -83,29 +84,54 @@ _LIVE_PREDICATE: Final[str] = """
 """
 
 
-def _row_to_flag(row: Any) -> RiskFlag:
+def _row_to_flag(row: Any, at: datetime) -> RiskFlag:
     """
-    One database row to one `RiskFlag`.
+    One database row to one `RiskFlag`, evaluated at the instant `at`.
 
     `sources` and `time_profile` arrive as text and are parsed here rather than
     relying on the driver: with raw SQL, asyncpg returns `jsonb` as a string, and
     whether SQLAlchemy intercepts that depends on column typing this query does not
     declare. Casting to text in SQL and parsing here behaves the same everywhere.
+
+    `severity_now` is computed in Python rather than in the SQL above, which is a
+    departure from S20's "decay applied at query time in PostGIS". The reason is the
+    time-of-day profile: it is a 24-element array lookup against the Dhaka-local hour,
+    and expressing that in SQL means either a `CASE` with 24 branches or a jsonb index
+    into a column that is null on every row today, in both cases duplicating
+    `app/scoring/decay.py` in a second language. The decay arithmetic already has two
+    implementations it cannot avoid (Python for the seeded surface, SQL for
+    `expires_at`); adding a third, in the hot path, to save an exponent per row on a
+    result set capped at 500 is a bad trade.
+
+    What PostGIS still does at query time is the part that needs an index: the spatial
+    test and the liveness filter. Rows that have decayed below the serve threshold never
+    leave the database, because `expires_at` encodes exactly that point.
     """
     raw_sources: list[dict[str, Any]] = json.loads(row.sources_json or "[]")
     raw_profile: dict[str, Any] | None = (
         json.loads(row.time_profile_json) if row.time_profile_json else None
     )
+    kind = IncidentKind(row.kind)
+    time_profile = TimeProfile(**raw_profile) if raw_profile else None
 
     return RiskFlag(
         flag_id=row.flag_id if isinstance(row.flag_id, UUID) else UUID(str(row.flag_id)),
         event_key=row.event_key,
-        kind=IncidentKind(row.kind),
+        kind=kind,
         status=row.status,
         lat=float(row.lat),
         lon=float(row.lon),
         radius_m=int(row.radius_m),
         severity_0=float(row.severity_0),
+        severity_now=severity_at(
+            severity_0=float(row.severity_0),
+            half_life_hours=float(row.half_life_hours),
+            observed_at=row.observed_at,
+            at=at,
+            kind=kind,
+            valid_from=row.valid_from,
+            time_profile=time_profile,
+        ),
         half_life_hours=float(row.half_life_hours),
         observed_at=row.observed_at,
         expires_at=row.expires_at,
@@ -114,7 +140,7 @@ def _row_to_flag(row: Any) -> RiskFlag:
         source_count=int(row.source_count),
         sources=[SourceRef(**s) for s in raw_sources],
         mobility_statement=row.mobility_statement,
-        time_profile=TimeProfile(**raw_profile) if raw_profile else None,
+        time_profile=time_profile,
     )
 
 
@@ -175,7 +201,7 @@ class DbRiskSurface:
                 "limit": MAX_FLAGS_PER_READ,
             },
         )
-        return [_row_to_flag(row) for row in result]
+        return [_row_to_flag(row, at) for row in result]
 
     async def flags_near(
         self, lat: float, lon: float, radius_m: int, at: datetime
@@ -219,4 +245,4 @@ class DbRiskSurface:
                 "limit": MAX_FLAGS_PER_READ,
             },
         )
-        return [_row_to_flag(row) for row in result]
+        return [_row_to_flag(row, at) for row in result]

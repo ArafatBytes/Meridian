@@ -204,6 +204,9 @@ ALLOWED_WRITERS: dict[str, str] = {
     "app/policy/framing.py": "the sole writer",
     "app/contracts/risk.py": "declares the field",
     "app/scoring/surface_db.py": "rehydrates a stored row; reading, not writing",
+    "app/scoring/surface_seeded.py": "rehydrates a fixture row; reading, not writing",
+    "app/scoring/fixture.py": "calls to_mobility_statement() for every fixture row",
+    "app/scoring/chronic.py": "calls to_mobility_statement() for every chronic row",
 }
 
 
@@ -213,13 +216,25 @@ def _assignments_to_mobility_statement(path: Path) -> bool:
 
     Parsed rather than grepped, so a mention in a docstring or a comment does not
     count. Covers keyword arguments (`RiskFlag(mobility_statement=...)`), plain
-    assignment, and attribute assignment (`flag.mobility_statement = ...`), which
-    is every way the field can actually be set.
+    assignment, attribute assignment (`flag.mobility_statement = ...`), **and a
+    string key in a dict literal** (`{"mobility_statement": ...}`), which together are
+    every way the field can actually be set.
+
+    The dict-literal case was added in D02 and it was a real blind spot, not a
+    formality. `app/scoring/fixture.py` builds insert-shaped dicts rather than
+    `RiskFlag` objects — a flag has no `flag_id` until the database has seen it — so
+    before D02 the only producers of this field outside `framing.py` lived in
+    `scripts/`, which this test does not scan. A hand-written statement in a dict
+    literal under `app/` would have gone straight past it.
     """
     tree = ast.parse(path.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.keyword) and node.arg == "mobility_statement":
             return True
+        if isinstance(node, ast.Dict):
+            for key in node.keys:
+                if isinstance(key, ast.Constant) and key.value == "mobility_statement":
+                    return True
         if isinstance(node, ast.Assign):
             for target in node.targets:
                 if isinstance(target, ast.Name) and target.id == "mobility_statement":

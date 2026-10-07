@@ -133,10 +133,18 @@ class RiskFlag(BaseModel):
     A single, decaying, located claim about mobility. The only risk object the
     client sees.
 
-    Three fields carry invariants rather than data:
+    Four fields carry invariants rather than data:
 
     * `half_life_hours` — mandatory and positive. There are no permanent area
       labels in this product. The database carries the same CHECK.
+    * `severity_now` — **computed on read, never stored.** `severity_0` is the
+      severity at `observed_at` and never changes; this is that value decayed to
+      the instant the caller asked about, with the hour-of-day multiplier applied
+      (`app.scoring.decay.severity_at`). It is a required field rather than an
+      optional one because a surface that forgot to compute it would otherwise
+      serve a flag that silently never fades, and the map colours pins by this
+      value. There is no setter: the two `RiskSurface` implementations are the only
+      producers.
     * `expires_at` — **derived** from `observed_at`, `severity_0`,
       `half_life_hours` and `valid_to` by a database trigger
       (`trg_risk_flags_expires_at`), which discards whatever a caller supplied.
@@ -155,6 +163,7 @@ class RiskFlag(BaseModel):
     lon: float = Field(ge=-180, le=180)
     radius_m: int = Field(gt=0)
     severity_0: float = Field(ge=0.0, le=100.0)  # severity at observed_at
+    severity_now: float = Field(ge=0.0, le=100.0)
     half_life_hours: float = Field(gt=0)  # §4: decay is mandatory
     observed_at: datetime
     expires_at: datetime  # derived, never hand-set

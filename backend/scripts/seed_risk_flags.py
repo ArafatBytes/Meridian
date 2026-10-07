@@ -41,7 +41,7 @@ import asyncio
 import json
 import re
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -60,11 +60,7 @@ for _stream in (sys.stdout, sys.stderr):
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND_DIR))
 
-from app.contracts.risk import IncidentKind, MobilityImpact  # noqa: E402
-from app.policy.framing import to_mobility_statement  # noqa: E402
-
-FIXTURE = BACKEND_DIR / "data" / "fixtures" / "risk_flags.json"
-SEED_KEY_PREFIX = "seed-"
+from app.scoring.fixture import SEED_KEY_PREFIX, FixtureError, fixture_rows  # noqa: E402
 
 # Reuse the runner's connection handling rather than duplicating .env parsing and
 # the asyncpg DSN translation.
@@ -79,120 +75,6 @@ def sql_str(value: str) -> str:
 
 def sql_ts(value: datetime) -> str:
     return sql_str(value.astimezone(UTC).isoformat())
-
-
-def build_rows(now: datetime) -> list[dict[str, Any]]:
-    """
-    The fixture, resolved against `now` and framed.
-
-    Returns plain dicts rather than `RiskFlag` models: a flag does not have a
-    `flag_id` or an `expires_at` until the database has seen it, and constructing
-    a `RiskFlag` here would mean inventing both.
-    """
-    raw = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    rows: list[dict[str, Any]] = []
-
-    for entry in raw["flags"]:
-        if "mobility_statement" in entry:
-            raise SystemExit(
-                f"\n  error: fixture entry {entry['event_key']!r} contains a "
-                "'mobility_statement'.\n"
-                "    Flag text is produced by app/policy/framing.py, never written by "
-                "hand.\n    Remove the field; set 'mobility_impact' and 'place' instead.\n"
-            )
-
-        kind = IncidentKind(entry["kind"])
-        impact = MobilityImpact(entry["mobility_impact"])
-        observed_at = now + timedelta(hours=float(entry["observed_offset_hours"]))
-
-        sources = [
-            {
-                "source_id": s["source_id"],
-                "url": s["url"],
-                "published_at": (
-                    now + timedelta(hours=float(s["published_offset_hours"]))
-                ).isoformat(),
-                "title": s.get("title"),
-                "snippet": s.get("snippet"),
-            }
-            for s in entry.get("sources", [])
-        ]
-
-        rows.append(
-            {
-                "event_key": entry["event_key"],
-                "kind": kind.value,
-                "status": entry.get("status", "unconfirmed"),
-                "lat": float(entry["lat"]),
-                "lon": float(entry["lon"]),
-                "radius_m": int(entry["radius_m"]),
-                "severity_0": float(entry["severity_0"]),
-                "half_life_hours": float(entry["half_life_hours"]),
-                "observed_at": observed_at,
-                "valid_from": _offset_or_none(now, entry.get("valid_from_offset_hours")),
-                "valid_to": _offset_or_none(now, entry.get("valid_to_offset_hours")),
-                "source_count": int(entry.get("source_count", max(1, len(sources)))),
-                "sources": sources,
-                # The one and only writer of this string.
-                "mobility_statement": to_mobility_statement(
-                    kind=kind, impact=impact, place=entry.get("place")
-                ),
-            }
-        )
-
-    _check_consistency(rows)
-    return rows
-
-
-def _offset_or_none(now: datetime, offset: Any) -> datetime | None:
-    return None if offset is None else now + timedelta(hours=float(offset))
-
-
-def _check_consistency(rows: list[dict[str, Any]]) -> None:
-    """
-    Catch in the fixture what the database would otherwise reject mid-load.
-
-    Each of these mirrors a CHECK constraint on `risk_flags`. Validating here as
-    well means a bad fixture entry is reported by name, with all of them listed at
-    once, instead of the load dying on the first offender with a constraint name.
-    """
-    problems: list[str] = []
-    seen: set[str] = set()
-
-    for row in rows:
-        key = row["event_key"]
-        if key in seen:
-            problems.append(f"{key}: duplicate event_key")
-        seen.add(key)
-
-        if not key.startswith(SEED_KEY_PREFIX):
-            problems.append(
-                f"{key}: event_key must start with {SEED_KEY_PREFIX!r} so the "
-                "seeder can clear its own rows without touching agent output"
-            )
-        if row["half_life_hours"] <= 0:
-            problems.append(f"{key}: half_life_hours must be positive")
-        if not 0 <= row["severity_0"] <= 100:
-            problems.append(f"{key}: severity_0 must be 0-100")
-        if not 0 < row["radius_m"] <= 20_000:
-            problems.append(f"{key}: radius_m must be 1-20000")
-        if row["status"] == "confirmed" and row["source_count"] < 2:
-            problems.append(
-                f"{key}: status 'confirmed' needs source_count >= 2 "
-                "(verification before publication)"
-            )
-        if len(row["sources"]) > row["source_count"]:
-            problems.append(
-                f"{key}: lists {len(row['sources'])} sources but source_count is "
-                f"{row['source_count']}"
-            )
-
-    if problems:
-        print("\n  fixture is invalid:", file=sys.stderr)
-        for problem in problems:
-            print(f"    - {problem}", file=sys.stderr)
-        print(file=sys.stderr)
-        raise SystemExit(2)
 
 
 INSERT_COLUMNS = (
@@ -329,7 +211,11 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    rows = build_rows(datetime.now(UTC))
+    try:
+        rows = fixture_rows(datetime.now(UTC))
+    except FixtureError as problem:
+        print(f"\n  {problem}\n", file=sys.stderr)
+        return 2
 
     if args.sql:
         sql = build_sql(rows, clear=not args.keep)

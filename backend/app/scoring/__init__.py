@@ -1,12 +1,19 @@
 """
-Scoring — the database-backed risk surface.
+Scoring — the risk surface and the arithmetic behind it.
 
-D01 ships one thing: `DbRiskSurface`, so the map can read flags through the
-`RiskSurface` seam instead of around it.
+    kinds.py          per-kind half-life, radius and severity. The reviewed table.
+    decay.py          severity on read: halving, plus the hour-of-day profile.
+    chronic.py        the chronic baseline, from real police-unit statistics.
+    fixture.py        data/fixtures/risk_flags.json, resolved into rows.
+    surface_db.py     DbRiskSurface  — the risk_flags table.
+    surface_seeded.py SeededRiskSurface — the fixture, with no database at all.
+    factory.py        get_risk_surface() — the only place that chooses between them.
 
-D02 owns the rest and will grow this package considerably — exponential decay
-computed on read, the per-kind half-life and radius table, time-of-day modulation,
-the expiry sweep, and `SeededRiskSurface` beside the database one. None of that is
-here yet because nothing calls it yet; `risk_flags.expires_at` is derived by a
-database trigger, which is the only decay arithmetic D01 actually needs.
+**This file is deliberately empty of imports.** `factory.py` needs
+`app.core.config.settings`, whose required fields mean importing it fails without a
+discoverable `.env`. Re-exporting the factory from here would put that cost on every
+import of the package, including `scripts/seed_risk_flags.py --sql`, which only turns a
+JSON file into SQL text and has no business needing a database URL. That is not
+hypothetical — it is a bug this package had, briefly, in D02. Import from the module you
+want.
 """

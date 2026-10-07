@@ -44,7 +44,27 @@ class RouteService:
         return R * c
         
     def _get_regional_risk(self, lat: float, lon: float) -> float:
-        """Get normalized risk score based on regional model (0-100)"""
+        """
+        Get normalized risk score based on regional model (0-100)
+
+        DELETE THIS METHOD IN D06. It is now a double count.
+
+        D02 moved `scripts/crime_risk_model.json` into the risk surface as the chronic
+        baseline layer (`app/scoring/chronic.py`), so route scoring will read the same
+        police statistics through `RiskSurface` once D06 wires it up. Leaving this here
+        as well counts regional risk twice, and the symptom is a plausible-looking
+        safety score that is quietly wrong — the worst kind of bug to have on stage,
+        because nothing looks broken.
+
+        It also has a second bug worth knowing before deleting it: the `max` below
+        takes the highest `normalized_risk` across *every* overlapping unit, and the
+        dataset contains both metropolitan units and the ranges that contain them. Any
+        point in Dhaka therefore scores 100.0 from `Dhaka Range` rather than 58.9 from
+        `DMP`. `chronic.py` drops the range rows for exactly this reason and documents
+        why; see the "Two decisions that keep it honest" section there.
+
+        See DEMO_PLAN.md D02 and D06.
+        """
         max_risk = 0.0
         
         for unit, data in self.risk_model.items():

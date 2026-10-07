@@ -33,7 +33,29 @@ MIGRATION = BACKEND / "migrations" / "versions" / "20261007120000__risk_flags.sq
 
 
 def _fixture_flags() -> list[dict]:
+    """The fixture entries, exactly as written in the file."""
     return json.loads(FIXTURE.read_text(encoding="utf-8"))["flags"]
+
+
+def _loaded_rows() -> list[dict]:
+    """
+    The rows the fixture actually produces, after the loader has filled in defaults.
+
+    D02 made this distinction matter. A fixture entry is now allowed to omit its
+    `sources` list, in which case `app/scoring/fixture.py` generates one sample
+    reference per `source_count` — which is what keeps a 200-entry fixture to one line
+    per flag. So the raw file no longer carries the provenance for most entries, and a
+    test that read only the file would be checking a field that is usually absent and
+    passing for the wrong reason.
+
+    These rows are what the INSERT statement gets and what the seeded surface serves,
+    so asserting against them is strictly stronger than asserting against the file.
+    """
+    from datetime import UTC, datetime
+
+    from app.scoring.fixture import fixture_rows
+
+    return fixture_rows(datetime.now(UTC))
 
 
 # ---------------------------------------------------------------------------
@@ -104,9 +126,11 @@ def test_confirmed_fixture_flags_cite_distinct_publishers() -> None:
     actually behind it: if a flag cites three entries that are all
     `prothom_alo`, that is one publisher agreeing with itself, which is exactly
     the failure mode Rumour Guard's deduplication exists to catch.
+
+    Checked against the loaded rows rather than the raw file — see `_loaded_rows()`.
     """
     offenders: list[str] = []
-    for flag in _fixture_flags():
+    for flag in _loaded_rows():
         if flag.get("status") != "confirmed":
             continue
         publishers = {s["source_id"] for s in flag.get("sources", [])}
@@ -122,10 +146,12 @@ def test_no_fixture_flag_lists_more_sources_than_it_counts() -> None:
     `source_count` may exceed the listed `sources` — Rumour Guard can count a
     corroboration whose full text it did not keep — but never the other way round.
     The database carries the same constraint.
+
+    Checked against the loaded rows rather than the raw file — see `_loaded_rows()`.
     """
     offenders = [
         f["event_key"]
-        for f in _fixture_flags()
+        for f in _loaded_rows()
         if len(f.get("sources", [])) > int(f.get("source_count", 1))
     ]
     assert offenders == [], f"{offenders} list more sources than source_count claims"
@@ -147,18 +173,20 @@ def test_the_fixture_actually_contains_both_statuses() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_seed_loader_rejects_a_single_source_confirmed_flag(tmp_path, monkeypatch) -> None:
+def test_the_loader_rejects_a_single_source_confirmed_flag(tmp_path) -> None:
     """
-    The seeder validates before it writes, and reports by flag name.
+    The loader validates before anything writes, and reports by flag name.
 
-    This matters more than it looks: the loader is the one place a human types flag
-    data, and a constraint violation arriving from Postgres names the constraint,
-    not the flag. Catching it here means the message says which entry is wrong.
+    This matters more than it looks: the fixture is the one place a human types flag
+    data, and a constraint violation arriving from Postgres names the constraint, not
+    the flag. Catching it here means the message says which entry is wrong.
+
+    It also now guards the surface that has no constraints at all.
+    `SeededRiskSurface` reads these same rows with no database behind it, so this
+    check is the only thing standing between a bad fixture entry and an offline demo
+    serving a flag the real database would have refused.
     """
-    import sys
-
-    sys.path.insert(0, str(BACKEND / "scripts"))
-    import seed_risk_flags
+    from app.scoring.fixture import FixtureError, fixture_rows
 
     bad = {
         "flags": [
@@ -187,9 +215,28 @@ def test_seed_loader_rejects_a_single_source_confirmed_flag(tmp_path, monkeypatc
     }
     fixture = tmp_path / "risk_flags.json"
     fixture.write_text(json.dumps(bad), encoding="utf-8")
-    monkeypatch.setattr(seed_risk_flags, "FIXTURE", fixture)
 
     from datetime import UTC, datetime
 
-    with pytest.raises(SystemExit):
-        seed_risk_flags.build_rows(datetime.now(UTC))
+    with pytest.raises(FixtureError, match="seed-bad-confirmed"):
+        fixture_rows(datetime.now(UTC), include_chronic=False, fixture_path=fixture)
+
+
+def test_the_seeder_turns_a_fixture_error_into_an_exit_code() -> None:
+    """
+    The exception above has to reach the shell as a failure, not as a traceback.
+
+    `scripts/seed_risk_flags.py` is run by hand and by `seed.sh`, and a loader error
+    that escaped as an unhandled exception would still exit non-zero — but it would
+    print a traceback where the message naming the bad entry should be, which defeats
+    the point of validating by name.
+
+    **This reads the script's source**, because the script resolves the fixture path
+    itself and offers no way to point it at a bad one; making it injectable purely to
+    test this would be a worse trade than a source check that says so out loud.
+    """
+    source = (BACKEND / "scripts" / "seed_risk_flags.py").read_text(encoding="utf-8")
+    assert "except FixtureError" in source, (
+        "seed_risk_flags.py must catch FixtureError and return a non-zero exit code"
+    )
+    assert "return 2" in source

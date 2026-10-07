@@ -69,15 +69,15 @@ Full write-up, indicators of compromise and the remediation checklist:
 
 ## 📍 CURRENT STATE
 
-*Last updated: 2026-10-07 · by: Nakib · after: D01*
+*Last updated: 2026-10-07 · by: Nakib · after: D02*
 
 | | |
 |---|---|
-| **Last sprint completed** | **D01 — ✅ closed.** Walkthrough run on an iPhone, every step passed. All 20 checkboxes ticked in [DEMO_PLAN.md](DEMO_PLAN.md) |
-| **NEXT SPRINT** | **D02 — The surface breathes** (Oct 9–10) → [DEMO_PLAN.md](DEMO_PLAN.md). 200 flags, decay on read, the "as of" time control, the flag detail sheet |
+| **Last sprint completed** | **D02 — ✅ closed.** Walkthrough run on an iPhone, every step passed. All 14 checkboxes ticked in [DEMO_PLAN.md](DEMO_PLAN.md). **Two days ahead of schedule** — D02 was Oct 9–10 |
+| **NEXT SPRINT** | **D03 — Bangla search that actually works** (Oct 11–12) → [DEMO_PLAN.md](DEMO_PLAN.md). Gazetteer, Geolocation Agent, the search box. **Its long pole is the 150-landmark gazetteer, which is §9 data entry that has not started** |
 | **Baton holder** | **free** |
-| **Trunk** | `develop` · D01 committed. **Not merged to `main` yet — owner is doing that by hand.** |
-| **Build status** | 🟡 **mypy, invariant tests and the frontend are green; `ruff` is not.** `./scripts/check.sh` reports ~320 ruff findings in **pre-existing** code — ruff had never actually run here, because with no `backend/venv` the step was *skipped* and the skip read as a pass. D01's own files are clean and D01 added **zero** new findings. Cleanup is Track B (B3, B5). |
+| **Trunk** | `develop` · D01 and D02 committed and pushed. **Not merged to `main` yet — owner is doing that by hand.** |
+| **Build status** | 🟡 **mypy, invariant tests and the frontend are green; `ruff` is not.** `./scripts/check.sh` reports ~320 ruff findings in **pre-existing** code — ruff had never actually run here, because with no `backend/venv` the step was *skipped* and the skip read as a pass. D01's and D02's own files are clean and neither sprint added a new finding. Cleanup is Track B (B3, B5). |
 | **Phase** | 0 — Foundation & Contracts |
 
 ### 🗓️ PLAN RESEQUENCED — read [DEMO_PLAN.md](DEMO_PLAN.md) before IMPLEMENTATION_PLAN.md
@@ -101,6 +101,32 @@ Full write-up, indicators of compromise and the remediation checklist:
 
 **Blocked decision:** the image-analysis reasoning layer must be settled by **16 October** or `D07`
 cannot start. See `DEMO_PLAN.md` §7.1 — recommendation is local detection + Claude vision.
+
+### ✅ D02 CLOSED — gate met on a real device, two days early
+
+**2026-10-07, Nakib.** [`docs/walkthroughs/D02.md`](docs/walkthroughs/D02.md) was run end to end on an
+iPhone in Expo Go and **every step passed**, including the two that matter most: severity-now differing
+from severity-when-observed, and flags disappearing as the time control moves forward and returning
+when it goes back. The 212 flags are applied to the owner's live Supabase project.
+
+**D02 was scheduled for Oct 9–10 and closed on Oct 7.** That is the first slack this plan has had —
+`DEMO_PLAN.md` §8 names "the schedule slips" as the likeliest failure and says plainly there is none.
+Two days is not a licence to add scope; it is the buffer D10 was supposed to be.
+
+**Verified:** 86 invariant tests passing (36 new), `mypy --strict` clean across 60 files, `ruff` clean
+on everything D02 touched, `tsc` clean, 45 jest tests, 0 ESLint errors. Decay measured on the seeded
+surface: **191 flags live now, 149 at +3h, 137 at +6h, 108 at +12h, 64 at +24h, 28 at +48h, 24 at +30
+days** — unattended, with no cleanup job running.
+
+**Two bugs were found getting to the device, neither by a test.** Both are in the D02 handoff entry
+below. The short version: the seeder crashed when run from the repository root because the surface
+factory had been put in `app/scoring/__init__.py`, which made every import of the package require a
+database URL; and `.\scripts\seed.sh` does not run in PowerShell at all — it returns silently and
+changes nothing, so a stale 22-flag fixture file read as a successful regeneration. 86 tests, `mypy`
+and `ruff` all passed throughout, because pytest runs with `backend/` as its working directory. The
+failures needed someone to run the documented command from the documented place.
+
+---
 
 ### ✅ D01 CLOSED — gate met on a real device
 
@@ -333,53 +359,67 @@ deferred** until Arafat and Nakib have discussed it.
 
 ### ▶️ RESUME HERE
 
-**D01 is done and committed on `develop`. It is NOT merged to `main` — the owner is doing that by
-hand.**
+**D01 and D02 are both closed, both verified on a phone, and both pushed to `develop`.** Neither is
+merged to `main` — the owner does that by hand. The trunk is green and the baton is free.
 
-Take the baton:
+**Next is D03 — *Bangla search that actually works*, Oct 11-12.** Source sprints S10, S11 and S04 in
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), and **that is where the task text lives**; DEMO_PLAN
+tells you which sprint and in what order, not what the work means.
 
 ```bash
 git checkout develop && git pull
-./scripts/check.sh                      # see the ruff note in Build status before panicking
-./scripts/run.ps1                       # containers + Expo
-git checkout -b sprint/D02-surface-breathes
+./scripts/check.sh                      # read the ruff note in Build status before panicking
+git checkout -b sprint/D03-bangla-search
 ```
 
-Then open **D02** in [DEMO_PLAN.md](DEMO_PLAN.md) — *The surface breathes*, Oct 9–10. Its source
-sprints are S04, S19 and S20 in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), and **that is where
-the task text lives**; DEMO_PLAN tells you which sprint and in what order, not what the work means.
+**Before you write any code, re-run `docs/walkthroughs/D01.md` and `D02.md`.** They are the regression
+suite now, and `DEMO_PLAN.md` §3 makes "every previous walkthrough still passes" a handoff gate. About
+22 minutes for both. D02's steps 7 and 9-12 are the ones that catch a silent break in the decay path.
 
-**Before you write any code, re-run `docs/walkthroughs/D01.md`.** It is now the regression suite, and
-`DEMO_PLAN.md` §3 makes "every previous walkthrough still passes" a handoff gate. It takes ~12 minutes
-and it is the only thing standing between a D02 mistake and finding out on the 23rd.
+**There are two days of slack, for the first time.** D02 closed on 7 October against dates of 9-10.
+`DEMO_PLAN.md` §8 names schedule slip as the likeliest failure and says there is no slack; there now
+is a little. **Spend it on §9, not on scope.** Which brings us to the thing that should worry you:
 
-**Four things about D02's scope that D01 changed underneath it:**
+**The gazetteer is D03's long pole and it has not started.** `DEMO_PLAN.md` §9 item 1: 150
+Dhaka-central landmarks, Bangla and romanised forms, aliases, coordinates. Pure data entry -- no code,
+no baton, and **no coding agent can compress it**. The concept document calls Bangla place resolution
+*the primary technical risk* and D03 is demo beat 3. If the two spare days go anywhere, they go here.
+The owner deferred §9 deliberately, which is a decision and not an oversight, but the cost of it lands
+on D03 specifically and it lands in four days.
 
-1. **`as_of` already works** — it filters on the derived `expires_at`, so 20 flags now is 16 at +6h and
-   4 at +48h. What D02 adds is *severity on read*, so a flag visibly **fades** before it vanishes.
-   Do not rebuild the parameter; build the arithmetic behind it and the on-screen control.
-2. **There is deliberately no decay code in Python.** `expires_at` is derived by the
-   `trg_risk_flags_expires_at` trigger, and that is the only implementation. When D02 needs the serve
-   threshold in Python to compute severity *now*, mirror the `5.0` with a comment on both sides — or
-   better, read it from the database. Two silent copies of one formula is the failure to avoid.
-3. **There is no `RISK_SURFACE_IMPL` switch and no scoring methods on the protocol.** Both were written
-   in D01 and then deleted on purpose: a factory over one class is not a seam, and `score_point` /
-   `score_path` had no callers until D06. `app/contracts/surface.py` declares only `flags_in_bbox` and
-   `flags_near`. Add the rest when `SeededRiskSurface` exists to dispatch to.
-4. **The fixture file D02 grows to ~200 flags already exists** at
-   `backend/data/fixtures/risk_flags.json`, with 22 entries and a loader. **It contains no
-   `mobility_statement` and must never contain one** — `scripts/seed_risk_flags.py` raises if one
-   appears, and an invariant test checks it. Set `mobility_impact` and `place`; `framing.py` writes the
-   sentence. 200 rows is 200 chances to smuggle prose past the guard.
+**Four things about D03's scope that D02 settled underneath it:**
+
+1. **`app/llm/client.py` still does not exist, and D03 is its first consumer.** The Geolocation
+   Agent's LLM fallback is the first thing in the track that needs one. `anthropic` is already in
+   `requirements/ai.txt`; the invariant test asserting `client.py` is the only module that may import
+   it is D03's to write.
+2. **`app/scoring/kinds.py` is where per-kind defaults live.** When D03 or D04 builds a flag from an
+   extracted incident and has no severity, radius or half-life to go on, read them from there rather
+   than inventing numbers at the call site. Every value is reviewed and carries its reasoning.
+3. **The fixture's compact entry form means a new flag is one line.** `event_key` starting `seed-`,
+   `kind`, `lat`, `lon`, `mobility_impact`, `observed_offset_hours`; everything else defaults. See the
+   `_README` at the top of `backend/data/fixtures/risk_flags.json`. **It still must never contain a
+   `mobility_statement`** -- the loader raises and an invariant test checks it, now including dict
+   literals.
+4. **`app/scoring/__init__.py` is deliberately empty of imports.** Import from the module you want.
+   Putting the surface factory there made every import of the package require a `DATABASE_URL`, which
+   broke the seeder outside `backend/`. The docstring explains it; do not undo it for tidiness.
 
 **Decision still blocking D07, deadline 17 October:** the image-analysis reasoning layer.
 `DEMO_PLAN.md` §7.1. Recommendation is local YOLOv9c detection plus Claude vision as the reasoning
-layer. **This needs an actual conversation, not a default.**
+layer. **This needs an actual conversation, not a default.** It is ten days away and it is the only
+open decision that can stop a sprint starting.
 
-**Off-baton work that should already be running** (`DEMO_PLAN.md` §9): the Dhaka gazetteer (150
-landmarks, D03), the OSRM Bangladesh graph build (D06 assumes it is done), the D07 eval set (2 of
-30–40 images), and booking a native Bangla speaker for D08. **None of it needs the baton and none of it
-compresses later.**
+**Off-baton work, still none of it started** (`DEMO_PLAN.md` §9): the Dhaka gazetteer (D03 -- see
+above, this is now urgent), the OSRM Bangladesh graph build (a multi-gigabyte download plus
+preprocessing; D06 on the 16th assumes it is done), the D07 eval set (2 images of a target of 30-40),
+and booking a native Bangla speaker for D08 (a gate on that sprint, and it depends on someone else's
+calendar). **None of it needs the baton and none of it compresses later.**
+
+**Outstanding owner actions on the security incident (B0), unchanged:** rotate the credentials, rewrite
+history to drop the payload from `db6c42f`, untrack both `.env` files, delete the `agent/Arafat`
+branch. Both `.env` files are still tracked and still hold live values, so **this repository must not
+be made public.** See the incident block at the top of this file.
 
 ---
 
@@ -406,6 +446,242 @@ git push   # then PR, squash-merge to main, tell your partner
 ---
 
 # 📜 Handoff Log
+
+---
+
+## D02 — The surface breathes
+
+**Owner:** Nakib · **Dates:** 2026-10-07 · **Source sprints:** S04, S19, S20 · **Plan:** [DEMO_PLAN.md](DEMO_PLAN.md) D02
+
+All 14 checkboxes written. **The walkthrough has not been run on a device, so this sprint is not
+closed** — see the banner in CURRENT STATE. Everything below is verified against the backend.
+
+### Shipped
+
+**`app/scoring/` is now the package the plan described.** Six modules, each with one job:
+
+| Module | What it owns |
+|---|---|
+| `kinds.py` | Per-kind half-life, radius and baseline severity. The reviewed table S19 asks for, with the concept document's §5.6 range recorded beside each value so a later change is an argument rather than a guess. |
+| `decay.py` | `severity(t) = severity_0 · 0.5^(elapsed/half_life) · profile[hour]`. Pure, total, no wall clock. Four hand-set time-of-day profiles with written rationales. |
+| `chronic.py` | The chronic baseline, derived from `scripts/crime_risk_model.json` — real published Bangladesh Police unit statistics. |
+| `fixture.py` | The single reader of `data/fixtures/risk_flags.json`, shared by the seeder and the seeded surface. |
+| `surface_db.py` | `DbRiskSurface`, now computing `severity_now` per read. |
+| `surface_seeded.py` | `SeededRiskSurface` — the fixture, with no database in the request path at all. |
+
+`get_risk_surface()` in `__init__.py` is the only place that chooses between them, on
+`RISK_SURFACE_IMPL`. The endpoint holds a `RiskSurface` and cannot tell which one it got, which is what
+makes the offline demo path an environment variable rather than a branch.
+
+**The fixture went from 22 entries to 204, plus 8 derived chronic rows = 212 flags.** Grouped by
+commuting corridor — Mirpur Road, Kazi Nazrul Islam Avenue, Rokeya Sarani, Airport Road, Progoti
+Sarani, the Gulistan–Jatrabari axis — because D06 routes around them and a corridor with one flag on it
+cannot be routed around. Several are deliberately clustered so an alternative route has a reason to
+exist. All ten incident kinds, 69 confirmed and 143 unconfirmed, six deliberately pre-expired.
+
+**A compact entry form is what makes 204 entries maintainable.** An entry is one line:
+`half_life_hours` and `radius_m` default from `kinds.py`, and `sources` is generated from
+`source_count` when absent, picking distinct `sample_*` publishers stably by `zlib.crc32(event_key)` —
+`hash()` would have been salted per process and churned the generated SQL on every run.
+
+**`severity_now` is a new required field on `RiskFlag`**, mirrored in
+`frontend/src/types/contracts/risk.ts` in the same commit. Required rather than optional on purpose: a
+surface that forgot to compute it would otherwise serve a complete, valid, entirely plausible response
+in which nothing ever faded.
+
+**The expiry sweep is `scripts/sweep_expired_flags.py`**, and it is housekeeping rather than
+enforcement. Whether a flag is served is decided on read against the stored `expires_at`, so a flag
+retires itself whether or not the sweep has ever run. A job that *decided* liveness would mean the
+surface was only correct as often as the job ran. It sets `status = 'expired'` and does not DELETE — an
+expired flag is the evidence that the surface retires things on its own, which is beat 5's claim. Not a
+Celery beat yet because there is no worker; `sweep_expired()` is the function D04's registry registers.
+
+**Frontend:** `components/RiskFlagSheet.tsx` (beat 2's container — severity then vs now, % remaining,
+half-life, time left, source strip), and a `__DEV__`-only "as of" bar on `MapScreen` with six presets.
+Pins and circles now colour by `severityNow`, so a flag visibly fades as the clock moves.
+
+### Decisions
+
+**1. `severity_now` is computed in Python, not in PostGIS.** A departure from S20's "decay applied at
+query time in PostGIS", and the one to revisit if route scoring later needs decay inside a spatial
+query. The time-of-day profile is a 24-element lookup against the Dhaka-local hour; in SQL that is a
+24-branch `CASE` or a jsonb index into a column that is null on every row today, either way duplicating
+`decay.py` in a second language in the request path. The decay formula already has two implementations
+it cannot avoid — Python for the seeded surface, SQL for `expires_at` — and a third in the hot path to
+save an exponent per row on a result set capped at 500 is a bad trade. PostGIS still does the spatial
+test and the liveness filter, which are the parts that need an index. Written out in
+`surface_db.py::_row_to_flag`.
+
+**2. The time-of-day multiplier does not affect expiry.** `severity_at()` applies it; `expires_at_for()`
+does not. An event does not end because it is 4 a.m. Keeping it out also preserves the equivalence both
+surfaces lean on: un-modulated severity crosses the serve threshold at exactly `expires_at`, so "still
+served" and "still above threshold" are one statement, which is why the endpoint can filter on a stored
+column and still be honest about severity. `test_expiry_is_exactly_where_severity_crosses_the_threshold`
+pins it.
+
+**3. Forward-dated flags decay from `valid_from`, not `observed_at`.** A procession announced on Tuesday
+for Friday must not arrive already three days decayed. `decay_anchor()` is the one line that makes D09
+work, and `elapsed_hours()` clamps at zero so a flag whose window has not opened reads at full severity
+rather than at an amplified value from a negative exponent.
+
+**4. The chronic layer drops the eight `… Range` rows and keeps the seven metropolitan units.**
+`Dhaka Range` has a 100 km radius and a `normalized_risk` of 100.0 — the dataset maximum — and it
+geographically *contains* DMP, whose own figure is 58.9. Emitting both double-counts the same reported
+crimes and blankets the map at maximum severity. The rule is: the most specific unit covering a point
+wins, and the aggregate is not a second opinion. For the demo zone that is one flag, DMP, 20 km, 58.9.
+
+**5. The chronic layer is seeded rows, not a third surface class.** A `CompositeRiskSurface` was the
+first design and it was deleted before it was written: chronic flags are flags, the table already
+stores them, and `DbRiskSurface` serves them with no new code. The seeded surface gets the same rows
+because both read `fixture.py`.
+
+**6. A chronic flag is `unconfirmed` with `source_count = 1`.** It would be tempting to call a
+government statistic confirmed, and the CHECK constraint would reject it — one source cannot produce a
+confirmed flag, and that rule has no exception for official data. Leaving the layer honestly
+unconfirmed is the correct reading of it.
+
+**7. The "as of" control is six preset buttons, not a slider.** `@react-native-community/slider` is not
+installed and adding a dependency for a dev-only affordance is the wrong trade; a dragged value also
+fires a request per frame. Presets are more repeatable on stage. D09 promotes it to a real
+forward-looking control over the same parameter.
+
+**8. Circles are not drawn above a 5 km radius.** The chronic flag is 20 km. A translucent disc larger
+than the viewport is a tint, not information, and it makes every other flag harder to read while
+implying a precision the data does not have. The pin is drawn alone and the sheet states the radius in
+words. Kind-agnostic, because "a circle bigger than the screen says nothing" is true whatever produced
+it.
+
+**9. `KIND_LABELS` in the sheet maps `clash` to "Disruption", not "Clash".** The kind is an internal
+routing decision; the product does not characterise events to users. This is `framing.py`'s commitment
+restated in the one place a client could break it, and an unmapped kind falls back to "Disruption"
+rather than to its raw value, so adding an `IncidentKind` cannot leak a new word onto a screen.
+
+### Found while building, not planned
+
+**`seed_risk_flags.py --sql` crashed outside `backend/`, and the owner found it, not a test.**
+`get_risk_surface()` was first written into `app/scoring/__init__.py`, so **every** import from the
+package pulled in `app.core.config.settings` — whose `DATABASE_URL` and `JWT_SECRET_KEY` have no
+defaults, so importing it raises unless a `.env` is discoverable from the current directory. The
+seeder imports `app.scoring.fixture` to turn a JSON file into SQL text. It touches no database and
+needs no credentials, and it worked from `backend/` and nowhere else. Moved to
+`app/scoring/factory.py`; `__init__.py` is now docstring-only and says why. `fixture.py`, `decay.py`,
+`kinds.py` and `chronic.py` are importable with no configuration at all.
+
+Worth noting how it surfaced: 86 tests, `mypy --strict` and `ruff` all passed, because pytest runs
+with `backend/` as the working directory. The failure needed someone to run the documented command
+from the documented directory — which is the same lesson as D01's three device bugs, one layer down.
+
+**`route_service._get_regional_risk()` is wrong on its own terms, not just a double count.** It takes
+the **maximum** `normalized_risk` across every overlapping unit, and the dataset holds both
+metropolitan units and the ranges containing them — so every point in Dhaka scores 100.0 from
+`Dhaka Range` instead of 58.9 from `DMP`. Every route in the city has been scored against a regional
+risk of 100 since the method was written. D06 deletes it; it now carries a comment saying so and
+pointing at `chronic.py` for the reasoning.
+
+**The framing invariant had a blind spot, and D02 would have driven through it.** The AST check in
+`test_no_flag_text_bypasses_framing.py` caught keyword arguments, assignments and attribute
+assignments — but **not a string key in a dict literal**. Before D02 the only producers of
+`mobility_statement` outside `framing.py` lived in `scripts/`, which that test does not scan. D02 moved
+row-building into `app/scoring/fixture.py`, which builds dicts, so a hand-written statement under
+`app/` would have walked straight past the one test whose job is to prevent exactly that. The detector
+was strengthened to catch dict keys, and the three legitimate modules were then added to
+`ALLOWED_WRITERS` with their reasons. Strengthening the check rather than excluding the new modules is
+the point: the cheap fix was available and it was the wrong one.
+
+**`.\scripts\seed.sh` does not run in PowerShell, and it fails by doing nothing.** Found when the owner
+ran the documented command and the regenerated fixture file still held the previous sprint's 22 flags.
+PowerShell cannot execute a `.sh`: the command returns at once, prints nothing, exits cleanly, and
+changes nothing — indistinguishable from success, and the failure mode is a stale fixture whose
+timestamps are hours old, which on a map looks like a broken product rather than a stale file. Every
+`.sh` in `scripts/` has this problem; only `run.ps1` is native. The walkthrough and RESUME HERE now
+give PowerShell-native commands. A `seed.ps1` would be the real fix and is not in D02's scope.
+
+**`.env` changes need `docker compose up -d --force-recreate api`, not `restart`.** Compose reads
+`backend/.env` when the container is *created*, so `docker compose restart api` silently keeps the old
+values — which would make the `RISK_SURFACE_IMPL` switch look like it did not work. Written out in the
+walkthrough's *Switching the surface* section.
+
+**There is no database container, and the walkthrough said there was.** `docker-compose.yml` runs the
+API and Redis; the database is Supabase and it is remote. The original step 15 said "stop the database
+container", which is not a thing. Corrected to breaking `DATABASE_URL` instead.
+
+**The offline claim was asserted before it was checked, and it turned out to be true but narrow.** The
+endpoint declares `db: AsyncSession = Depends(get_db)`, so a session is constructed on every request
+whatever the surface is. `seeded` works only because SQLAlchemy connects lazily *and* the seeded surface
+never runs a statement — **191 flags served against a `DATABASE_URL` pointing at a non-existent host.**
+Anything that made `get_db` connect eagerly would break the offline path while leaving it looking fine,
+so `test_the_seeded_surface_serves_with_no_reachable_database` now pins it, with the `db` case as a
+control so it cannot pass by the database happening to be up.
+
+### Measurements
+
+Seeded surface, Dhaka bbox `23.70,90.33 → 23.90,90.50`:
+
+| | |
+|---|---|
+| Flags in the fixture | 204 hand-built + 8 derived chronic = **212** |
+| Live now / +3h / +6h / +12h / +24h / +48h / +30d | **191 / 149 / 137 / 108 / 64 / 28 / 24** |
+| Confirmed / unconfirmed | 69 / 143 |
+| Incident kinds represented | 10 of 10 |
+| Severity range | 4.3 – 75.0 |
+| Shortest / longest half-life | 1h (road accident) / 2160h = 90 days (chronic) |
+| Chronic baseline, Dhaka (DMP) | 58.9/100 over a 20 km radius |
+| Invariant tests | **86 passing**, 36 new in D02 |
+| `mypy --strict` | clean, 59 files |
+| `ruff` | clean on every file D02 wrote |
+| Frontend | `tsc` clean · 0 ESLint errors, 6 warnings (all pre-existing) · jest 45/45 |
+
+**The number for Q&A:** 191 flags now, 108 in twelve hours, 24 in a month — unattended, no cleanup job.
+That is "no stale red zones" as a measurement rather than a claim.
+
+### Deliberately NOT done
+
+- **No Celery beat for the sweep.** There is no worker in `docker-compose.yml` and the beat schedule
+  still points at two modules that do not exist. A task registered against a broken schedule looks
+  scheduled and never runs, which is worse than a script somebody runs. D04 builds the registry.
+- **No `LegacyRegionalSurface`.** `surface_db.py` lists it as a Track B implementation; the chronic
+  layer made it unnecessary for now, since the police model reaches the surface as rows.
+- **`route_service._get_regional_risk()` not deleted.** It is a D06 checkbox and deleting it today
+  would change route scores in a sprint that does not test routing.
+- **No independence check on sources.** D05, and pre-declared as the first thing to cut there.
+- **No per-flag `time_profile` written anywhere.** The column exists and the contract carries it; every
+  flag falls back to its kind default. D04's extraction is the first thing that might set one.
+
+### Gotchas for the next agent
+
+1. **Restarting the backend with `RISK_SURFACE_IMPL=seeded` resets every flag to fresh.** Fixture
+   offsets are relative and resolved once per process, at first load. That is deliberate — resolving per
+   request would move `observed_at` forward between two requests and nothing would ever appear to decay
+   — but it will confuse you mid-rehearsal. `reset_cache()` does it on purpose; nothing over HTTP can.
+2. **`.\scripts\seed.sh` does not run in PowerShell, and it fails silently.** PowerShell cannot
+   execute a `.sh`: the command returns at once, prints nothing and changes nothing, which reads
+   exactly like success. Call the Python directly (see RESUME HERE) or use Git Bash. Every `.sh` in
+   `scripts/` has this problem; only `run.ps1` is native.
+3. **Regenerate `3-fixtures.sql`; never reuse one.** Same reason. An old file seeds a map of entirely
+   expired flags, which looks exactly like a broken product rather than a stale file.
+4. **`SERVE_THRESHOLD = 5.0` exists in two places and must stay in two places** — `decay.py` and the
+   SQL trigger in migration `20261007120000__risk_flags`. The migration is checksummed and immutable, so
+   the Python side is the one that can drift. `test_expiry_matches_the_sql_trigger_arithmetic` has
+   hand-computed expectations taken from the trigger, not from the Python, so it cannot be satisfied by
+   changing both sides at once.
+5. **Two of the eight chronic units expire immediately.** Barishal (4.76) and Rangpur (4.30) normalise
+   below the serve threshold. Correct, and a little odd to read in the seed output.
+6. **Do not compute decay on the device.** The TS contract says so in a comment. A client that halved
+   severity itself would disagree with the server about when a flag vanishes.
+7. **`severity_now` is required on `RiskFlag`.** Anything new that constructs one — a test, an agent,
+   D04's extraction — has to supply it. The two surfaces are the only producers today.
+
+### Prototype Gate
+
+- [x] It runs
+- [x] `mypy --strict` clean on `app/scoring`, `app/contracts`, `app/policy`
+- [x] `ruff` clean on every file this sprint wrote
+- [x] 86 invariant tests passing
+- [x] Frontend `tsc` clean, 0 ESLint errors, jest 45/45
+- [x] `docs/walkthroughs/D02.md` written, with expected results at every step
+- [x] **`docs/walkthroughs/D02.md` run on a real device — iPhone, Expo Go, every step passed**
+- [x] `docs/walkthroughs/D01.md` re-run and still passing
+- [x] 212 flags applied to Supabase
 
 ---
 

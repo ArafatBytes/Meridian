@@ -110,6 +110,19 @@ class Settings(BaseSettings):
     SPEECH_MAX_DURATION_SECONDS: int = 30
     SPEECH_SAMPLE_RATE: int = 16000
     
+    # Which RiskSurface GET /api/v1/risk/flags reads from: "db" or "seeded".
+    #
+    # "db" reads the risk_flags table. "seeded" reads
+    # data/fixtures/risk_flags.json and never touches the database at all -- the
+    # offline demo path (DEMO_PLAN.md D10), and what to switch to if Postgres or
+    # the venue network dies mid-script.
+    #
+    # Chosen in app/scoring/__init__.py :: get_risk_surface(). An unknown value
+    # raises on the first request rather than falling back, because the seeded
+    # surface looks entirely plausible and `sample_` in the source strip is the
+    # only tell that you are showing the fixture.
+    RISK_SURFACE_IMPL: str = "db"
+
     # OSRM
     OSRM_BASE_URL: str = "http://localhost:5000"
     

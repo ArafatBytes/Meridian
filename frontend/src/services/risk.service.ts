@@ -59,6 +59,7 @@ interface RiskFlagWire {
   lon: number;
   radius_m: number;
   severity_0: number;
+  severity_now: number;
   half_life_hours: number;
   observed_at: string;
   expires_at: string;
@@ -109,6 +110,7 @@ function toRiskFlag(wire: RiskFlagWire): RiskFlag {
     lon: wire.lon,
     radiusM: wire.radius_m,
     severity0: wire.severity_0,
+    severityNow: wire.severity_now,
     halfLifeHours: wire.half_life_hours,
     observedAt: wire.observed_at,
     expiresAt: wire.expires_at,
