@@ -77,7 +77,7 @@ Full write-up, indicators of compromise and the remediation checklist:
 | **NEXT SPRINT** | **Finish D04's gate**: run `docs/walkthroughs/D04.md` on the phone in Dhaka daytime, capture the replay (step O1), commit it. **Then D05 — Verification you can see** (Oct 15) → [DEMO_PLAN.md](DEMO_PLAN.md) §D05, source S15 |
 | **Baton holder** | **Farhan Ishraq** |
 | **Trunk** | Work branch **`ishraq-dev`** (cut from `main` @ `99922ec`). By agreement, commits go only to `ishraq-dev`; nothing is pushed to or merged into `main` from this side |
-| **Build status** | 🟡 **193 backend tests passing in `tests/invariants` + `tests/test_ingestion_sources.py` (185 invariants, 64 new; 1 skipped until a replay is captured), `mypy --strict` clean on `app` (80 files), `ruff` clean on every D04 file, `tsc` clean, 45 jest, ESLint 0 errors / 106 warnings (budget 106, none added).** Pre-existing and unchanged: ~320 `ruff` findings in old code, 2 failures in `tests/test_crime_vision.py`, and **a checksum drift on migration `20261007120100`** (see the D04 entry) that makes `migrate.py up` refuse |
+| **Build status** | 🟡 **193 backend tests passing in `tests/invariants` + `tests/test_ingestion_sources.py` (185 invariants, 64 new; 1 skipped until a replay is captured), `mypy --strict` clean on `app` (80 files), `ruff` clean on every D04 file, `tsc` clean, 45 jest, ESLint 0 errors / 106 warnings (budget 106, none added).** Pre-existing and unchanged: ~320 `ruff` findings in old code, 2 failures in `tests/test_crime_vision.py`. **Fixed in D04:** the `migrate.py` "drift" that was only line endings — `up` works again |
 | **Slack** | D04 was scheduled Oct 13–14 and built Oct 8. **Spend the slack on §9** — the OSRM graph (D06) is still the long pole and still not started |
 | **Phase** | 0 — Foundation & Contracts |
 
@@ -768,8 +768,8 @@ extracted from today's Bangla news; tap one and see the outlet, the headline as 
 
 - `20261008120000__raw_documents_extracted_at.sql` — `raw_documents.extracted_at` and a partial index.
   "Has the model read this?" cannot be answered from `extracted_incidents`, because most articles yield
-  no rows. **Applied to the owner's Supabase via `migrate.py sql --version 20261008120000`**, not `up` —
-  see the drift below.
+  no rows. **Applied to the owner's Supabase** (via `migrate.py sql --version`, before the line-ending
+  fix below made `up` usable again); `status` now shows all three applied, 0 pending.
 
 ### Env vars added
 
@@ -793,13 +793,15 @@ extracted from today's Bangla news; tap one and see the outlet, the headline as 
   `news:title`; the parser took the first `title`. Image and video extensions are now skipped, with a
   regression test. Found by printing what the filter saw, not by a test.
 - **The risk status pill was invisible.** It shared `top` with the search card (`zIndex: 10`). Moved.
-- **Migration drift, pre-existing.** `migrate.py status` reports `20261007120100__ingestion_and_agent_runs`
-  as CHANGED: the file has one commit and the ledger checksum (`45302f494c07…`) matches neither it nor
-  its line endings — it was most likely pasted into the SQL Editor before a final comment edit. The
-  **live schema was compared column by column and CHECK by CHECK and matches the file.** The ledger row
-  was **not** touched; it is the team's record. Consequence: `migrate.py up` refuses to run for
-  everyone until someone re-stamps that row (`update schema_migrations set checksum = <file sha256>
-  where version = '20261007120100'`) — a one-line owner decision.
+- **Migration "drift" that was line endings — fixed in `scripts/migrate.py`.** `status` reported
+  `20261007120100` as CHANGED and `up` refused to run for everyone. The ledger holds the **CRLF** hash
+  of `20261007120000` (`8575ba…`) and the **LF** hash of `20261007120100` (`45302f…`) — each is exactly
+  the committed content, checksummed in checkouts with different line endings (`core.autocrlf=true`
+  on Windows; LF in a container or a freshly written file). D04's own migration would have hit the
+  same trap on its next checkout. `Migration.matches()` now accepts either form while new rows record
+  the LF form; an edited statement is still drift (`tests/test_migrate_checksum.py`, 3 tests). No
+  ledger row was touched. The live schema had also been compared column by column and CHECK by CHECK
+  against the file before the cause was found — it matches.
 
 ### Deliberately NOT done
 
