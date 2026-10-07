@@ -14,7 +14,7 @@ import { RouteProp } from '@react-navigation/native';
 import { ReportsStackParamList } from '../../types';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MapView, { Marker, PROVIDER_GOOGLE } from '../../components/MapComponent';
+import MapView, { Marker, MAP_PROVIDER } from '../../components/MapComponent';
 import { crimeService } from '../../services/crime.service';
 
 type ReportDetailsScreenNavigationProp = NativeStackNavigationProp<
@@ -282,7 +282,7 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
         {/* Map */}
         <View style={styles.mapContainer}>
           <MapView
-            provider={PROVIDER_GOOGLE}
+            provider={MAP_PROVIDER}
             style={styles.map}
             initialRegion={{
               latitude: parseFloat(report.latitude),

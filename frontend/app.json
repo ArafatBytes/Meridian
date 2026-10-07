@@ -9,7 +9,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.Meridian.app",
@@ -19,9 +21,6 @@
         "NSCameraUsageDescription": "Meridian needs camera access to let you capture and report crime incidents.",
         "NSMicrophoneUsageDescription": "Meridian needs microphone access for voice commands and emergency SOS features.",
         "NSPhotoLibraryUsageDescription": "Meridian needs photo library access to attach images to crime reports."
-      },
-      "config": {
-        "googleMapsApiKey": "YOUR_GOOGLE_MAPS_API_KEY"
       }
     },
     "android": {
@@ -38,12 +37,7 @@
         "VIBRATE",
         "RECEIVE_BOOT_COMPLETED",
         "WAKE_LOCK"
-      ],
-      "config": {
-        "googleMaps": {
-          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY"
-        }
-      }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -75,10 +69,6 @@
       "expo-secure-store",
       "expo-asset",
       "expo-font"
-    ],
-    "extra": {
-      "supabaseUrl": "https://lpfsoinrwkapkxwprhpc.supabase.co",
-      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwZnNvaW5yd2thcGt4d3ByaHBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwNTI3MjIsImV4cCI6MjA4MDYyODcyMn0.5JKvblcBeyczyoWg6sj5qrZt0CRs0UCsU1PUOEw59wM"
-    }
+    ]
   }
 }

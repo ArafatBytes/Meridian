@@ -17,6 +17,7 @@ import { colors, spacing, borderRadius, fontSize } from '../../theme';
 import { useAuthStore } from '../../store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
+import { uploadAvatar } from '../../lib/supabase-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { ProfileStackParamList } from '../../types';
 
@@ -58,7 +59,7 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
 
     // Launch image picker
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],  // MediaTypeOptions is deprecated in SDK 57
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
@@ -73,7 +74,6 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
     try {
       setIsUploadingImage(true);
 
-      // Get current user
       const {
         data: { user: authUser },
         error: userError,
@@ -83,31 +83,18 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
         throw new Error('User not authenticated');
       }
 
-      // Create file name with subfolder (required by storage policies)
-      const fileExt = uri.split('.').pop();
-      const fileName = `${authUser.id}-${Date.now()}.${fileExt}`;
-      const filePath = `${authUser.id}/${fileName}`; // Include user ID as subfolder
-
-      // Read file as base64 and convert to ArrayBuffer for upload
-      const response = await fetch(uri);
-      const arrayBuffer = await response.arrayBuffer();
-
-      // Upload to Supabase Storage using ArrayBuffer
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, arrayBuffer, {
-          contentType: `image/${fileExt}`,
-          upsert: true,
-        });
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      // Get public URL
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      // Delegated to the shared helper instead of building the upload inline.
+      //
+      // The inline version set contentType to "image/" + fileExt, so a .jpg
+      // file produced `image/jpg` -- which is not a valid IANA MIME type (the
+      // real one is `image/jpeg`). The bucket's allowed_mime_types correctly
+      // lists image/jpeg, so every .jpg upload was rejected with
+      // "mime type image/jpg is not supported".
+      //
+      // uploadAvatar() maps the extension to a real MIME type, enforces the
+      // `<uid>/` path that the storage RLS policy requires, and rejects empty
+      // or oversized files before they reach the network.
+      const publicUrl = await uploadAvatar(authUser.id, uri);
 
       setAvatar(publicUrl);
       Alert.alert('Success', 'Profile picture uploaded successfully!');

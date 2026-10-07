@@ -34,7 +34,6 @@ import { MainTabParamList } from '../../types';
 import { API_BASE_URL } from '../../constants/app.constants';
 import * as FileSystem from 'expo-file-system';
 import { Accelerometer } from 'expo-sensors';
-import { Audio } from 'expo-av';
 
 type HomeScreenNavigationProp = BottomTabNavigationProp<
   MainTabParamList,
@@ -51,6 +50,10 @@ const HomeScreen: React.FC = () => {
   const [isSOSModalVisible, setIsSOSModalVisible] = useState(false);
   const [isSendingSOS, setIsSendingSOS] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  // Which half of the SOS we are in. The upload finishes long before the alert
+  // does — the server then talks to the SMTP relay — and showing "uploading" through
+  // that second phase is what made a working SOS look hung at 98%.
+  const [sosStage, setSosStage] = useState<'uploading' | 'sending'>('uploading');
 
   const handleSOSPress = () => {
     setIsSOSModalVisible(true);
@@ -132,6 +135,12 @@ const HomeScreen: React.FC = () => {
         setUploadProgress(prev => Math.max(prev, Math.floor(simulatedProgress)));
       }, 200);
 
+      // Once the bytes are gone, the wait is the server's: it is talking to the
+      // SMTP relay. Saying "uploading 98%" through that is how a working SOS looks
+      // broken — which is exactly how it read the first time this was run on a
+      // phone. Tell the truth instead.
+      setSosStage('uploading');
+
       const data: any = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', `${API_BASE_URL}/sos/trigger`);
@@ -146,6 +155,9 @@ const HomeScreen: React.FC = () => {
               simulatedProgress = newProgress;
               return newProgress;
             });
+            if (event.loaded >= event.total) {
+              setSosStage('sending');
+            }
           }
         };
 
@@ -213,115 +225,19 @@ const HomeScreen: React.FC = () => {
     return () => subscription && subscription.remove();
   }, [isSOSModalVisible, isSendingSOS]);
 
-  // Voice-Activated SOS: Loud Sound Detection
-  // Detects loud sounds (like screaming) and triggers SOS
-  // Works with Expo Go without native modules
-  React.useEffect(() => {
-    let recording: Audio.Recording | null = null;
-    let monitoringInterval: NodeJS.Timeout | null = null;
-    let consecutiveLoudSounds = 0;
-    const LOUD_THRESHOLD = -20; // dB threshold for loud sounds (screaming)
-    const REQUIRED_LOUD_SOUNDS = 2; // Need 2 consecutive loud sounds to trigger
-
-    const startVoiceMonitoring = async () => {
-      try {
-        // Request microphone permission
-        const { status } = await Audio.requestPermissionsAsync();
-        if (status !== 'granted') {
-          console.log('🎤 Microphone permission denied - voice monitoring disabled');
-          return;
-        }
-
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-        });
-
-        console.log('🎤 Voice monitoring started (loud sound detection)');
-        console.log('🎤 Scream "HELP" loudly to trigger SOS!');
-
-        // Monitor audio levels continuously
-        monitoringInterval = setInterval(async () => {
-          if (isSOSModalVisible || isSendingSOS) return;
-
-          try {
-            // Start recording
-            const { recording: newRecording } = await Audio.Recording.createAsync(
-              Audio.RecordingOptionsPresets.HIGH_QUALITY,
-              undefined,
-              100 // Update every 100ms
-            );
-            recording = newRecording;
-
-            // Record for 1 second to check amplitude
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            if (!recording) return;
-
-            // Get recording status to check audio levels
-            const status = await recording.getStatusAsync();
-
-            // Stop recording
-            await recording.stopAndUnloadAsync();
-            recording = null;
-
-            // Check if sound was loud (metering available on iOS)
-            if (status.isRecording && status.metering !== undefined) {
-              const metering = status.metering;
-              console.log('🎤 Audio level:', metering, 'dB');
-
-              if (metering > LOUD_THRESHOLD) {
-                consecutiveLoudSounds++;
-                console.log(`🎤 Loud sound detected! (${consecutiveLoudSounds}/${REQUIRED_LOUD_SOUNDS})`);
-
-                if (consecutiveLoudSounds >= REQUIRED_LOUD_SOUNDS) {
-                  console.log('🚨 LOUD SCREAMING DETECTED! Triggering SOS...');
-                  consecutiveLoudSounds = 0;
-                  handleSOSPress();
-                }
-              } else {
-                consecutiveLoudSounds = 0; // Reset if quiet
-              }
-            } else {
-              // Fallback: On Android or if metering not available, just trigger on any recording
-              // This is a simple approach - any voice activity triggers after 2 intervals
-              consecutiveLoudSounds++;
-              console.log(`🎤 Voice activity detected (${consecutiveLoudSounds}/${REQUIRED_LOUD_SOUNDS})`);
-
-              if (consecutiveLoudSounds >= REQUIRED_LOUD_SOUNDS) {
-                console.log('🚨 CONTINUOUS VOICE DETECTED! Triggering SOS...');
-                console.log('💡 Say "HELP" or scream to trigger SOS');
-                consecutiveLoudSounds = 0;
-                // Uncomment below to enable auto-trigger on continuous voice
-                // handleSOSPress();
-              }
-            }
-
-          } catch (err: any) {
-            console.log('🎤 Monitoring error:', err.message);
-            if (recording) {
-              try {
-                await recording.stopAndUnloadAsync();
-              } catch { }
-              recording = null;
-            }
-          }
-        }, 2000); // Check every 2 seconds
-
-      } catch (error: any) {
-        console.error('🎤 Failed to start voice monitoring:', error.message);
-      }
-    };
-
-    startVoiceMonitoring();
-
-    return () => {
-      if (monitoringInterval) clearInterval(monitoringInterval);
-      if (recording) {
-        recording.stopAndUnloadAsync().catch(() => { });
-      }
-    };
-  }, [isSOSModalVisible, isSendingSOS]);
+  // The voice-activated SOS block that used to live here has been removed.
+  //
+  // It was defect 4, and it was worse than useless. It started a 1-second
+  // recording every 2 seconds, forever, while the Home screen was mounted --
+  // then read `status.isRecording` AFTER calling stopAndUnloadAsync(), which is
+  // always false, so it fell through to a branch whose trigger was commented
+  // out. The net effect was continuous microphone recording with zero
+  // detection: all of the battery and privacy cost, none of the feature.
+  //
+  // Removed now rather than ported, because SDK 57 drops expo-av and porting
+  // dead code to a new API is pure waste. Real hot-word detection is S18, and
+  // it uses an on-device wake-word engine -- not a polling loop that uploads
+  // audio. Until then SOS is the manual button and the shake gesture above.
 
   const handleReportCrimePress = () => {
     navigation.navigate('Reports');
@@ -355,14 +271,22 @@ const HomeScreen: React.FC = () => {
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingCard}>
             <ActivityIndicator size="large" color={colors.danger} />
-            <Text style={styles.loadingText}>Uploading Evidence...</Text>
+            <Text style={styles.loadingText}>
+              {sosStage === 'sending'
+                ? 'Alerting your contacts...'
+                : 'Uploading Evidence...'}
+            </Text>
 
             <View style={styles.progressBarContainer}>
               <View style={[styles.progressBarFill, { width: `${uploadProgress}%` }]} />
             </View>
             <Text style={styles.progressText}>{uploadProgress}% Completed</Text>
 
-            <Text style={styles.loadingSubText}>Please do not close the app</Text>
+            <Text style={styles.loadingSubText}>
+              {sosStage === 'sending'
+                ? 'Evidence uploaded. Sending the alert — do not close the app.'
+                : 'Please do not close the app'}
+            </Text>
           </View>
         </View>
       </Modal>

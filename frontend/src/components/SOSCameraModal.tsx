@@ -3,6 +3,11 @@ import { View, StyleSheet, Text, Modal, TouchableOpacity, Alert, Animated, Easin
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { colors, spacing, typography } from '../theme';
 import { Ionicons } from '@expo/vector-icons';
+import {
+    SOS_VIDEO_BITRATE,
+    SOS_VIDEO_DURATION_SECONDS,
+    SOS_VIDEO_MAX_BYTES,
+} from '../constants';
 
 interface SOSCameraModalProps {
     visible: boolean;
@@ -69,7 +74,13 @@ export const SOSCameraModal: React.FC<SOSCameraModalProps> = ({
             setIsRecording(true);
             try {
                 const video = await cameraRef.current.recordAsync({
-                    maxDuration: 10,
+                    maxDuration: SOS_VIDEO_DURATION_SECONDS,
+                    // Backstop if bitrate control is ignored on this device.
+                    maxFileSize: SOS_VIDEO_MAX_BYTES,
+                    // iOS only, and required there: expo-camera ignores the
+                    // videoBitrate prop unless a codec is named. avc1 is H.264,
+                    // which every mail client can play.
+                    codec: 'avc1',
                 });
 
                 if (video?.uri) {
@@ -131,6 +142,15 @@ export const SOSCameraModal: React.FC<SOSCameraModalProps> = ({
                     mode="video"
                     ref={cameraRef}
                     onCameraReady={handleCameraReady}
+                    // Keep the clip small enough to actually send. Default quality
+                    // produced 16.45 MB for 10 seconds, which took 2m34s to email.
+                    //
+                    // videoQuality's 16:9 options are Android-only; '4:3' is the
+                    // cross-platform one and means 640x480. videoBitrate is what
+                    // does the work on iOS, together with the codec passed to
+                    // recordAsync.
+                    videoQuality="4:3"
+                    videoBitrate={SOS_VIDEO_BITRATE}
                 />
 
                 <View style={styles.overlay}>
@@ -163,10 +183,10 @@ const styles = StyleSheet.create({
         backgroundColor: 'black',
     },
     camera: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,  // RN 0.86 removed absoluteFillObject; absoluteFill is now the plain object
     },
     overlay: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,  // RN 0.86 removed absoluteFillObject; absoluteFill is now the plain object
         backgroundColor: 'rgba(0,0,0,0.5)',
         justifyContent: 'space-between',
         padding: 30,

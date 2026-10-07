@@ -13,7 +13,12 @@ import {
   Platform,
 } from 'react-native';
 
-import MapView, { Marker, PROVIDER_GOOGLE, Polyline } from '../../components/MapComponent';
+import MapView, {
+  Marker,
+  MAP_PROVIDER,
+  Polyline,
+  Circle,
+} from '../../components/MapComponent';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { CompositeNavigationProp } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -24,7 +29,11 @@ import { DEFAULT_MAP_REGION } from '../../constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { CrimeCategory, MainTabParamList } from '../../types';
+import { crimeCategoryLabel } from '../../types/contracts/crime';
+import type { RiskFlag } from '../../types/contracts/risk';
 import { routeService, RouteResponse, Location } from '../../services/route.service';
+import { riskService } from '../../services/risk.service';
+import RiskFlagSheet, { riskBand } from '../../components/RiskFlagSheet';
 
 interface CrimeReportData {
   id: string;
@@ -38,16 +47,82 @@ interface CrimeReportData {
   verified: boolean;
 }
 
+// Defect 3. These keys were capitalised ('Theft') while the database enum and
+// everything the app sends are lowercase ('theft'), so every lookup returned
+// undefined and NO crime marker had a colour. Typed as Record<CrimeCategory, ...>
+// against the single list in types/contracts/crime.ts, so a missing category is
+// now a compile error rather than a grey pin.
 const CRIME_COLORS: Record<CrimeCategory, string> = {
-  Theft: '#FF9800', // Orange
-  Robbery: '#F44336', // Red
-  Assault: '#E91E63', // Pink
-  Harassment: '#9C27B0', // Purple
-  Vandalism: '#607D8B', // Blue Grey
-  Burglary: '#FF5722', // Deep Orange
-  Fraud: '#2196F3', // Blue
-  Other: '#9E9E9E', // Grey
+  theft: '#FF9800', // Orange
+  robbery: '#F44336', // Red
+  assault: '#E91E63', // Pink
+  harassment: '#9C27B0', // Purple
+  vandalism: '#607D8B', // Blue Grey
+  burglary: '#FF5722', // Deep Orange
+  fraud: '#2196F3', // Blue
+  other: '#9E9E9E', // Grey
 };
+
+const CRIME_FALLBACK_COLOR = '#9E9E9E';
+
+/**
+ * Colour for a category that may not be one we know.
+ *
+ * Reports come straight out of Supabase with no validation step, so a row written
+ * before an enum change can carry anything. Returning grey beats returning
+ * undefined, which is how this bug looked for the whole of S01.
+ */
+const crimeColor = (category: string): string =>
+  CRIME_COLORS[category as CrimeCategory] ?? CRIME_FALLBACK_COLOR;
+
+// ---------------------------------------------------------------------------
+// Risk flags
+// ---------------------------------------------------------------------------
+
+/**
+ * Severity bands live in `components/RiskFlagSheet.tsx` and are imported, not
+ * redeclared. The sheet and the pins must agree: a sheet saying "High" next to a pin
+ * the map coloured "Severe" reads as a bug in the data rather than in the palette.
+ *
+ * They are keyed off `severityNow` from D02 onward — the decayed value — which is what
+ * makes a fading flag visibly change colour as the time control moves.
+ */
+
+/**
+ * The largest radius worth drawing as a circle, in metres.
+ *
+ * The chronic baseline layer comes from police *unit* statistics, so its flags have a
+ * 20 km radius — DMP covers the whole of Dhaka. Drawing that is not information, it is
+ * a tint over the entire viewport that makes every other flag harder to read while
+ * implying a precision the data does not have. Above this, the pin is drawn alone and
+ * the detail sheet states the radius in words.
+ *
+ * Kind-agnostic on purpose: the rule is "a circle bigger than the screen says nothing",
+ * which is true whatever produced it.
+ */
+const MAX_DRAWN_RADIUS_M = 5000;
+
+/**
+ * An "hours from now" offset as the instant to ask the surface about.
+ *
+ * `undefined` for 0, so a live read sends no `as_of` at all rather than an instant that
+ * is already a few hundred milliseconds stale by the time it arrives.
+ *
+ * Module scope, not a function inside the component, and that is not a style choice:
+ * `react-hooks/purity` flags reading the clock anywhere in a component body, because a
+ * render that depends on `Date.now()` is not a pure function of its props. Keeping it
+ * out here makes the rule true rather than suppressed.
+ */
+const asOfFromOffset = (offsetHours: number): Date | undefined =>
+  offsetHours === 0 ? undefined : new Date(Date.now() + offsetHours * 3600 * 1000);
+
+/**
+ * Hex colour plus an alpha channel, for the radius circles.
+ *
+ * `react-native-maps` takes rgba strings for fill and stroke. Eight-digit hex is
+ * accepted on both platforms and keeps the band table in one notation.
+ */
+const withAlpha = (hex: string, alpha: string) => `${hex}${alpha}`;
 
 // Colors for routes based on safety score
 const getRouteColor = (safetyScore: number) => {
@@ -70,6 +145,16 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   const [region, setRegion] = useState(DEFAULT_MAP_REGION);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [crimeReports, setCrimeReports] = useState<CrimeReportData[]>([]);
+  const [riskFlags, setRiskFlags] = useState<RiskFlag[]>([]);
+  const [riskError, setRiskError] = useState<string | null>(null);
+  const [selectedFlag, setSelectedFlag] = useState<RiskFlag | null>(null);
+  // The instant the server evaluated the surface at, echoed back in the response. The
+  // sheet needs it to say how long a flag has left *from the moment being shown*, not
+  // from now -- otherwise dragging the time control forward would show a flag with
+  // negative time remaining.
+  const [riskAsOf, setRiskAsOf] = useState<string | null>(null);
+  // Hours ahead of now that the map is being shown at. 0 is live. Dev builds only.
+  const [asOfOffsetHours, setAsOfOffsetHours] = useState(0);
   const [selectedCrime, setSelectedCrime] = useState<CrimeReportData | null>(
     null,
   );
@@ -215,6 +300,44 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
+  /**
+   * Load risk flags for the area around the current map centre.
+   *
+   * Through the backend, not Supabase: `risk_flags` is RLS-locked with no policies
+   * and the anon key cannot read it. Decay and the time-of-day arithmetic live on
+   * the server, which is the point of the endpoint.
+   *
+   * A failure is recorded in state rather than shown as an Alert. An alert on
+   * every failed poll is unusable, and the honest signal — "the risk layer is not
+   * loading" — belongs on the screen where it can be read during a demo.
+   */
+  const fetchRiskFlags = async (offsetHours = asOfOffsetHours) => {
+    const asOf = asOfFromOffset(offsetHours);
+    try {
+      const result = await riskService.getFlagsInRegion(region, asOf);
+      setRiskFlags(result.flags);
+      setRiskAsOf(result.asOf);
+      setRiskError(null);
+    } catch (error: any) {
+      // Not fatal: the crime layer and routing still work without it.
+      console.warn('Risk flags unavailable:', error?.message ?? error);
+      setRiskError('Risk layer unavailable');
+    }
+  };
+
+  /**
+   * Move the map's clock. Dev builds only -- see the control at the bottom of render.
+   *
+   * Refetches rather than filtering what is already loaded, because decay is computed
+   * on the server and `severityNow` for a different instant is a different number. The
+   * device deliberately holds no decay arithmetic (see `types/contracts/risk.ts`).
+   */
+  const setAsOfOffset = (offsetHours: number) => {
+    setAsOfOffsetHours(offsetHours);
+    setSelectedFlag(null); // its severity and time-remaining belong to the old instant
+    fetchRiskFlags(offsetHours);
+  };
+
   const handleMarkerPress = (crime: CrimeReportData) => {
     if (routeMode) return; // Don't select markers in route mode
     setSelectedCrime(crime);
@@ -269,6 +392,16 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Reload flags whenever the map recentres. The fetch asks for a generous box
+  // around the centre (see RISK_FETCH_MIN_SPAN_DEGREES), so this does not need to
+  // fire on every pan — and deliberately does not, because the map is driven by a
+  // controlled `region` prop and adding a region-change handler to it risks the
+  // map fighting the user. D04 replaces this with explicit pull-to-refresh.
+  useEffect(() => {
+    fetchRiskFlags();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [region.latitude, region.longitude]);
+
   useEffect(() => {
     if (currentLocation && !hasInitialized) {
       setRegion({
@@ -305,7 +438,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <MapView
-        provider={PROVIDER_GOOGLE}
+        provider={MAP_PROVIDER}
         style={styles.map}
         region={region}
         showsUserLocation
@@ -350,6 +483,56 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           );
         })}
 
+        {/* Risk flag radius circles.
+            Drawn before the markers so the pins sit on top of them. A flag is a
+            claim about an AREA — a bare pin would overstate how precisely the
+            location is known. */}
+        {!routeMode &&
+          riskFlags
+            .filter(flag => flag.radiusM <= MAX_DRAWN_RADIUS_M)
+            .map(flag => {
+              const band = riskBand(flag.severityNow);
+              return (
+                <Circle
+                  key={`risk-circle-${flag.flagId}`}
+                  center={{ latitude: flag.lat, longitude: flag.lon }}
+                  radius={flag.radiusM}
+                  strokeWidth={1}
+                  strokeColor={withAlpha(band.color, '99')}
+                  fillColor={withAlpha(band.color, '26')}
+                />
+              );
+            })}
+
+        {/* Risk flag pins.
+            The callout text is `mobilityStatement` and nothing else. It is the
+            only user-facing string the server produced through
+            app/policy/framing.py, and building a label from `kind` here would put
+            the word "clash" on a map that has committed not to say it.
+
+            Colour is `severityNow`, not `severity0`: a pin that fades as the time
+            control moves is demo beat 5, and it only works if the colour tracks the
+            decayed value. */}
+        {!routeMode && riskFlags.map(flag => {
+          const band = riskBand(flag.severityNow);
+          return (
+            <Marker
+              key={`risk-${flag.flagId}`}
+              coordinate={{ latitude: flag.lat, longitude: flag.lon }}
+              title={flag.mobilityStatement}
+              description={`${band.label} · ${Math.round(flag.severityNow)}/100 · ${
+                flag.status === 'confirmed'
+                  ? `${flag.sourceCount} sources`
+                  : 'unconfirmed'
+              }`}
+              pinColor={band.color}
+              // The callout still carries the statement, because a tap-and-hold on iOS
+              // shows it; the sheet is what a tap opens. Both are the same string.
+              onPress={() => !routeMode && setSelectedFlag(flag)}
+            />
+          );
+        })}
+
         {/* Crime Report Markers */}
         {!routeMode && crimeReports.map(crime => (
           <Marker
@@ -359,7 +542,11 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
               longitude: parseFloat(crime.longitude),
             }}
             title={crime.title}
-            description={crime.category}
+            description={crimeCategoryLabel(crime.category)}
+            // Defect 3, the other half. CRIME_COLORS was already defined and was
+            // never passed to a marker, so even with correct keys every pin would
+            // still have rendered in the default red.
+            pinColor={crimeColor(crime.category)}
             onPress={() => handleMarkerPress(crime)}
           />
         ))}
@@ -521,6 +708,80 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       )}
 
+      {/* Risk layer status.
+          Small, but it is what turns "the map looks the same as yesterday" into a
+          readable answer: either a flag count, or the reason there is none. */}
+      {!routeMode && (
+        <View style={[styles.riskBadge, { top: insets.top + spacing.xs }]}>
+          <View
+            style={[
+              styles.riskDot,
+              {
+                backgroundColor: riskError
+                  ? colors.error
+                  : asOfOffsetHours > 0
+                    ? colors.info
+                    : colors.success,
+              },
+            ]}
+          />
+          <Text style={styles.riskBadgeText}>
+            {riskError ?? `${riskFlags.length} risk flags`}
+          </Text>
+        </View>
+      )}
+
+      {/* The "as of" time control. DEV BUILDS ONLY.
+          This is what makes decay showable. Without it, beat 5 means standing on stage
+          saying "trust me, in three hours this will fade" -- the one claim in the demo
+          that cannot be demonstrated in real time, because the shortest half-life in
+          the surface is an hour.
+
+          Presets rather than a slider, deliberately: a slider needs a dependency the
+          project does not have, and a dragged value fires a request per frame. Six taps
+          are also repeatable on stage in a way a drag is not.
+
+          `__DEV__` is false in any production build, so this does not ship. D09 promotes
+          it to a real forward-looking control over the same `as_of` parameter -- at
+          which point it stops being a debug affordance and becomes beat 8. */}
+      {__DEV__ && !routeMode && (
+        <View style={[styles.asOfBar, { bottom: insets.bottom + spacing.xxl * 2 }]}>
+          <Text style={styles.asOfLabel}>
+            {asOfOffsetHours === 0
+              ? 'Showing: now'
+              : `Showing: +${asOfOffsetHours}h — ${riskFlags.length} flags left`}
+          </Text>
+          <View style={styles.asOfButtons}>
+            {[0, 3, 6, 12, 24, 48].map(hours => (
+              <TouchableOpacity
+                key={hours}
+                style={[
+                  styles.asOfButton,
+                  asOfOffsetHours === hours && styles.asOfButtonActive,
+                ]}
+                onPress={() => setAsOfOffset(hours)}
+              >
+                <Text
+                  style={[
+                    styles.asOfButtonText,
+                    asOfOffsetHours === hours && styles.asOfButtonTextActive,
+                  ]}
+                >
+                  {hours === 0 ? 'now' : `+${hours}h`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Flag detail sheet. Demo beat 2. */}
+      <RiskFlagSheet
+        flag={selectedFlag}
+        asOf={riskAsOf}
+        onClose={() => setSelectedFlag(null)}
+      />
+
       {/* Loading Indicator */}
       {isRouting && (
         <View style={styles.loadingOverlay}>
@@ -545,10 +806,10 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                     <Text
                       style={[
                         styles.categoryText,
-                        { color: CRIME_COLORS[selectedCrime.category] },
+                        { color: crimeColor(selectedCrime.category) },
                       ]}
                     >
-                      {selectedCrime.category}
+                      {crimeCategoryLabel(selectedCrime.category)}
                     </Text>
                   </View>
                   <TouchableOpacity onPress={closeModal}>
@@ -616,6 +877,34 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  // Risk layer status pill, top-left. Left, because the report and route buttons
+  // own the top-right corner.
+  riskBadge: {
+    position: 'absolute',
+    left: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: borderRadius.full,
+    elevation: 3,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  riskDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  riskBadgeText: {
+    color: colors.text,
+    fontSize: fontSize.xs,
+    fontWeight: '600',
   },
   sosButton: {
     position: 'absolute',
@@ -725,7 +1014,7 @@ const styles = StyleSheet.create({
     width: 20,
   },
   loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,  // RN 0.86 removed absoluteFillObject; absoluteFill is now the plain object
     backgroundColor: 'rgba(255, 255, 255, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -736,6 +1025,53 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: '600',
     color: colors.primary,
+  },
+  // The dev-only "as of" control. Sits above the SOS button rather than beside it:
+  // during a demo the presenter's thumb is on this, and a mis-tap that fired an SOS
+  // would be memorable for the wrong reason.
+  asOfBar: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
+    backgroundColor: colors.backgroundLight,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  asOfLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  asOfButtons: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  asOfButton: {
+    flex: 1,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.surfaceVariant,
+    alignItems: 'center',
+  },
+  asOfButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  asOfButtonText: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  asOfButtonTextActive: {
+    color: colors.white,
   },
   modalOverlay: {
     flex: 1,

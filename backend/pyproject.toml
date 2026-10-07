@@ -1,0 +1,112 @@
+[project]
+name = "meridian-backend"
+version = "0.1.0"
+description = "Meridian — agentic safety navigation for Bangladesh (backend)"
+requires-python = ">=3.11"
+
+# =============================================================================
+# Ruff — lint + format
+# =============================================================================
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["venv", ".venv", "migrations", "__pycache__"]
+
+[tool.ruff.lint]
+# Deliberately a starter set. The existing code predates any linting, so a
+# maximal rule set would produce hundreds of findings and get switched off.
+# Expand this list when a sprint touches the relevant code, not in bulk.
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes — real bugs: undefined names, unused imports
+    "I",    # isort — import ordering
+    "UP",   # pyupgrade — modern syntax for our Python floor
+    "B",    # bugbear — mutable defaults, bare except, etc.
+    "ASYNC",# async correctness: blocking calls inside async def
+    "T20",  # no print() in application code
+]
+ignore = [
+    "E501",  # line length — the formatter owns this
+    "B008",  # function call in default arg: how FastAPI's Depends() works
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Scripts and tests are allowed to print and to be loose about imports.
+"scripts/*"        = ["T20", "E402"]
+"tests/*"          = ["T20"]
+"app/services/ai/*" = ["T20"]  # TODO(S06): replace prints with the logger
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# =============================================================================
+# Mypy
+# =============================================================================
+# Incremental adoption: lenient everywhere, strict on new code, silent on
+# legacy modules until a sprint rewrites them. The point is that `check.sh`
+# stays useful — a type check that reports 300 pre-existing errors gets ignored,
+# and then it reports 301 and nobody notices.
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true       # ultralytics, mediapipe, geoalchemy2 ship no stubs
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+show_error_codes = true
+pretty = true
+exclude = ['venv/', '\.venv/', 'migrations/']
+
+# --- Strict: everything written from S03 onward -----------------------------
+[[tool.mypy.overrides]]
+module = [
+    "app.contracts.*",
+    "app.agents.*",
+    "app.llm.*",
+    "app.policy.*",
+    "app.privacy.*",
+    "app.scoring.*",
+    "app.routing.*",
+    "app.trips.*",
+    "app.casework.*",
+    "app.ingestion.*",
+]
+strict = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+warn_return_any = true
+
+# --- Silenced: pre-S01 code, until the sprint that owns it arrives ----------
+# Each entry names the sprint that un-silences it. Do not add rows here
+# without a sprint number — that is how a temporary exemption becomes
+# permanent.
+[[tool.mypy.overrides]]
+module = [
+    "app.services.ai.*",       # S06  — multi-person pose rewrite
+    "app.services.route_service",  # S05 — PostGIS rewrite
+    "app.services.sos_service",    # S05
+    "app.services.email_service",  # S05
+    "app.api.v1.endpoints.*",      # S05 — stub endpoints deleted or implemented
+    "app.models.*",            # S02  — ADR 0003 collapses the user tables
+    "app.schemas.*",           # S03  — superseded by app.contracts
+    "app.core.*",              # S04  — config split into app/config/
+]
+ignore_errors = true
+
+# =============================================================================
+# Pytest
+# =============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+addopts = "-q --strict-markers"
+markers = [
+    "invariant: enforces a non-negotiable invariant (IMPLEMENTATION_PLAN.md §4)",
+    "integration: needs a live database",
+    "llm: makes a real Anthropic API call — costs money, excluded from CI",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["*/venv/*", "*/tests/*", "*/migrations/*"]

@@ -1,0 +1,19 @@
+# =============================================================================
+# dev — tests, linting and types
+# =============================================================================
+#   pip install -r requirements/base.txt -r requirements/dev.txt
+#
+# This is what `./scripts/check.sh` needs. Without it the script SKIPS rather
+# than fails, which is deliberate but means a green run can be a green run of
+# nothing — so install it.
+# =============================================================================
+
+pytest
+pytest-asyncio      # pyproject sets asyncio_mode = "auto"
+pytest-cov
+ruff                # lint and format; configured in pyproject.toml
+mypy                # strict on app/contracts, app/policy, app/scoring, app/llm
+
+# Type stubs for libraries that ship none, so --strict has something to check
+# against rather than silently treating every call as Any.
+types-requests

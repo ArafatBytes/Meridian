@@ -8,6 +8,10 @@ from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.core.config import settings
+from app.core.jwks import verify_supabase_token
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -48,26 +52,39 @@ def create_refresh_token(data: dict) -> str:
     return encoded_jwt
 
 
-def decode_token(token: str) -> dict:
-    """Decode and verify JWT token"""
+async def decode_token(token: str) -> dict:
+    """
+    Verify a Supabase access token and return its claims.
+
+    Was `jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=["HS256"],
+    options={"verify_aud": False})`. That failed on every authenticated request
+    with "The specified alg value is not allowed", because Supabase signs with
+    ES256 by default now and the tokens are ECDSA signatures, not HMACs. No
+    secret value could have made it work.
+
+    Verification moved to app/core/jwks.py, which fetches the project's
+    published public key. It still accepts HS256 for projects on a legacy
+    shared secret, selected per token by its own `alg` header.
+
+    Audience is now actually checked (`verify_aud` was disabled before, so a
+    token minted for a different audience would have been accepted).
+    """
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM], options={"verify_aud": False})
-        return payload
-    except JWTError as e:
-        print(f"❌ JWT Validation Error: {str(e)}")
-        print(f"❌ Token being validated: {token[:20]}...")
-        print(f"❌ Using Secret Key (First 10 chars): {settings.JWT_SECRET_KEY[:10]}...")
+        return await verify_supabase_token(token)
+    except JWTError as exc:
+        # Log the reason server-side; never echo token contents to the client.
+        logger.warning("Rejected token: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from exc
 
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Get current authenticated user from token"""
     token = credentials.credentials
-    payload = decode_token(token)
+    payload = await decode_token(token)
     
     user_id: str = payload.get("sub")
     if user_id is None:

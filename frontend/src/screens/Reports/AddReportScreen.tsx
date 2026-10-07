@@ -12,10 +12,15 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from '../../components/MapComponent';
+import MapView, {
+  Marker,
+  MAP_PROVIDER,
+} from '../../components/MapComponent';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker, {
+  DateTimePickerChangeEvent,
+} from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
 import { useLocationStore } from '../../store';
@@ -68,7 +73,14 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
   const [showAIResults, setShowAIResults] = useState(false);
 
   useEffect(() => {
-    getCurrentLocation();
+    // The store re-throws after storing the error, so this promise must be
+    // handled or a denied permission becomes an uncaught rejection red-box.
+    // The screen is still usable without a fix -- the user picks a point on the
+    // map instead -- so this is a soft failure, not an alert.
+    getCurrentLocation().catch(() => {
+      // Intentionally quiet: locationStore already holds the message, and the
+      // map defaults to DEFAULT_MAP_REGION.
+    });
     // Request camera permissions
     (async () => {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -220,56 +232,60 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
     return `${day}/${month}/${year} at ${hours}:${minutes}`;
   };
 
-  const handleDateChange = (event: any, selectedDate?: Date) => {
+  // DateTimePicker 9.x deprecated `onChange` in favour of `onValueChange` plus
+  // a separate `onDismiss`. Two things follow from that and both simplify this
+  // code: `date` is no longer optional, and dismissal no longer reaches these
+  // handlers at all, so the old `event.type !== 'dismissed'` guard is gone.
+  const handleDateChange = (
+    _event: DateTimePickerChangeEvent,
+    selectedDate: Date,
+  ) => {
     if (Platform.OS === 'android') {
       setShowDatePicker(false);
     }
 
-    // Always update if we have a selected date and user didn't dismiss
-    if (selectedDate && event.type !== 'dismissed') {
-      // Preserve the time when changing date
-      const newDateTime = new Date(selectedDate.getTime());
-      const currentTime =
-        incidentDateTime.getHours() * 60 + incidentDateTime.getMinutes();
-      const now = new Date();
+    // Changing the date must not change the time, so carry the existing
+    // hours/minutes across -- except when the result would be in the future
+    // on today's date, in which case clamp to now.
+    const newDateTime = new Date(selectedDate.getTime());
+    const now = new Date();
+    const isToday =
+      selectedDate.getDate() === now.getDate() &&
+      selectedDate.getMonth() === now.getMonth() &&
+      selectedDate.getFullYear() === now.getFullYear();
+    const keptMinutes =
+      incidentDateTime.getHours() * 60 + incidentDateTime.getMinutes();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
-      // Check if the selected date is today
-      const isToday =
-        selectedDate.getDate() === now.getDate() &&
-        selectedDate.getMonth() === now.getMonth() &&
-        selectedDate.getFullYear() === now.getFullYear();
-
-      // If today and time would be in future, use current time
-      if (isToday && currentTime > now.getHours() * 60 + now.getMinutes()) {
-        newDateTime.setHours(now.getHours(), now.getMinutes(), 0, 0);
-      } else {
-        newDateTime.setHours(
-          incidentDateTime.getHours(),
-          incidentDateTime.getMinutes(),
-          0,
-          0,
-        );
-      }
-      setIncidentDateTime(newDateTime);
-    }
-  };
-  const handleTimeChange = (event: any, selectedTime?: Date) => {
-    if (Platform.OS === 'android') {
-      setShowTimePicker(false);
-    }
-
-    // Always update if we have a selected time and user didn't dismiss
-    if (selectedTime && event.type !== 'dismissed') {
-      // Create new date preserving the date part, updating only time
-      const newDateTime = new Date(incidentDateTime.getTime());
+    if (isToday && keptMinutes > nowMinutes) {
+      newDateTime.setHours(now.getHours(), now.getMinutes(), 0, 0);
+    } else {
       newDateTime.setHours(
-        selectedTime.getHours(),
-        selectedTime.getMinutes(),
+        incidentDateTime.getHours(),
+        incidentDateTime.getMinutes(),
         0,
         0,
       );
-      setIncidentDateTime(newDateTime);
     }
+    setIncidentDateTime(newDateTime);
+  };
+
+  const handleTimeChange = (
+    _event: DateTimePickerChangeEvent,
+    selectedTime: Date,
+  ) => {
+    if (Platform.OS === 'android') {
+      setShowTimePicker(false);
+    }
+    // Keep the date, replace only the time.
+    const newDateTime = new Date(incidentDateTime.getTime());
+    newDateTime.setHours(
+      selectedTime.getHours(),
+      selectedTime.getMinutes(),
+      0,
+      0,
+    );
+    setIncidentDateTime(newDateTime);
   };
 
   // ============================================================================
@@ -290,7 +306,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'], // MediaTypeOptions is deprecated in SDK 57
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
@@ -322,7 +338,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'], // MediaTypeOptions is deprecated in SDK 57
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
@@ -389,7 +405,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
           Alert.alert(
             'Analysis Failed',
             message ||
-            'Could not analyze the image. Please fill the form manually.',
+              'Could not analyze the image. Please fill the form manually.',
             [{ text: 'OK' }],
           );
         }
@@ -600,7 +616,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                   style={[
                     styles.categoryLabel,
                     selectedCategory === category.id &&
-                    styles.categoryLabelActive,
+                      styles.categoryLabelActive,
                   ]}
                 >
                   {category.label}
@@ -1028,10 +1044,10 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                                 width: `${Math.min(analysisResult.fusion_signals.object_score, 100)}%`,
                                 backgroundColor:
                                   analysisResult.fusion_signals.object_score >
-                                    70
+                                  70
                                     ? colors.success
                                     : analysisResult.fusion_signals
-                                      .object_score > 40
+                                          .object_score > 40
                                       ? colors.warning
                                       : colors.error,
                               },
@@ -1060,7 +1076,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                                   analysisResult.fusion_signals.pose_score > 70
                                     ? colors.success
                                     : analysisResult.fusion_signals.pose_score >
-                                      40
+                                        40
                                       ? colors.warning
                                       : colors.error,
                               },
@@ -1089,7 +1105,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                                   analysisResult.fusion_signals.scene_score > 70
                                     ? colors.success
                                     : analysisResult.fusion_signals
-                                      .scene_score > 40
+                                          .scene_score > 40
                                       ? colors.warning
                                       : colors.error,
                               },
@@ -1118,10 +1134,10 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                                 width: `${Math.min(analysisResult.fusion_signals.weighted_score, 100)}%`,
                                 backgroundColor:
                                   analysisResult.fusion_signals.weighted_score >
-                                    75
+                                  75
                                     ? '#4CAF50'
                                     : analysisResult.fusion_signals
-                                      .weighted_score > 50
+                                          .weighted_score > 50
                                       ? '#FF9800'
                                       : '#F44336',
                               },
@@ -1233,7 +1249,8 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                 value={incidentDateTime}
                 mode="date"
                 display="spinner"
-                onChange={handleDateChange}
+                onValueChange={handleDateChange}
+                onDismiss={() => setShowDatePicker(false)}
                 maximumDate={new Date()}
                 textColor="#000000"
                 themeVariant="light"
@@ -1252,7 +1269,8 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
               value={incidentDateTime}
               mode="date"
               display="default"
-              onChange={handleDateChange}
+              onValueChange={handleDateChange}
+              onDismiss={() => setShowDatePicker(false)}
               maximumDate={new Date()}
               textColor="#000000"
               themeVariant="light"
@@ -1265,7 +1283,8 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                 value={incidentDateTime}
                 mode="time"
                 display="spinner"
-                onChange={handleTimeChange}
+                onValueChange={handleTimeChange}
+                onDismiss={() => setShowTimePicker(false)}
                 maximumDate={new Date()}
                 textColor="#000000"
                 themeVariant="light"
@@ -1286,7 +1305,8 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
               value={incidentDateTime}
               mode="time"
               display="default"
-              onChange={handleTimeChange}
+              onValueChange={handleTimeChange}
+              onDismiss={() => setShowTimePicker(false)}
               maximumDate={new Date()}
               textColor="#000000"
               themeVariant="light"
@@ -1369,7 +1389,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
 
           <View style={styles.mapContainer}>
             <MapView
-              provider={PROVIDER_GOOGLE}
+              provider={MAP_PROVIDER}
               style={styles.map}
               region={region}
               onPress={handleMapPress}

@@ -16,7 +16,25 @@ import {
   Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Contacts from 'expo-contacts';
+// `expo-contacts/legacy`, not `expo-contacts`.
+//
+// SDK 57 moved expo-contacts to a class-based API and deprecated the old
+// function API with a hard throw:
+//   "Method presentContactPickerAsync imported from expo-contacts is
+//    deprecated. Use the new class-based API or import the legacy API from
+//    expo-contacts/legacy."
+//
+// The new API has no contact picker at all -- it exposes Contact/Container/
+// Group classes plus permissions, and the only picker-like thing is
+// <ContactAccessButton>, which is iOS 18+ only and a different interaction
+// (a button that surfaces contacts matching a query). There is no cross-platform
+// replacement for presentContactPickerAsync yet, so the legacy entry point is
+// the correct target rather than a workaround.
+//
+// This will need revisiting when the legacy module is removed. The screen's
+// manual-entry modal already covers the same need, so the fallback is a UX
+// regression, not a broken feature.
+import * as Contacts from 'expo-contacts/legacy';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
 import { useAuthStore } from '../../store';

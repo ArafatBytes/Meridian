@@ -4,15 +4,23 @@ export const APP_NAME = 'Meridian';
 export const APP_VERSION = '1.0.0';
 
 // API Configuration
-// Use your machine's local IP address for physical device testing
-// Run 'ifconfig' (Mac/Linux) or 'ipconfig' (Windows) to find it
-// Don't use 'localhost' for Android emulator or physical device
-export const API_BASE_URL = 'http://192.168.0.103:8000/api/v1';
-
-// For Android Emulator, use:
-// export const API_BASE_URL = 'http://10.0.2.2:8000/api/v1';
-// For Production, use:
-// export const API_BASE_URL = 'https://api.Meridian.com/api/v1';
+//
+// Set EXPO_PUBLIC_API_BASE_URL in frontend/.env. `scripts/run.ps1` and
+// `scripts/run.sh` detect your LAN IP and set it automatically, which is the
+// point: this used to be a hardcoded 192.168.0.103 that was only ever correct
+// on one machine, so the app silently could not reach the backend on any other.
+//
+// Never 'localhost' for a physical device or an Android emulator — that
+// resolves to the device itself, not your machine.
+//   Physical device  → http://<your-LAN-IP>:8000/api/v1
+//   Android emulator → http://10.0.2.2:8000/api/v1
+//   iOS simulator    → http://localhost:8000/api/v1
+//   Production       → https://api.meridian.app/api/v1
+//
+// The fallback keeps the historical value so an unset env var behaves as before
+// rather than failing in a new way.
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://192.168.0.103:8000/api/v1';
 
 export const API_TIMEOUT = 30000; // 30 seconds
 
@@ -59,6 +67,33 @@ export const NEARBY_CRIMES_RADIUS = 1000; // meters
 export const SOS_ACTIVATION_PHRASE = 'Meridian Emergency';
 export const SOS_COUNTDOWN_SECONDS = 5;
 export const SOS_AUTO_CALL_DELAY = 10000; // 10 seconds
+
+// SOS evidence video.
+//
+// These exist because of a measurement, not a guess. A 10-second clip recorded at
+// an iPhone's default quality came out at 16.45 MB; base64-encoded as an email
+// attachment that is ~22 MB, just under Gmail's 25 MB limit, and it took 2 minutes
+// 34 seconds to send. An emergency alert that takes two and a half minutes to
+// leave the building is not an emergency alert.
+//
+// At 1.2 Mbps a 10-second clip is about 1.5 MB plus audio, which sends in seconds
+// and is still perfectly legible as evidence of what was happening.
+export const SOS_VIDEO_DURATION_SECONDS = 10;
+
+/** Target bitrate in bits per second. iOS additionally needs the codec set on recordAsync. */
+export const SOS_VIDEO_BITRATE = 1_200_000;
+
+/**
+ * Hard ceiling on the recording, in bytes. Recording stops here.
+ *
+ * A backstop, not the mechanism: at the bitrate above a 10-second clip is nowhere
+ * near this. It matters if bitrate control is ignored on some device, where it
+ * turns "16 MB and a two-minute send" into "a shorter clip that actually sends".
+ * Partial evidence that arrives beats complete evidence that does not.
+ *
+ * Well under the backend's own 25 MB limit (SOS_VIDEO_MAX_SIZE_MB).
+ */
+export const SOS_VIDEO_MAX_BYTES = 8 * 1024 * 1024; // 8MB
 
 // Emergency Contacts
 export const MAX_EMERGENCY_CONTACTS = 5;

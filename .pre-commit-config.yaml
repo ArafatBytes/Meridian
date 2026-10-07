@@ -1,0 +1,108 @@
+# =============================================================================
+# Meridian — pre-commit hooks
+# =============================================================================
+# Install once per machine:
+#
+#     pip install pre-commit
+#     pre-commit install
+#
+# These catch, locally and in seconds, the things CI would otherwise catch
+# minutes later. For a relay team that matters more than usual: a red trunk
+# costs your partner their whole window, not just your own time.
+#
+# Bypass with `git commit --no-verify` only when you have a reason you would
+# write down in PROGRESS.md.
+# =============================================================================
+
+repos:
+  # ---------------------------------------------------------------- hygiene --
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.md$'       # trailing spaces are meaningful in Markdown
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-case-conflict  # Windows/macOS are case-insensitive; Linux CI is not
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=2048]   # yolov9c.pt is 82 MB and must stay out of git
+
+      # Blocks an accidentally-staged .env even if the ignore rules regress.
+      # They already did once: before S01 only `.env.*.local` was ignored, so a
+      # backend/.env holding the service-role key was fully trackable.
+      - id: detect-private-key
+
+  # ------------------------------------------------------------------ python --
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  # -------------------------------------------------------------- typescript --
+  # Local hooks: they need frontend/node_modules, so they no-op when it is
+  # absent rather than failing the commit on a fresh clone.
+  - repo: local
+    hooks:
+      - id: tsc
+        name: tsc --noEmit
+        entry: bash -c 'if [ -d frontend/node_modules ]; then cd frontend && npx tsc --noEmit; else echo "skipped: frontend/node_modules missing"; fi'
+        language: system
+        pass_filenames: false
+        files: ^frontend/.*\.(ts|tsx)$
+
+      - id: eslint
+        name: eslint
+        entry: bash -c 'if [ -d frontend/node_modules ]; then cd frontend && npx eslint --max-warnings=105 .; else echo "skipped: frontend/node_modules missing"; fi'
+        language: system
+        pass_filenames: false
+        files: ^frontend/.*\.(ts|tsx|js|jsx)$
+
+  # ------------------------------------------------------- project-specific --
+  - repo: local
+    hooks:
+      # The exact failure that made this repo unbuildable from a clean clone.
+      # Cheap to check, expensive to rediscover.
+      - id: supabase-client-tracked
+        name: frontend/src/lib must not be gitignored
+        entry: bash -c 'if git check-ignore -q frontend/src/lib/supabase.ts; then echo "ERROR: frontend/src/lib/supabase.ts is gitignored. A bare lib/ rule in .gitignore matches it and breaks clean clones. Anchor the rule (/backend/lib/)."; exit 1; fi'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      # Injected-code scan. Added after ~26 KB of obfuscated malware was found
+      # appended to frontend/babel.config.js, present since the initial commit
+      # and executing on every Metro bundle and Jest run. See PROGRESS.md.
+      - id: scan-injection
+        name: scan for injected/obfuscated code
+        entry: bash scripts/scan-injection.sh --quiet
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      # Windows PowerShell 5.1 reads a BOM-less .ps1 as Windows-1252, where the
+      # third byte of an em-dash (0x94) becomes a smart right double quote --
+      # a PowerShell string delimiter. One dash in a comment broke run.ps1 with
+      # ten cascading parse errors. Keep .ps1 files pure ASCII.
+      - id: ps1-ascii-only
+        name: PowerShell scripts must be pure ASCII
+        entry: bash -c 'bad=$(for f in $(git ls-files "*.ps1"); do LC_ALL=C grep -qP "[^\x00-\x7F]" "$f" && echo "$f"; done); if [ -n "$bad" ]; then echo "ERROR: non-ASCII characters in:"; echo "$bad"; echo "Windows PowerShell 5.1 misreads them as smart quotes and the script will not parse."; exit 1; fi'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      # Secrets belong in .env, which is ignored. Catch a relapse at commit time.
+      - id: no-hardcoded-supabase-keys
+        name: no Supabase keys in tracked config
+        entry: bash -c 'if grep -rlE "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" --include="*.json" --include="*.ts" --include="*.tsx" --include="*.py" frontend/src frontend/app.json backend/app 2>/dev/null; then echo "ERROR: a JWT literal is hardcoded in the files above. Move it to .env (EXPO_PUBLIC_*)."; exit 1; fi'
+        language: system
+        pass_filenames: false
+        always_run: true

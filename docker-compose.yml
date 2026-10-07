@@ -1,0 +1,180 @@
+# =============================================================================
+# Meridian — local stack
+# =============================================================================
+#   docker compose up -d                 backend + redis  (what you want)
+#   docker compose --profile osrm up -d   + local routing engine
+#   docker compose --profile mobile up    + Expo dev server in a container
+#
+# Normally you do not run this directly — `scripts/run.ps1` (Windows) or
+# `scripts/run.sh` brings up the stack AND starts Expo in one command.
+#
+# -----------------------------------------------------------------------------
+# What is deliberately NOT here
+# -----------------------------------------------------------------------------
+# * postgres — the database is Supabase. A local Postgres container would be a
+#   second, divergent source of truth, and backend/migrations/supabase/SCHEMA.sql
+#   targets Supabase's auth.users and storage schemas, which a bare postgres
+#   image does not have.
+#
+# * celery worker / beat — app/core/celery_app.py schedules two tasks whose
+#   modules do not exist (`crime_service.update_crime_scores`,
+#   `storage_service.cleanup_old_videos`) and there are no @task definitions
+#   anywhere, so beat crashes on boot. Added in S04 with the agent registry.
+#
+# * flower — monitors a worker that does not run yet.
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # api — FastAPI + the vision stack
+  # ===========================================================================
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: meridian-api:dev
+    container_name: meridian-api
+    env_file:
+      - ./backend/.env
+    environment:
+      # `environment` wins over `env_file`, which is the point: inside the
+      # network Redis is `redis`, not `localhost`, whatever backend/.env says.
+      REDIS_HOST: redis
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      # DATABASE_URL comes from backend/.env and points at Supabase — reachable
+      # from the container as an ordinary outbound connection.
+      PYTHONPATH: /app
+    ports:
+      - "8000:8000"
+    volumes:
+      # Live reload: edit on the host, uvicorn restarts in the container.
+      - ./backend/app:/app/app
+      - ./backend/scripts:/app/scripts
+      - ./backend/tests:/app/tests
+      - ./backend/migrations:/app/migrations
+      # The eval image set and its committed baseline. Without this mount the
+      # harness cannot see data/eval/crime_vision/manifest.csv, and anything it
+      # writes lands in the container layer and disappears on recreate.
+      - ./backend/data:/app/data
+      # Data the services read at import time.
+      - ./backend/police_stations.csv:/app/police_stations.csv:ro
+      - ./backend/bangladesh_crime_data_full.csv:/app/bangladesh_crime_data_full.csv:ro
+      # Model weights. ~700 MB downloads on the first AI request (YOLOv9c 82 MB,
+      # CLIP ~600 MB); this volume is what stops that happening again on every
+      # restart.
+      - model_cache:/cache
+      - ./backend/logs:/app/logs
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ===========================================================================
+  # redis — cache + future Celery broker
+  # ===========================================================================
+  # Unused by application code until the geo-proxy cache lands in S05, but
+  # app/core/redis.py builds a client at import and config requires a URL, so
+  # it is simpler to have it running than to special-case its absence.
+  redis:
+    image: redis:7-alpine
+    container_name: meridian-redis
+    command: redis-server --appendonly yes --save 60 1
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ===========================================================================
+  # osrm — local routing engine   [profile: osrm]
+  # ===========================================================================
+  # Opt-in because it needs a one-time ~1 GB download and 10–30 minutes of
+  # preprocessing. Without it, route_service falls back to the public demo
+  # server at router.project-osrm.org, which is rate-limited and unsuitable for
+  # anything but a demo (S05 makes that fallback explicit and loud).
+  #
+  # One-time setup, from the repo root:
+  #   mkdir -p osrm-data && cd osrm-data
+  #   curl -O https://download.geofabrik.de/asia/bangladesh-latest.osm.pbf
+  #   docker run -t -v "${PWD}:/data" osrm/osrm-backend osrm-extract -p /opt/car.lua /data/bangladesh-latest.osm.pbf
+  #   docker run -t -v "${PWD}:/data" osrm/osrm-backend osrm-partition /data/bangladesh-latest.osrm
+  #   docker run -t -v "${PWD}:/data" osrm/osrm-backend osrm-customize /data/bangladesh-latest.osrm
+  #
+  # Then set OSRM_BASE_URL=http://osrm:5000 in backend/.env.
+  osrm:
+    image: osrm/osrm-backend
+    container_name: meridian-osrm
+    profiles: [osrm]
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./osrm-data:/data
+    command: osrm-routed --algorithm mld /data/bangladesh-latest.osrm
+    restart: unless-stopped
+
+  # ===========================================================================
+  # expo — Metro bundler in a container   [profile: mobile]
+  # ===========================================================================
+  # Provided because it was asked for, but running Expo natively is the better
+  # default on Windows and macOS. Three reasons, all of which cost you time
+  # rather than merely being untidy:
+  #
+  #  1. File watching. Metro relies on inotify, which does not propagate
+  #     reliably across Docker Desktop bind mounts. Hot reload becomes slow or
+  #     stops working, and the failure is silent.
+  #  2. Host addressing. Your phone must reach Metro directly, so the container
+  #     has to advertise the host's LAN IP rather than its own — hence
+  #     REACT_NATIVE_PACKAGER_HOSTNAME below. Get it wrong and the QR code
+  #     scans fine and then hangs on "Downloading JavaScript bundle".
+  #  3. No native builds. `expo run:android` / `run:ios` need the Android SDK or
+  #     Xcode on the host regardless.
+  #
+  # `scripts/run.ps1` therefore containerises the backend and runs Expo on the
+  # host, which removes all three problems and is still one command.
+  expo:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    image: meridian-expo:dev
+    container_name: meridian-expo
+    profiles: [mobile]
+    env_file:
+      - ./frontend/.env
+    environment:
+      # MUST be your machine's LAN IP, not localhost and not the container IP.
+      # scripts/run.ps1 detects it; set HOST_LAN_IP yourself if running compose
+      # by hand.
+      REACT_NATIVE_PACKAGER_HOSTNAME: ${HOST_LAN_IP:-127.0.0.1}
+      EXPO_PUBLIC_API_BASE_URL: http://${HOST_LAN_IP:-127.0.0.1}:8000/api/v1
+      # Polling fallback for the inotify problem above. It works, at the cost of
+      # CPU and some latency.
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+    ports:
+      - "8081:8081"   # Metro
+      - "19000:19000" # Expo dev server
+      - "19001:19001"
+      - "19006:19006" # web
+    volumes:
+      - ./frontend:/app
+      # Anonymous volume so the container's node_modules is not shadowed by the
+      # host directory, which holds Windows-built binaries.
+      - /app/node_modules
+    depends_on:
+      - api
+    stdin_open: true
+    tty: true
+    command: npx expo start --host lan
+
+volumes:
+  redis_data:
+  model_cache:

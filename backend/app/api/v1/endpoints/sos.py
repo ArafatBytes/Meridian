@@ -80,7 +80,11 @@ async def trigger_sos(
             "message": result["message"],
             "contacts_notified": result["contacts_notified"],
             "video_attached": result.get("video_attached", False),
-            "location": location
+            "location": location,
+            # Defect 35: the id of the row now written to sos_incidents. None
+            # means the alert went out but the audit write failed, which is worth
+            # being able to tell apart from the alert itself failing.
+            "incident_id": result.get("incident_id"),
         }
 
     except HTTPException:

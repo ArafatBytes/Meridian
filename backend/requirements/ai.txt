@@ -1,0 +1,34 @@
+# =============================================================================
+# ai — the vision stack
+# =============================================================================
+# Object detection, pose, scene classification and speech. Several gigabytes, and
+# the slowest part of any environment build, which is exactly why it is its own
+# file: a machine that only runs the API or the tests does not need it.
+#
+#   pip install -r requirements/base.txt -r requirements/ai.txt
+#
+# D07 is the sprint that rewrites what sits on top of these. Note the mediapipe
+# situation before pinning anything here (defect 29): the version installed
+# removed the `mp.solutions` namespace that pose_detection_service.py is built on,
+# so the import raises and pose analysis has never run.
+# =============================================================================
+
+ultralytics>=8.3.0  # 8.1.x breaks on torch>=2.6: torch.load now defaults to
+                    # weights_only=True and the YOLO checkpoint carries pickled
+                    # ultralytics objects -> 'Weights only load failed'
+torch
+torchvision
+numpy
+onnxruntime
+mediapipe           # D07: the PoseLandmarker port, defects 29 and 5
+opencv-python
+scipy
+transformers        # CLIP, for scene classification
+safetensors         # required by transformers
+pandas              # scripts/train_crime_model.py and the eval harness
+
+# ---- speech ------------------------------------------------------------------
+google-cloud-speech
+google-cloud-storage
+pydub               # NOTE: its import in speech_service.py is commented out, so
+                    # that service raises NameError at runtime. Defect 2, Track B (B4).

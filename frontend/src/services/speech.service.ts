@@ -1,4 +1,20 @@
-import { Audio } from 'expo-av';
+/**
+ * Speech-to-text transcription.
+ *
+ * Recording used to live here too, built on `expo-av`'s imperative
+ * `Audio.Recording` API with mutable state held in a module-level singleton.
+ * SDK 57 removed `expo-av`, and `expo-audio` only exposes recording through the
+ * `useAudioRecorder` hook, so capture moved to `src/hooks/useVoiceRecorder.ts`.
+ *
+ * That turned out to be the right boundary anyway: recording is tied to a
+ * component's lifecycle, transcription is a stateless network call. The old
+ * singleton meant two screens recording at once would have silently clobbered
+ * each other's `this.recording`.
+ *
+ * Also removed: `recordAndTranscribe()`, which started a recording and then
+ * returned `null` unconditionally with a comment explaining that the UI was
+ * meant to handle the rest. It could not work, and nothing called it.
+ */
 import * as FileSystem from 'expo-file-system';
 import apiService from './api.service';
 import { ApiResponse } from '../types';
@@ -10,258 +26,89 @@ export interface TranscriptionResult {
   word_count: number;
 }
 
-export interface SpeechRecognitionOptions {
+export interface TranscribeOptions {
+  /** BCP-47 tag. The backend supports bn-BD for Bangla. */
   language?: string;
-  maxDurationSeconds?: number;
 }
 
+/** Backend cap (ai.py rejects larger uploads). */
+const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
+
 class SpeechService {
-  private recording: Audio.Recording | null = null;
-  private isRecording = false;
-
   /**
-   * Request audio recording permissions
-   */
-  async requestPermissions(): Promise<boolean> {
-    try {
-      const { status } = await Audio.requestPermissionsAsync();
-      return status === 'granted';
-    } catch (error) {
-      console.error('Error requesting audio permissions:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Start recording audio
-   */
-  async startRecording(): Promise<void> {
-    try {
-      if (this.isRecording) {
-        console.warn('Recording already in progress');
-        return;
-      }
-
-      // Request permissions
-      const hasPermission = await this.requestPermissions();
-      if (!hasPermission) {
-        throw new Error('Audio recording permission not granted');
-      }
-
-      // Configure audio mode
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      // Create and start recording
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
-      );
-
-      this.recording = recording;
-      this.isRecording = true;
-      console.log('Recording started');
-    } catch (error) {
-      console.error('Failed to start recording:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Stop recording and return the audio file URI
-   */
-  async stopRecording(): Promise<string | null> {
-    try {
-      if (!this.recording || !this.isRecording) {
-        console.warn('No recording in progress');
-        return null;
-      }
-
-      await this.recording.stopAndUnloadAsync();
-      const uri = this.recording.getURI();
-
-      this.recording = null;
-      this.isRecording = false;
-
-      console.log('Recording stopped, URI:', uri);
-      return uri;
-    } catch (error) {
-      console.error('Failed to stop recording:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Cancel recording without saving
-   */
-  async cancelRecording(): Promise<void> {
-    try {
-      if (this.recording && this.isRecording) {
-        await this.recording.stopAndUnloadAsync();
-        this.recording = null;
-        this.isRecording = false;
-        console.log('Recording cancelled');
-      }
-    } catch (error) {
-      console.error('Failed to cancel recording:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get recording status
-   */
-  getIsRecording(): boolean {
-    return this.isRecording;
-  }
-
-  /**
-   * Get recording duration in milliseconds
-   */
-  async getRecordingDuration(): Promise<number> {
-    if (!this.recording) {
-      return 0;
-    }
-
-    try {
-      const status = await this.recording.getStatusAsync();
-      return status.durationMillis || 0;
-    } catch (error) {
-      console.error('Failed to get recording duration:', error);
-      return 0;
-    }
-  }
-
-  /**
-   * Transcribe audio file using backend API
+   * Upload a recorded audio file and return its transcription.
+   *
+   * @param audioUri Local file URI, from `useVoiceRecorder().stop()`.
    */
   async transcribeAudio(
     audioUri: string,
-    options: SpeechRecognitionOptions = {},
+    options: TranscribeOptions = {},
   ): Promise<TranscriptionResult> {
-    try {
-      const { language = 'en-US', maxDurationSeconds = 30 } = options;
+    const { language = 'en-US' } = options;
 
-      // Get file info
-      const fileInfo = await FileSystem.getInfoAsync(audioUri);
-      if (!fileInfo.exists) {
-        throw new Error('Audio file does not exist');
-      }
-
-      // Check file size (max 10MB)
-      const maxSizeBytes = 10 * 1024 * 1024;
-      if (fileInfo.size && fileInfo.size > maxSizeBytes) {
-        throw new Error('Audio file is too large (max 10MB)');
-      }
-
-      // Create FormData
-      const formData = new FormData();
-
-      // Add audio file
-      const filename = audioUri.split('/').pop() || 'recording.m4a';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `audio/${match[1]}` : 'audio/m4a';
-
-      formData.append('audio', {
-        uri: audioUri,
-        name: filename,
-        type: type,
-      } as any);
-
-      // Add language
-      formData.append('language', language);
-
-      // Send to backend
-      console.log('Sending audio to backend for transcription...');
-      const response: ApiResponse<TranscriptionResult> =
-        await apiService.uploadFile('/ai/speech-to-text', formData);
-
-      if (!response.success || !response.data) {
-        throw new Error(response.message || 'Transcription failed');
-      }
-
-      console.log('Transcription successful:', response.data);
-      return response.data;
-    } catch (error: any) {
-      console.error('Transcription error:', error);
+    const info = await FileSystem.getInfoAsync(audioUri);
+    if (!info.exists) {
+      throw new Error('Recording file is missing.');
+    }
+    if (info.size === 0) {
+      // Usually means the audio session was never put into recording mode.
+      throw new Error('Recording is empty. Check microphone permissions.');
+    }
+    if (info.size > MAX_AUDIO_BYTES) {
       throw new Error(
-        error.message || 'Failed to transcribe audio. Please try again.',
+        `Recording is ${(info.size / 1024 / 1024).toFixed(1)} MB. Maximum is 10 MB.`,
       );
     }
-  }
 
-  /**
-   * Record and transcribe in one step
-   */
-  async recordAndTranscribe(
-    options: SpeechRecognitionOptions = {},
-  ): Promise<TranscriptionResult | null> {
-    let audioUri: string | null = null;
+    const filename = audioUri.split('/').pop() || 'recording.m4a';
+    const extension = /\.(\w+)$/.exec(filename)?.[1] ?? 'm4a';
 
-    try {
-      // Start recording
-      await this.startRecording();
+    const formData = new FormData();
+    formData.append('audio', {
+      uri: audioUri,
+      name: filename,
+      type: `audio/${extension}`,
+    } as never);
+    formData.append('language', language);
 
-      // Wait for user to stop (this should be controlled by UI)
-      // For now, we'll just return null and let the UI handle the flow
-      return null;
-    } catch (error) {
-      console.error('Record and transcribe error:', error);
-      if (audioUri) {
-        // Clean up the temporary file
-        await FileSystem.deleteAsync(audioUri, { idempotent: true });
-      }
-      throw error;
+    const response: ApiResponse<TranscriptionResult> =
+      await apiService.uploadFile('/ai/speech-to-text', formData);
+
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Transcription failed.');
     }
+    return response.data;
   }
 
-  /**
-   * Get list of supported languages from backend
-   */
-  async getSupportedLanguages(): Promise<
-    Array<{ code: string; name: string }>
-  > {
+  /** Languages the backend will accept, with a local fallback if it is down. */
+  async getSupportedLanguages(): Promise<{ code: string; name: string }[]> {
     try {
-      const response = await apiService.get<
-        Array<{ code: string; name: string }>
-      >('/ai/supported-languages');
-
-      if (!response.success || !response.data) {
-        throw new Error('Failed to fetch supported languages');
-      }
-
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching supported languages:', error);
-      // Return default languages if API fails
-      return [
-        { code: 'en-US', name: 'English (US)' },
-        { code: 'bn-BD', name: 'Bengali (Bangladesh)' },
-        { code: 'hi-IN', name: 'Hindi (India)' },
-      ];
+      const response =
+        await apiService.get<{ code: string; name: string }[]>('/ai/supported-languages');
+      if (response.success && response.data) return response.data;
+    } catch {
+      // Fall through to the defaults below.
     }
+    return [
+      { code: 'en-US', name: 'English (US)' },
+      { code: 'bn-BD', name: 'Bengali (Bangladesh)' },
+      { code: 'hi-IN', name: 'Hindi (India)' },
+    ];
   }
 
   /**
-   * Check if speech service is available
+   * Whether the backend's speech pipeline is usable.
+   *
+   * NOTE: this currently reports availability of the Google Cloud client, and
+   * the backend's `_convert_audio_format` is still broken for some formats.
+   * Treat a true here as "the endpoint exists", not "transcription works".
    */
   async checkServiceHealth(): Promise<boolean> {
     try {
       const response = await apiService.get('/ai/health');
       return response.success;
-    } catch (error) {
-      console.error('Speech service health check failed:', error);
+    } catch {
       return false;
-    }
-  }
-
-  /**
-   * Clean up resources
-   */
-  async cleanup(): Promise<void> {
-    if (this.isRecording) {
-      await this.cancelRecording();
     }
   }
 }

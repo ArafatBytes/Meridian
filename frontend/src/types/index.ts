@@ -1,3 +1,5 @@
+import type { CrimeCategory } from './contracts/crime';
+
 // User related types
 export interface User {
   id: string;
@@ -34,12 +36,21 @@ export interface AuthResponse {
 }
 
 // Emergency Contact types
+// Mirrors the `emergency_contacts` table and
+// backend/app/models/emergency_contact.py. A second, conflicting declaration
+// used to exist in the SOS section below with `relationship` required and an
+// `isPrimary` field that exists in no table and is read by no screen.
+// TypeScript merges duplicate interfaces rather than erroring, so the live type
+// was the union of both with every field required -- which is why
+// EmergencyContactCreate never satisfied it. Defect 12.
 export interface EmergencyContact {
   id: string;
   user_id: string;
   name: string;
   phone: string;
   email: string;
+  /** Nullable in the schema; the app does not currently write it. */
+  relationship?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -77,15 +88,20 @@ export interface LocationData extends Coordinates {
 }
 
 // Crime related types
-export type CrimeCategory =
-  | 'Theft'
-  | 'Robbery'
-  | 'Assault'
-  | 'Harassment'
-  | 'Vandalism'
-  | 'Burglary'
-  | 'Fraud'
-  | 'Other';
+//
+// CrimeCategory is defined in ./contracts/crime and re-exported here so existing
+// imports keep working. It used to be a capitalised union declared inline, which
+// did not match the lowercase `public.crime_category` enum the database actually
+// stores — every CRIME_COLORS lookup in MapScreen missed, and no crime marker on
+// the map had a colour. That was defect 3. The values now live in exactly one
+// place, with the colour table typed against them so the two cannot drift apart
+// again.
+// Only the type is re-exported. The value exports (CRIME_CATEGORIES, the colour
+// and label tables) are imported from './contracts/crime' directly, because
+// `constants/app.constants.ts` already exports a different, longer CRIME_CATEGORIES
+// for a UI picker, and two same-named exports reachable through two barrels is how
+// the original mismatch became hard to see.
+export type { CrimeCategory };
 
 export type CrimeSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
 
@@ -157,14 +173,6 @@ export interface DangerZone {
 }
 
 // SOS related types
-export interface EmergencyContact {
-  id: string;
-  name: string;
-  phone: string;
-  relationship: string;
-  isPrimary: boolean;
-}
-
 export interface SOSIncident {
   id: string;
   userId: string;

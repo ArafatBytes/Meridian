@@ -1,0 +1,3 @@
+image,expected,scene,source,notes
+seed-bus-pedestrians.jpg,none,street,"Ultralytics public test fixture (ultralytics.com/images/bus.jpg)","SEED. Negative. Several small/distant pedestrians by a bus - tests whether MediaPipe returns any pose for figures that are not frame-filling."
+seed-two-people-close.jpg,none,other,"Ultralytics public test fixture (ultralytics.com/images/zidane.jpg)","SEED. Negative. Two people close together, upper body - the exact shape of input the multi-person interaction path was written for, and which defect 5 prevents reaching."

@@ -19,6 +19,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store';
 import { SOSHotWord, ProfileStackParamList } from '../../types';
 import { speechService } from '../../services';
+import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 
 type SOSHotWordsScreenNavigationProp = NativeStackNavigationProp<
   ProfileStackParamList,
@@ -34,20 +35,21 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const [hotWords, setHotWords] = useState<SOSHotWord[]>([]);
   const [newHotWord, setNewHotWord] = useState('');
-  const [isListening, setIsListening] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [recordingDuration, setRecordingDuration] = useState(0);
   const [isTranscribing, setIsTranscribing] = useState(false);
+
+  // Recording lives in the hook: expo-audio only exposes capture via
+  // useAudioRecorder, and the hook also owns the 30s cap and unmount cleanup
+  // that the old setInterval-on-a-function-property never did reliably.
+  const recorder = useVoiceRecorder();
+  const isListening = recorder.isRecording;
+  const recordingDuration = recorder.durationSeconds;
 
   useEffect(() => {
     fetchHotWords();
 
-    // Cleanup on unmount
-    return () => {
-      if (isListening) {
-        speechService.cancelRecording();
-      }
-    };
+    // No recording cleanup here any more -- useVoiceRecorder stops the
+    // recorder and releases the audio session on unmount.
   }, []);
 
   const fetchHotWords = async () => {
@@ -133,87 +135,51 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const startVoiceInput = async () => {
-    try {
-      if (isListening) {
-        // Stop recording
-        setIsListening(false);
-        setIsTranscribing(true);
+    if (isTranscribing) return;
 
-        const audioUri = await speechService.stopRecording();
-
+    // Stop -> transcribe
+    if (isListening) {
+      setIsTranscribing(true);
+      try {
+        const audioUri = await recorder.stop();
         if (!audioUri) {
-          Alert.alert('Error', 'Failed to save recording');
-          setIsTranscribing(false);
+          Alert.alert('Nothing Recorded', 'No audio was captured. Please try again.');
           return;
         }
 
-        // Transcribe the audio
-        try {
-          const result = await speechService.transcribeAudio(audioUri, {
-            language: 'en-US', // Can be made configurable
-          });
+        const result = await speechService.transcribeAudio(audioUri, {
+          language: 'en-US',
+        });
 
-          if (result.text) {
-            setNewHotWord(result.text);
-            Alert.alert(
-              'Transcription Complete',
-              `Detected: "${result.text}"\n\nConfidence: ${Math.round(result.confidence * 100)}%`,
-            );
-          } else {
-            Alert.alert(
-              'No Speech Detected',
-              'Please try again and speak clearly.',
-            );
-          }
-        } catch (transcriptionError: any) {
-          console.error('Transcription error:', transcriptionError);
-          Alert.alert(
-            'Transcription Failed',
-            transcriptionError.message ||
-              'Failed to convert speech to text. Please try again.',
-          );
-        } finally {
-          setIsTranscribing(false);
-        }
-      } else {
-        // Start recording
-        const hasPermission = await speechService.requestPermissions();
-
-        if (!hasPermission) {
-          Alert.alert(
-            'Permission Required',
-            'Microphone permission is required for voice input.',
-          );
+        if (!result.text) {
+          Alert.alert('No Speech Detected', 'Please try again and speak clearly.');
           return;
         }
 
-        await speechService.startRecording();
-        setIsListening(true);
-        setRecordingDuration(0);
+        setNewHotWord(result.text);
+        Alert.alert(
+          'Transcription Complete',
+          `Detected: "${result.text}"
 
-        // Update recording duration every second
-        const interval = setInterval(async () => {
-          const duration = await speechService.getRecordingDuration();
-          setRecordingDuration(Math.floor(duration / 1000));
-
-          // Auto-stop after 30 seconds
-          if (duration >= 30000) {
-            clearInterval(interval);
-            startVoiceInput(); // This will trigger the stop logic
-          }
-        }, 1000);
-
-        // Store interval ID to clear it later
-        (startVoiceInput as any).intervalId = interval;
+Confidence: ${Math.round(result.confidence * 100)}%`,
+        );
+      } catch (error: any) {
+        Alert.alert(
+          'Transcription Failed',
+          error.message || 'Could not convert speech to text. Please try again.',
+        );
+      } finally {
+        setIsTranscribing(false);
       }
+      return;
+    }
+
+    // Start. The hook requests permission and throws with an actionable
+    // message if it is denied.
+    try {
+      await recorder.start();
     } catch (error: any) {
-      console.error('Voice input error:', error);
-      setIsListening(false);
-      setIsTranscribing(false);
-      Alert.alert(
-        'Voice Input Error',
-        error.message || 'Failed to start voice input. Please try again.',
-      );
+      Alert.alert('Microphone Unavailable', error.message || 'Could not start recording.');
     }
   };
 
