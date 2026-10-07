@@ -69,16 +69,56 @@ Full write-up, indicators of compromise and the remediation checklist:
 
 ## 📍 CURRENT STATE
 
-*Last updated: 2026-10-07 · by: Nakib · after: D02*
+*Last updated: 2026-10-08 · by: Nakib · after: D03*
 
 | | |
 |---|---|
-| **Last sprint completed** | **D02 — ✅ closed.** Walkthrough run on an iPhone, every step passed. All 14 checkboxes ticked in [DEMO_PLAN.md](DEMO_PLAN.md). **Two days ahead of schedule** — D02 was Oct 9–10 |
-| **NEXT SPRINT** | **D03 — Bangla search that actually works** (Oct 11–12) → [DEMO_PLAN.md](DEMO_PLAN.md). Gazetteer, Geolocation Agent, the search box. **Its long pole is the 150-landmark gazetteer, which is §9 data entry that has not started** |
+| **Last sprint completed** | **D03 — ✅ closed.** [`docs/walkthroughs/D03.md`](docs/walkthroughs/D03.md) run end to end on an iPhone in Expo Go, all 14 steps passed. All 12 checkboxes ticked in [DEMO_PLAN.md](DEMO_PLAN.md). **D03 was scheduled Oct 11–12 and closed Oct 8** |
+| **NEXT SPRINT** | **D04 — Today's news, on the map** (Oct 13–14) → [DEMO_PLAN.md](DEMO_PLAN.md) §D04. Source sprints S09, S14, S04 in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), which is where the task text lives |
 | **Baton holder** | **free** |
-| **Trunk** | `develop` · D01 and D02 committed and pushed. **Not merged to `main` yet — owner is doing that by hand.** |
-| **Build status** | 🟡 **mypy, invariant tests and the frontend are green; `ruff` is not.** `./scripts/check.sh` reports ~320 ruff findings in **pre-existing** code — ruff had never actually run here, because with no `backend/venv` the step was *skipped* and the skip read as a pass. D01's and D02's own files are clean and neither sprint added a new finding. Cleanup is Track B (B3, B5). |
+| **Trunk** | `develop` · D01, D02 and D03 committed and pushed. **Not merged to `main`** — owner does that by hand |
+| **Build status** | 🟡 **121 invariant tests passing (35 new in D03), `mypy --strict` clean on `app` (67 files), `ruff` clean on every D03 file, `tsc` clean, 45 jest tests, 0 ESLint errors.** Two **pre-existing** problems, neither D03's and both present before it: `./scripts/check.sh` reports ~320 `ruff` findings in old code, and `tests/test_crime_vision.py` has 2 failures (PIL cannot decode the seed fixtures — D07 inherits them). Cleanup is Track B (B3, B5) |
+| **Slack** | **5 days.** D02 closed 2 days early, D03 another 3. `DEMO_PLAN.md` §8 names schedule slip as the likeliest failure and said there was none. **Spend it on §9, not on scope** — the OSRM graph is now the long pole and D06 assumes it is done |
 | **Phase** | 0 — Foundation & Contracts |
+
+### ⚠️ One decision is open and it is a one-line change
+
+**Should the `GEO` LLM fallback exist at all?** `LLM_CHAIN_GEO` still ends in
+`groq:openai/gpt-oss-120b`. Measured over the 53-case set:
+
+| | If Gemini is unavailable |
+|---|---|
+| **Keep it** | 95.6% accuracy but **1 fabrication** — the discard invariant holds only while Gemini is up |
+| **Drop it** | gazetteer only: **93.3%**, **0 fabrications**, and **no network at all** |
+
+Recommendation is to **drop it** — 2.3 points is not worth a fabrication when "a wrong pin is worse
+than no pin" is the invariant a judge is most likely to test, and the degraded path then needs no
+network, which is the venue-failure story. Adding a second *Gemini* model does not help: same
+provider, same rate limit, and `gemini-3.1-flash-lite` fabricates too. **Left open deliberately —
+owner's call.** Full numbers in `docs/walkthroughs/D03.md` § *Model selection*.
+
+### 🔑 The LLM tier runs on free endpoints, not Anthropic
+
+**This project has no Anthropic key.** `ANTHROPIC_API_KEY` is in `.env.example` and absent from
+`.env`, so `DEMO_PLAN.md` §7.1's claim that *"the key is already configured"* was wrong — that matters
+because **D04, D07 and D08 all assume an LLM is available.**
+
+What exists instead, and it works: `GEMINI_KEY_GEO_ONE` and `GROQ_KEY_GEO_ONE`. Both Gemini and Groq serve the
+OpenAI Chat Completions wire format, so `app/llm/client.py` uses the `openai` SDK and reaches either
+by changing a base URL. Configuration is **per feature**, not global — `LLM_CHAIN_GEO` picks the
+models and `<PROVIDER>_KEY_GEO_*` the keys:
+
+```
+LLM_CHAIN_GEO=gemini:gemini-3.5-flash-lite,groq:openai/gpt-oss-120b
+```
+
+Keys are discovered from **every** variable named `GEMINI_KEY_*` / `GROQ_KEY_*`, so adding a second
+account's key widens the daily quota with no code change. Quotas: 500 requests/day on the Gemini
+model, 1,000/day on the Groq one, different providers so independent.
+
+**§7.1's D07 recommendation ("local detection plus Claude vision") needs revisiting** — there is no
+Claude key to spend. Gemini's flash-lite models are multimodal and free, which is the obvious
+substitute, but that is a decision, not a fait accompli. **Still due 17 October.**
 
 ### 🗓️ PLAN RESEQUENCED — read [DEMO_PLAN.md](DEMO_PLAN.md) before IMPLEMENTATION_PLAN.md
 
@@ -101,6 +141,181 @@ Full write-up, indicators of compromise and the remediation checklist:
 
 **Blocked decision:** the image-analysis reasoning layer must be settled by **16 October** or `D07`
 cannot start. See `DEMO_PLAN.md` §7.1 — recommendation is local detection + Claude vision.
+
+### ✅ D03 CLOSED — gate met on a real device, three days early
+
+**2026-10-08, Nakib.** [`docs/walkthroughs/D03.md`](docs/walkthroughs/D03.md) was run end to end on an
+iPhone in Expo Go and **all 14 steps passed**, including the three that matter most: the demo's own
+phrase "Mirpur 10 golchattar" resolving, the same phrase in Bangla script resolving to the same place,
+and three different kinds of refusal rendering as an explicit "could not find that place" rather than
+a wrong pin.
+
+**D03 was scheduled Oct 11–12 and closed Oct 8**, which with D02's two days makes **five days of
+slack**. `DEMO_PLAN.md` §8 names schedule slip as the likeliest failure and states there is none.
+Five days is not a licence to add scope — the OSRM graph (§9 item 2, D06 assumes it is built) has not
+been started and is now the long pole.
+
+**Shipped**
+
+| | |
+|---|---|
+| Gazetteer | `backend/data/gazetteer/dhaka_central.json` — **1,022 entries** harvested from OpenStreetMap by `scripts/harvest_gazetteer.py`. `aliases.json` — **100 hand-written aliases over 22 entries** |
+| Matcher | `app/geo/gazetteer.py` — exact, then token-subset, then fuzzy. Folds Bengali digits to Latin |
+| LLM client | `app/llm/client.py` + `models.py` — one `openai` SDK reaching Gemini and Groq, key rotation, **per-feature** chains and key pools (`LLM_CHAIN_GEO`, `GEMINI_KEY_GEO_*`) |
+| Agent | `app/geo/agent.py` — gazetteer → LLM → **discard** |
+| Endpoint | `POST /api/v1/geo/resolve` |
+| Frontend | `components/PlaceSearch.tsx`, `services/geo.service.ts`, `types/contracts/geo.ts`, wired into `MapScreen` |
+| Eval | `scripts/eval_geocoding.py` over a 53-case held-out set, with committed baselines |
+
+**The gazetteer did not have to be typed by hand, and that is the main finding.** §9 item 1 called it
+"pure data entry… whoever is not holding the baton should be doing this" and budgeted it as the long
+pole. It is not, because **OpenStreetMap's Dhaka coverage is Bangla-primary**: `name` holds the Bangla
+form and `name:en` the romanisation, already paired, on 98% of features in the pilot box. Both halves
+of every entry plus coordinates came for free. What could not be harvested is the **alias layer** —
+`alt_name` exists on about 40 of 782 features — and that is the part worth having.
+
+Two sources were measured and rejected first: **GeoNames** has 493 rows in the box and only **11** with
+any Bengali name, all of them large obvious things (Dhaka, the airports, the university, a river) and
+**four** road junctions in the whole city. The administrative datasets everyone links to
+(`nuhil/bangladesh-geocode` and friends) stop at union level, where **all of Dhaka city is one row**.
+
+**Measured numbers** — `scripts/eval_geocoding.py`, baselines committed:
+
+| | Gazetteer only | Gazetteer + LLM |
+|---|---|---|
+| Accuracy on real places | **93.3%** | **100%** |
+| Correct refusals on fakes | **100%** | **100%** |
+| **Fabrications** | **0** | **0** |
+| Median error | 6 m | 6 m |
+
+The 93.3% column is the one that matters for the venue: it needs **no network at all** beyond the local
+API. "Fabrications" — coordinates returned for a place that does not exist — is the number to quote in
+Q&A, not accuracy.
+
+**Model selection was measured twice, and the second pass overturned part of the first.** The
+six-case probe gave `gemini-3.5-flash-lite` **6/6** (primary), `openai/gpt-oss-120b` 4/6,
+`gemini-3.1-flash-lite` 5/6 but **rejected** for fabricating, `qwen/qwen3.8-27b` 1/6 disqualified.
+
+Six cases was too thin to choose a fallback on. Over the **full 53-case set**, `gpt-oss-120b` alone
+scores **15.6%** on real places with **2 fabrications** — 4/6 was flattering, and 25 of 45 real places
+came back confidently wrong. As the system's only model (gazetteer still in front of it) it reaches
+95.6% and **1 fabrication**, but that 95.6% is almost entirely the gazetteer: 42 of 53 cases never
+reach a model. It invented coordinates for **"Gulshan 97 golchattar"**, a circle number that does not
+exist.
+
+**So there is an open decision, deliberately left open:** `LLM_CHAIN_GEO` still ends in
+`groq:openai/gpt-oss-120b`. Keeping it means 95.6% with 1 fabrication if Gemini is down; dropping it
+means gazetteer-only — **93.3% with 0 fabrications and no network at all.** Recommendation in
+`docs/walkthroughs/D03.md` is to **drop it**: 2.3 points is not worth a fabrication when "a wrong pin
+is worse than no pin" is the invariant a judge is most likely to test. **Owner's call.**
+
+**Three bugs found while building, none by a pre-existing test**
+
+1. **The matcher resolved "Sector 11" to "Sector 10"** at 0.89 confidence. One character apart, two
+   places 2 km apart — the wrong-pin failure the discard invariant exists to prevent. **Numbers are
+   now identity, not spelling:** digits must match exactly, letters may be misspelt. Found by typing
+   it, not by a test.
+2. **The gazetteer refused "Farmgate" and "Motijheel".** OSM lists each in two layers ~270 m apart,
+   and the duplicate check compared names without looking at distance — so the invariant was failing
+   in the direction that *costs* a real place. Same name within 1 km now merges; only genuinely
+   distant collisions (Uttara's and Bashundhara's "Sector 11", 10 km) are refused. 123 entries are
+   flagged ambiguous and refused on purpose.
+3. **The LLM tier was overturning the gazetteer's ambiguity refusals.** The gazetteer declined
+   "Sector 11" correctly, and the model then answered Uttara's with confidence — our own guard was
+   bypassable by the weaker tier beneath it. **Found by the eval set, not by a test**, because it only
+   shows up when you score refusals as outcomes. "We have never heard of this" and "we refuse this on
+   purpose" are now different code paths, and the second does not consult the model.
+
+**A fourth, which I caused and the code caught**
+
+Three hand-written aliases (`গাবতলী`, `কাপ্তান বাজার`, `Nilkhet`) duplicated **other entries'** real
+OSM names. The effect is quietly backwards: the query becomes ambiguous and the matcher refuses, so an
+alias added to *help* a lookup silently broke it. The harvest cannot see this — it merges duplicates
+before aliases are merged — so `_warn_about_alias_collisions()` now runs at load time and an invariant
+test fails on it. It found all three the moment it was written.
+
+**A fifth, found by the 53-case benchmark rather than by any test**
+
+`gpt-oss-120b` returns `json_validate_failed` with empty output on roughly 1 in 10 calls, and
+`app/llm/client.py` **raised** on it, because a 400 is normally a bad request from us. The first
+benchmark run died on it. In production the same thing — Gemini rate limited, request falling through
+to Groq — would have turned a map search into an HTTP **500** rather than an honest "could not find
+that place". Model-side 400s (`json_validate_failed`, `tool_use_failed`) now fall through to the next
+option while genuinely bad requests from us still surface, and two invariant tests pin both halves.
+
+**Two more found only by running it on the phone — this is §0 earning its place again**
+
+1. **The container would not start: `ModuleNotFoundError: No module named 'openai'`.** The dependency
+   *was* declared correctly (`requirements.txt` includes `requirements/agents.txt`, which has it), but
+   the Dockerfile keeps requirements in their own cached layer so code edits rebuild instantly, and
+   `run.ps1` runs a plain `docker compose up -d`. The image therefore came up with D01's packages.
+   **`.\scripts\run.ps1 -Rebuild` once** fixes it, and D03's walkthrough now says so as a
+   precondition. Any sprint that adds a package needs it.
+2. **Route mode had no reachable exit.** The button that leaves route mode was positioned *inside* the
+   route-search card, which carries `zIndex: 10` / `elevation: 8` against the button's `4` — so it lost
+   every stacking contest and could not be tapped. `toggleRouteMode` is the only exit, so a reload was
+   the only escape. **This would have stranded the demo if anyone had tapped navigate on stage.** The
+   close control now lives in the card's own header as a small ✕, and the floating button only
+   *enters* route mode.
+
+   Worth noting how it was fixed, because the first attempt was wrong: raising the button's z-order
+   made it reachable but left a 56 px red circle sitting on top of a text field. Reachable and still
+   wrong. A close control belongs on the thing it closes.
+
+   `tsc`, ESLint and Jest were green throughout both. Z-order and reachability are not things they can
+   see, and neither is a missing package inside an image.
+
+**Deliberately NOT done**
+
+- **`scripts/gazetteer_review.py`** (S10's add/review/audit tool). Not a D03 checkbox. Reviewing is
+  editing `aliases.json`, which is small and readable. Track B.
+- **Nominatim.** `GeoResolution.method` allows it; D06 owns the proxy.
+- **The other ~1,000 entries are `reviewed: false`** and resolve on their own OSM names. 22 reviewed
+  is the honest number, which is why `reviewed` is a field rather than an assumption. B7 extends it.
+- **Cloudflare Workers AI**, although a token is in `.env`. It is a shared 10,000-neuron pool across
+  every model, its Bangla-capable options are weak, and it is a third wire format for no gain.
+
+**Gotchas for whoever is next**
+
+1. **`data/gazetteer/dhaka_central.json` is generated. Never hand-edit it** — `harvest_gazetteer.py`
+   overwrites it. Hand work goes in `aliases.json`, which is never generated. That split is the only
+   thing protecting the alias layer.
+2. **An entry listed in `aliases.json` counts as `reviewed: true`.** The flag cannot live in the
+   generated file, because a re-harvest would erase it.
+3. **Public Overpass mirrors are genuinely unreliable.** One query succeeded against a mirror and the
+   same query timed out against all three twenty minutes later. The harvest caches raw answers in
+   `backend/data/gazetteer/.osm-cache/` (gitignored) so a re-run resumes. **Not a demo dependency** —
+   the JSON is committed.
+4. **ODbL.** The gazetteer is OpenStreetMap data. Attribution is in the `_README` block and an
+   invariant test fails if it is removed. If this is ever published as a dataset it goes out under
+   ODbL too.
+5. **A new Python dependency means the Docker image must be rebuilt: `.\scripts\run.ps1 -Rebuild`.**
+   D03 added `openai` to `requirements/agents.txt`. The Dockerfile keeps requirements in their own
+   cached layer so code changes rebuild instantly, and `run.ps1` runs a plain `docker compose up -d` —
+   so the container came up with D01's packages and died at `import openai` with
+   `ModuleNotFoundError`. The dependency was declared correctly; the image simply predated it. **This
+   cost a failed start on the first attempt at D03's walkthrough.** Any sprint that adds a package
+   needs `-Rebuild` once.
+6. **Always start with `.\scripts\run.ps1`, never a bare `docker compose` command.** `run.ps1` also
+   sets `EXPO_PUBLIC_API_BASE_URL` to the LAN IP, which is the only reason the *phone* can reach the
+   API. D03's walkthrough originally said `docker compose up -d --force-recreate api`, copied from D02
+   without the reason D02 needed it, and that would have left the app pointing somewhere unreachable.
+7. **`.env` needs `--force-recreate`, not `restart`** — unchanged from D02, and it bites every time.
+8. **Free-tier quota resets at midnight Pacific** for Gemini. Do not run a few hundred LLM queries on
+   the 23rd.
+9. **2 pre-existing failures in `tests/test_crime_vision.py`** (PIL cannot decode the seed fixtures).
+   Not D03's, present before it, and D07 will have to deal with them.
+
+**Prototype Gate: met.** 121 invariant tests passing (35 new), `mypy --strict` clean on `app`
+(67 files), `ruff` clean on every D03 file, `tsc` clean, 45 jest tests, **0 ESLint errors** — D03's
+three new frontend files lint completely clean, and `MapScreen.tsx` had 6 warnings before D03 and has
+6 after, so none were added. **Walkthrough run on a real device, all 14 steps.**
+
+*(A note on a claim in D02's handoff: it quoted "6 pre-existing ESLint warnings", which was a
+changed-files-only count. Project-wide `eslint src` reports 105, all pre-existing. The narrower number
+read as broader than it was.)*
+
+---
 
 ### ✅ D02 CLOSED — gate met on a real device, two days early
 
@@ -359,67 +574,95 @@ deferred** until Arafat and Nakib have discussed it.
 
 ### ▶️ RESUME HERE
 
-**D01 and D02 are both closed, both verified on a phone, and both pushed to `develop`.** Neither is
-merged to `main` — the owner does that by hand. The trunk is green and the baton is free.
+**You are taking over from Nakib. D01, D02 and D03 are closed, each verified on a real phone, all
+pushed to `develop`.** The trunk is green and the baton is free. `main` is behind — the owner merges by
+hand, do not do it for them.
 
-**Next is D03 — *Bangla search that actually works*, Oct 11-12.** Source sprints S10, S11 and S04 in
-[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), and **that is where the task text lives**; DEMO_PLAN
-tells you which sprint and in what order, not what the work means.
+**Start by proving you received something that runs**, before changing anything:
 
-```bash
-git checkout develop && git pull
-./scripts/check.sh                      # read the ruff note in Build status before panicking
-git checkout -b sprint/D03-bangla-search
+```powershell
+.\scripts\run.ps1            # starts Docker + Expo, sets the phone's API URL
 ```
 
-**Before you write any code, re-run `docs/walkthroughs/D01.md` and `D02.md`.** They are the regression
-suite now, and `DEMO_PLAN.md` §3 makes "every previous walkthrough still passes" a handoff gate. About
-22 minutes for both. D02's steps 7 and 9-12 are the ones that catch a silent break in the decay path.
+If the API never becomes healthy and the log ends in `ModuleNotFoundError`, you need
+`.\scripts\run.ps1 -Rebuild` once — the image caches its dependency layer and D03 added `openai`.
 
-**There are two days of slack, for the first time.** D02 closed on 7 October against dates of 9-10.
-`DEMO_PLAN.md` §8 names schedule slip as the likeliest failure and says there is no slack; there now
-is a little. **Spend it on §9, not on scope.** Which brings us to the thing that should worry you:
+**Then re-run the three existing walkthroughs on the phone. About 30 minutes, and it is a gate, not a
+courtesy.** `DEMO_PLAN.md` §3 makes "every previous walkthrough still passes" a handoff requirement,
+because that is the only thing that catches one sprint silently breaking an earlier one — which has
+already happened once on this project and would have surfaced on the 23rd.
 
-**The gazetteer is D03's long pole and it has not started.** `DEMO_PLAN.md` §9 item 1: 150
-Dhaka-central landmarks, Bangla and romanised forms, aliases, coordinates. Pure data entry -- no code,
-no baton, and **no coding agent can compress it**. The concept document calls Bangla place resolution
-*the primary technical risk* and D03 is demo beat 3. If the two spare days go anywhere, they go here.
-The owner deferred §9 deliberately, which is a decision and not an oversight, but the cost of it lands
-on D03 specifically and it lands in four days.
+- [`docs/walkthroughs/D01.md`](docs/walkthroughs/D01.md) — risk pins, and an SOS that leaves a record
+- [`docs/walkthroughs/D02.md`](docs/walkthroughs/D02.md) — decay. Steps 7 and 9–12 catch a broken decay path
+- [`docs/walkthroughs/D03.md`](docs/walkthroughs/D03.md) — Bangla search. Steps 8 and 10 are the subtle ones
 
-**Four things about D03's scope that D02 settled underneath it:**
+**Next is D04 — *Today's news, on the map*, Oct 13–14.** [DEMO_PLAN.md](DEMO_PLAN.md) §D04 tells you
+which sprint and in what order; **[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) S09, S14 and S04 are
+the specification.** Read the cited sprint, not just the checklist.
 
-1. **`app/llm/client.py` still does not exist, and D03 is its first consumer.** The Geolocation
-   Agent's LLM fallback is the first thing in the track that needs one. `anthropic` is already in
-   `requirements/ai.txt`; the invariant test asserting `client.py` is the only module that may import
-   it is D03's to write.
-2. **`app/scoring/kinds.py` is where per-kind defaults live.** When D03 or D04 builds a flag from an
-   extracted incident and has no severity, radius or half-life to go on, read them from there rather
-   than inventing numbers at the call site. Every value is reviewed and carries its reasoning.
-3. **The fixture's compact entry form means a new flag is one line.** `event_key` starting `seed-`,
-   `kind`, `lat`, `lon`, `mobility_impact`, `observed_offset_hours`; everything else defaults. See the
-   `_README` at the top of `backend/data/fixtures/risk_flags.json`. **It still must never contain a
-   `mobility_statement`** -- the loader raises and an invariant test checks it, now including dict
-   literals.
-4. **`app/scoring/__init__.py` is deliberately empty of imports.** Import from the module you want.
-   Putting the surface factory there made every import of the package require a `DATABASE_URL`, which
-   broke the seeder outside `backend/`. The docstring explains it; do not undo it for tidiness.
+```powershell
+git checkout develop ; git pull
+git checkout -b sprint/D04-live-news
+```
 
-**Decision still blocking D07, deadline 17 October:** the image-analysis reasoning layer.
-`DEMO_PLAN.md` §7.1. Recommendation is local YOLOv9c detection plus Claude vision as the reasoning
-layer. **This needs an actual conversation, not a default.** It is ten days away and it is the only
-open decision that can stop a sprint starting.
+**Five things D03 built that D04 should use rather than rebuild:**
 
-**Off-baton work, still none of it started** (`DEMO_PLAN.md` §9): the Dhaka gazetteer (D03 -- see
-above, this is now urgent), the OSRM Bangladesh graph build (a multi-gigabyte download plus
-preprocessing; D06 on the 16th assumes it is done), the D07 eval set (2 images of a target of 30-40),
-and booking a native Bangla speaker for D08 (a gate on that sprint, and it depends on someone else's
-calendar). **None of it needs the baton and none of it compresses later.**
+1. **The LLM seam.** `await complete(system, user, SomeModel, feature=FEATURE_EXTRACT)` from
+   `app/llm/client.py` returns a validated Pydantic model or raises `LLMUnavailable`. Add your output
+   shape to `app/llm/models.py`. **Do not import an SDK anywhere else** — an invariant test fails, and
+   it checks for whichever SDK is in use, not for the word `anthropic`.
+2. **Config is per feature, and D04 must declare its own.** Add `LLM_CHAIN_EXTRACT` to
+   `app/core/config.py`, add `EXTRACT` to `app.llm.client.KNOWN_FEATURES`, and put
+   `GEMINI_KEY_EXTRACT_ONE` in `.env`. An unknown feature name raises rather than silently finding no
+   keys. **Give it its own keys** — that is the whole point of the split: an ingestion loop on a
+   10–15 minute cadence can burn a 500/day quota, and sharing D03's would kill the search box on stage.
+3. **Resolve places through `app/geo/agent.py::resolve_place`, with `allow_llm=False` for bulk work.**
+   Ingestion resolving 50 locations would otherwise spend 50 requests on names the gazetteer already
+   knows. The gazetteer-only path scores 93.3% and costs nothing.
+4. **Per-kind defaults live in `app/scoring/kinds.py`.** When you build a flag from an extracted
+   incident and have no severity, radius or half-life, read them from there. Every value is reviewed
+   and carries its reasoning; do not invent numbers at the call site.
+5. **Every flag D04 produces is `unconfirmed`.** Rumour Guard is D05, and an invariant test already
+   forbids one source producing a `confirmed` flag. Writing `confirmed` will trip it, correctly.
+
+**Two traps that have each cost a session on this project:**
+
+- **PowerShell cannot execute a `.sh` file.** It returns silently and changes nothing, which is
+  indistinguishable from success. `.\scripts\seed.sh` does *nothing*. Only `run.ps1` is native —
+  for the others, call the Python directly or use Git Bash.
+- **Never write a literal backslash inside a bash heredoc in this repo.** It gets collapsed before
+  Python sees it, so `\\run.ps1` becomes `\run.ps1` and the `\r` turns into a carriage
+  return inside your file. This has corrupted documents three times. Build paths from `chr(92)`.
+
+**The gazetteer is done and §9 item 1 was wrong about it.** It said "pure data entry… no coding agent
+can compress it". OpenStreetMap's Dhaka data is Bangla-primary, so a harvest produced 1,022 paired
+entries in an afternoon. What cannot be automated is the **alias layer** — a synonym is not a spelling
+— and 22 entries have one. Extending it is B7 and is not blocking.
+
+**§9's remaining off-baton work. None of it has started, and the OSRM graph is now the critical one:**
+
+1. **The OSRM Bangladesh graph — D06 on the 16th assumes it is built.** Multi-gigabyte download plus
+   `osrm-extract` / `osrm-partition` / `osrm-customize` into `osrm-data/`. The compose service already
+   exists and is waiting for the file. No code, no baton, and nothing in D03 moved it. **Start this
+   first with the five days of slack.**
+2. The D07 eval set — 2 images against a target of 30–40.
+3. A native Bangla speaker for D08, for the 20th or 21st. It is a gate on that sprint and depends on
+   someone else's calendar.
+
+**Decision blocking D07, due 17 October — and D03 changed its shape.** `DEMO_PLAN.md` §7.1 recommends
+local YOLOv9c detection plus **Claude** vision, and claims the key is already configured. **It is not:
+this project has no Anthropic key.** Gemini's flash-lite models are multimodal, free, and already
+working through `app/llm/client.py`, which makes them the obvious substitute — but that is a decision,
+not a default, and it needs the conversation.
+
+**Decision open from D03, one line of config:** whether to drop `groq:openai/gpt-oss-120b` from
+`LLM_CHAIN_GEO`. See the ⚠️ block at the top of this file. Recommendation is to drop it.
 
 **Outstanding owner actions on the security incident (B0), unchanged:** rotate the credentials, rewrite
 history to drop the payload from `db6c42f`, untrack both `.env` files, delete the `agent/Arafat`
-branch. Both `.env` files are still tracked and still hold live values, so **this repository must not
-be made public.** See the incident block at the top of this file.
+branch. Both `.env` files are tracked and hold live values, so **this repository must not be made
+public.** See the incident block at the top of this file.
+
 
 ---
 

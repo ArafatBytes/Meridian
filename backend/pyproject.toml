@@ -62,6 +62,7 @@ exclude = ['venv/', '\.venv/', 'migrations/']
 module = [
     "app.contracts.*",
     "app.agents.*",
+    "app.geo.*",        # D03 — gazetteer, matcher, GeolocationAgent
     "app.llm.*",
     "app.policy.*",
     "app.privacy.*",

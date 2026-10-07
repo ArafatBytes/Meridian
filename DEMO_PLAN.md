@@ -278,25 +278,51 @@ D01–D02 still pass.
 > The concept document calls this **the primary technical risk**. It is also demo beat 3 — and in the
 > first draft of this plan, no sprint built the search box. That is why §0 exists.
 
-- [ ] **`app/llm/client.py` + `app/llm/models.py`** — install `anthropic`; every call returns a
+- [x] **`app/llm/client.py` + `app/llm/models.py`** — install `anthropic`; every call returns a
       validated Pydantic model; the invariant test asserts this is the only importer. **Lands here
       because the Geolocation Agent's fallback is the first thing in the track that needs an LLM** *(S04)*
-- [ ] `mypy --strict` clean on `app/llm` *(S04)*
-- [ ] `data/gazetteer/` — seed **one zone**, Dhaka central, 150+ landmark entries: Bangla and
+- [x] `mypy --strict` clean on `app/llm` *(S04)*
+- [x] `data/gazetteer/` — seed **one zone**, Dhaka central, 150+ landmark entries: Bangla and
       romanised forms, aliases, type, coordinates. The concept document's own mitigation is "seeded
       manually for the pilot zone" — do not attempt national coverage *(S10)*
-- [ ] Loader + fuzzy match across romanisation variants (golchattar / golchotor / গোলচত্বর) *(S10)*
-- [ ] `GeolocationAgent` — gazetteer first, **LLM fallback second**, discard third *(S11)*
-- [ ] **Invariant: unresolvable locations are discarded, never guessed.** A wrong pin is worse than
+- [x] Loader + fuzzy match across romanisation variants (golchattar / golchotor / গোলচত্বর) *(S10)*
+- [x] `GeolocationAgent` — gazetteer first, **LLM fallback second**, discard third *(S11)*
+- [x] **Invariant: unresolvable locations are discarded, never guessed.** A wrong pin is worse than
       no pin, the concept document commits to this, and a judge may well test it *(S11)*
-- [ ] `method` on every result: `gazetteer`, `llm` or `unresolved` *(S11)*
-- [ ] **`POST /api/v1/geo/resolve`** — text in, coordinates plus `method` out
-- [ ] 📱 **Search box on `MapScreen`**, with a resolution-method chip on success
-- [ ] 📱 **An explicit "could not resolve that place" state.** This is the discard invariant made
+- [x] `method` on every result: `gazetteer`, `llm` or `unresolved` *(S11)*
+- [x] **`POST /api/v1/geo/resolve`** — text in, coordinates plus `method` out
+- [x] 📱 **Search box on `MapScreen`**, with a resolution-method chip on success
+- [x] 📱 **An explicit "could not resolve that place" state.** This is the discard invariant made
       visible, and it is a better answer to a judge than a silent failure
-- [ ] **A real accuracy number** on a held-out set of ~50 references. "We did not measure it" is the
+- [x] **A real accuracy number** on a held-out set of ~50 references. "We did not measure it" is the
       worst available answer in Q&A *(S11)*
-- [ ] 📄 `docs/walkthroughs/D03.md`
+- [x] 📄 `docs/walkthroughs/D03.md` — **run end to end on an iPhone, all 14 steps passed.** Running
+      it found two defects that `tsc`, ESLint and Jest could not: the container started without
+      `openai` because the image cached its dependency layer, and route mode had no reachable exit
+      (its close button sat under the route card and `toggleRouteMode` is the only way out, so a
+      reload was the only escape). Both fixed
+- [x] **Deviation from this plan's own wording, and why:** the first item says *install `anthropic`*.
+      This project has no Anthropic key — `ANTHROPIC_API_KEY` is in `.env.example` and absent from
+      `.env`, so §7.1's claim that "the key is already configured" was wrong. The LLM tier runs on the
+      free Gemini and Groq endpoints instead, both of which serve the OpenAI Chat Completions wire
+      format, so `openai` is the SDK and one client reaches either provider by changing a base URL.
+      The invariant is unchanged in substance — one module, one seam, every response validated — and
+      `tests/invariants/test_only_llm_client_calls_models.py` enforces it against whichever SDK is in
+      use rather than against the name `anthropic`. Configuration is **per feature**, not global:
+      `LLM_CHAIN_GEO` picks the models and `GEMINI_KEY_GEO_*` / `GROQ_KEY_GEO_*` the keys, so D04's
+      ingestion loop cannot spend the daily quota D03's search box needs.
+- [x] **Not planned, found while building:**
+      the matcher resolved **"Sector 11" to "Sector 10"** at 0.89 confidence — one character apart,
+      two places 2 km apart. Numbers are now identity rather than spelling: digits must match exactly,
+      letters may be misspelt. Separately, the gazetteer was **refusing "Farmgate" and "Motijheel"**
+      because OpenStreetMap lists them in two layers ~270 m apart and the duplicate check ignored
+      distance, so the discard invariant was failing in the direction that costs a real place.
+- [x] **Also found, by the eval set rather than by a test:**
+      the LLM tier **overturned the gazetteer's ambiguity refusals.** "Sector 11" is Uttara's and
+      Bashundhara's, 10 km apart; the gazetteer declined and the model then answered Uttara's with
+      confidence. Our own guard was bypassable by the weaker tier beneath it. A refusal for ambiguity
+      now short-circuits before the LLM is asked, and "we have never heard of this" stays distinct
+      from "we refuse this on purpose".
 
 ---
 
