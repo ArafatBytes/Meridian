@@ -13,7 +13,12 @@ import {
   Platform,
 } from 'react-native';
 
-import MapView, { Marker, PROVIDER_GOOGLE, Polyline } from '../../components/MapComponent';
+import MapView, {
+  Marker,
+  MAP_PROVIDER,
+  Polyline,
+  Circle,
+} from '../../components/MapComponent';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { CompositeNavigationProp } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -24,7 +29,10 @@ import { DEFAULT_MAP_REGION } from '../../constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { CrimeCategory, MainTabParamList } from '../../types';
+import { crimeCategoryLabel } from '../../types/contracts/crime';
+import type { RiskFlag } from '../../types/contracts/risk';
 import { routeService, RouteResponse, Location } from '../../services/route.service';
+import { riskService } from '../../services/risk.service';
 
 interface CrimeReportData {
   id: string;
@@ -38,16 +46,64 @@ interface CrimeReportData {
   verified: boolean;
 }
 
+// Defect 3. These keys were capitalised ('Theft') while the database enum and
+// everything the app sends are lowercase ('theft'), so every lookup returned
+// undefined and NO crime marker had a colour. Typed as Record<CrimeCategory, ...>
+// against the single list in types/contracts/crime.ts, so a missing category is
+// now a compile error rather than a grey pin.
 const CRIME_COLORS: Record<CrimeCategory, string> = {
-  Theft: '#FF9800', // Orange
-  Robbery: '#F44336', // Red
-  Assault: '#E91E63', // Pink
-  Harassment: '#9C27B0', // Purple
-  Vandalism: '#607D8B', // Blue Grey
-  Burglary: '#FF5722', // Deep Orange
-  Fraud: '#2196F3', // Blue
-  Other: '#9E9E9E', // Grey
+  theft: '#FF9800', // Orange
+  robbery: '#F44336', // Red
+  assault: '#E91E63', // Pink
+  harassment: '#9C27B0', // Purple
+  vandalism: '#607D8B', // Blue Grey
+  burglary: '#FF5722', // Deep Orange
+  fraud: '#2196F3', // Blue
+  other: '#9E9E9E', // Grey
 };
+
+const CRIME_FALLBACK_COLOR = '#9E9E9E';
+
+/**
+ * Colour for a category that may not be one we know.
+ *
+ * Reports come straight out of Supabase with no validation step, so a row written
+ * before an enum change can carry anything. Returning grey beats returning
+ * undefined, which is how this bug looked for the whole of S01.
+ */
+const crimeColor = (category: string): string =>
+  CRIME_COLORS[category as CrimeCategory] ?? CRIME_FALLBACK_COLOR;
+
+// ---------------------------------------------------------------------------
+// Risk flags
+// ---------------------------------------------------------------------------
+
+/**
+ * Severity bands, in the order they are tested.
+ *
+ * Keyed off `severity0` — severity at the moment the flag was observed. D02 adds
+ * decay on read, at which point this colours the severity *now* and a fading flag
+ * visibly changes colour. Four bands rather than a continuous gradient because a
+ * pin is small and a judge should be able to read it from across a room.
+ */
+const RISK_SEVERITY_BANDS: { min: number; color: string; label: string }[] = [
+  { min: 70, color: '#D32F2F', label: 'Severe' },
+  { min: 50, color: '#F57C00', label: 'High' },
+  { min: 30, color: '#FBC02D', label: 'Moderate' },
+  { min: 0, color: '#78909C', label: 'Low' },
+];
+
+const riskBand = (severity: number) =>
+  RISK_SEVERITY_BANDS.find(band => severity >= band.min) ??
+  RISK_SEVERITY_BANDS[RISK_SEVERITY_BANDS.length - 1];
+
+/**
+ * Hex colour plus an alpha channel, for the radius circles.
+ *
+ * `react-native-maps` takes rgba strings for fill and stroke. Eight-digit hex is
+ * accepted on both platforms and keeps the band table in one notation.
+ */
+const withAlpha = (hex: string, alpha: string) => `${hex}${alpha}`;
 
 // Colors for routes based on safety score
 const getRouteColor = (safetyScore: number) => {
@@ -70,6 +126,8 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   const [region, setRegion] = useState(DEFAULT_MAP_REGION);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [crimeReports, setCrimeReports] = useState<CrimeReportData[]>([]);
+  const [riskFlags, setRiskFlags] = useState<RiskFlag[]>([]);
+  const [riskError, setRiskError] = useState<string | null>(null);
   const [selectedCrime, setSelectedCrime] = useState<CrimeReportData | null>(
     null,
   );
@@ -215,6 +273,29 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
+  /**
+   * Load risk flags for the area around the current map centre.
+   *
+   * Through the backend, not Supabase: `risk_flags` is RLS-locked with no policies
+   * and the anon key cannot read it. Decay and the time-of-day arithmetic live on
+   * the server, which is the point of the endpoint.
+   *
+   * A failure is recorded in state rather than shown as an Alert. An alert on
+   * every failed poll is unusable, and the honest signal — "the risk layer is not
+   * loading" — belongs on the screen where it can be read during a demo.
+   */
+  const fetchRiskFlags = async (asOf?: Date) => {
+    try {
+      const result = await riskService.getFlagsInRegion(region, asOf);
+      setRiskFlags(result.flags);
+      setRiskError(null);
+    } catch (error: any) {
+      // Not fatal: the crime layer and routing still work without it.
+      console.warn('Risk flags unavailable:', error?.message ?? error);
+      setRiskError('Risk layer unavailable');
+    }
+  };
+
   const handleMarkerPress = (crime: CrimeReportData) => {
     if (routeMode) return; // Don't select markers in route mode
     setSelectedCrime(crime);
@@ -269,6 +350,16 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Reload flags whenever the map recentres. The fetch asks for a generous box
+  // around the centre (see RISK_FETCH_MIN_SPAN_DEGREES), so this does not need to
+  // fire on every pan — and deliberately does not, because the map is driven by a
+  // controlled `region` prop and adding a region-change handler to it risks the
+  // map fighting the user. D04 replaces this with explicit pull-to-refresh.
+  useEffect(() => {
+    fetchRiskFlags();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [region.latitude, region.longitude]);
+
   useEffect(() => {
     if (currentLocation && !hasInitialized) {
       setRegion({
@@ -305,7 +396,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <MapView
-        provider={PROVIDER_GOOGLE}
+        provider={MAP_PROVIDER}
         style={styles.map}
         region={region}
         showsUserLocation
@@ -350,6 +441,46 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           );
         })}
 
+        {/* Risk flag radius circles.
+            Drawn before the markers so the pins sit on top of them. A flag is a
+            claim about an AREA — a bare pin would overstate how precisely the
+            location is known. */}
+        {!routeMode && riskFlags.map(flag => {
+          const band = riskBand(flag.severity0);
+          return (
+            <Circle
+              key={`risk-circle-${flag.flagId}`}
+              center={{ latitude: flag.lat, longitude: flag.lon }}
+              radius={flag.radiusM}
+              strokeWidth={1}
+              strokeColor={withAlpha(band.color, '99')}
+              fillColor={withAlpha(band.color, '26')}
+            />
+          );
+        })}
+
+        {/* Risk flag pins.
+            The callout text is `mobilityStatement` and nothing else. It is the
+            only user-facing string the server produced through
+            app/policy/framing.py, and building a label from `kind` here would put
+            the word "clash" on a map that has committed not to say it. */}
+        {!routeMode && riskFlags.map(flag => {
+          const band = riskBand(flag.severity0);
+          return (
+            <Marker
+              key={`risk-${flag.flagId}`}
+              coordinate={{ latitude: flag.lat, longitude: flag.lon }}
+              title={flag.mobilityStatement}
+              description={`${band.label} · ${Math.round(flag.severity0)}/100 · ${
+                flag.status === 'confirmed'
+                  ? `${flag.sourceCount} sources`
+                  : 'unconfirmed'
+              }`}
+              pinColor={band.color}
+            />
+          );
+        })}
+
         {/* Crime Report Markers */}
         {!routeMode && crimeReports.map(crime => (
           <Marker
@@ -359,7 +490,11 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
               longitude: parseFloat(crime.longitude),
             }}
             title={crime.title}
-            description={crime.category}
+            description={crimeCategoryLabel(crime.category)}
+            // Defect 3, the other half. CRIME_COLORS was already defined and was
+            // never passed to a marker, so even with correct keys every pin would
+            // still have rendered in the default red.
+            pinColor={crimeColor(crime.category)}
             onPress={() => handleMarkerPress(crime)}
           />
         ))}
@@ -521,6 +656,23 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       )}
 
+      {/* Risk layer status.
+          Small, but it is what turns "the map looks the same as yesterday" into a
+          readable answer: either a flag count, or the reason there is none. */}
+      {!routeMode && (
+        <View style={[styles.riskBadge, { top: insets.top + spacing.xs }]}>
+          <View
+            style={[
+              styles.riskDot,
+              { backgroundColor: riskError ? colors.error : colors.success },
+            ]}
+          />
+          <Text style={styles.riskBadgeText}>
+            {riskError ?? `${riskFlags.length} risk flags`}
+          </Text>
+        </View>
+      )}
+
       {/* Loading Indicator */}
       {isRouting && (
         <View style={styles.loadingOverlay}>
@@ -545,10 +697,10 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                     <Text
                       style={[
                         styles.categoryText,
-                        { color: CRIME_COLORS[selectedCrime.category] },
+                        { color: crimeColor(selectedCrime.category) },
                       ]}
                     >
-                      {selectedCrime.category}
+                      {crimeCategoryLabel(selectedCrime.category)}
                     </Text>
                   </View>
                   <TouchableOpacity onPress={closeModal}>
@@ -616,6 +768,34 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  // Risk layer status pill, top-left. Left, because the report and route buttons
+  // own the top-right corner.
+  riskBadge: {
+    position: 'absolute',
+    left: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: borderRadius.full,
+    elevation: 3,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  riskDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  riskBadgeText: {
+    color: colors.text,
+    fontSize: fontSize.xs,
+    fontWeight: '600',
   },
   sosButton: {
     position: 'absolute',

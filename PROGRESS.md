@@ -69,15 +69,15 @@ Full write-up, indicators of compromise and the remediation checklist:
 
 ## 📍 CURRENT STATE
 
-*Last updated: 2026-10-07 · by: Arafat · after: S01 (+ S01b, S01c, S01d)*
+*Last updated: 2026-10-07 · by: Nakib · after: D01*
 
 | | |
 |---|---|
-| **Last sprint completed** | **S01 — ✅ closed.** Grew three unplanned addenda: S01b dockerisation, S01c malware removal, S01d SDK 57 + real auth |
-| **NEXT SPRINT** | **D01 — Schema, contracts, framing, LLM client** → [DEMO_PLAN.md](DEMO_PLAN.md). *Was S02; resequenced by [ADR 0005](docs/adr/0005-finale-reordering.md).* |
-| **Baton holder** | **free — passing to Nakib** |
-| **Trunk** | `develop` @ `2d924a2` · **clean.** The 60 paths were committed in `2d924a2`; the RESUME HERE note below is stale on this point. |
-| **Build status** | 🟢 **GREEN** — backend `test.sh --ai` 14/14, and the app has now run end to end on a real device |
+| **Last sprint completed** | **D01 — ✅ closed.** Walkthrough run on an iPhone, every step passed. All 20 checkboxes ticked in [DEMO_PLAN.md](DEMO_PLAN.md) |
+| **NEXT SPRINT** | **D02 — The surface breathes** (Oct 9–10) → [DEMO_PLAN.md](DEMO_PLAN.md). 200 flags, decay on read, the "as of" time control, the flag detail sheet |
+| **Baton holder** | **free** |
+| **Trunk** | `develop` · D01 committed. **Not merged to `main` yet — owner is doing that by hand.** |
+| **Build status** | 🟡 **mypy, invariant tests and the frontend are green; `ruff` is not.** `./scripts/check.sh` reports ~320 ruff findings in **pre-existing** code — ruff had never actually run here, because with no `backend/venv` the step was *skipped* and the skip read as a pass. D01's own files are clean and D01 added **zero** new findings. Cleanup is Track B (B3, B5). |
 | **Phase** | 0 — Foundation & Contracts |
 
 ### 🗓️ PLAN RESEQUENCED — read [DEMO_PLAN.md](DEMO_PLAN.md) before IMPLEMENTATION_PLAN.md
@@ -101,6 +101,142 @@ Full write-up, indicators of compromise and the remediation checklist:
 
 **Blocked decision:** the image-analysis reasoning layer must be settled by **16 October** or `D07`
 cannot start. See `DEMO_PLAN.md` §7.1 — recommendation is local detection + Claude vision.
+
+### ✅ D01 CLOSED — gate met on a real device
+
+**2026-10-07, Nakib.** [`docs/walkthroughs/D01.md`](docs/walkthroughs/D01.md) was run end to end on an
+iPhone in Expo Go and **every step passed**. Migrations and fixtures are applied to the owner's live
+Supabase project; the SOS path was exercised against it, with a delivered email and a real
+`sos_incidents` row.
+
+**Two bugs were found by running it that nothing else would have found,** and both are fixed below:
+the map was a blank white page on iOS, and one SOS froze the entire API for 2 minutes 34 seconds. Both
+were invisible to `mypy`, `ruff`, 34 invariant tests and a verified database. That is the §0 rule
+paying for itself in its first sprint.
+
+**Applying the schema, for anyone rebuilding:** `psql` is not installed on this machine, so
+`.\scripts\seed.sh` without `--sql` cannot apply anything — it detects that and prints the manual
+steps. `.\scripts\seed.sh --sql` writes numbered files to `.seed-sql\`; paste `2-migrations.sql` then
+`3-fixtures.sql` into the Supabase SQL Editor. `1-schema.sql` is the already-applied baseline and
+`4-verify.sql` predates D01's tables. **Regenerate `3-fixtures.sql` rather than reusing a copy** — its
+timestamps are relative, so an old file seeds a map of expired flags. `migrate.py up` connects
+directly over asyncpg if you prefer that to pasting.
+
+**What landed:**
+
+| | |
+|---|---|
+| Migrations | `scripts/migrate.py` (forward-only, checksummed, with a paste-ready `sql` mode), `risk_flags` with the decay + verification CHECKs, `raw_documents`, `extracted_incidents`, `agent_runs` |
+| Contracts | `app/contracts/{risk,surface,agents}.py`, mirrored in `frontend/src/types/contracts/` |
+| Policy | `app/policy/framing.py` — the sole writer of `RiskFlag.mobility_statement` |
+| Surface | `DbRiskSurface` behind the `RiskSurface` protocol; `GET /api/v1/risk/flags?bbox=&as_of=`. **`as_of` is functional, not a placeholder** — it filters on the derived `expires_at`, so 20 flags now becomes 16 at +6h, 10 at +12h, 4 at +48h. Severity-on-read is still D02 |
+| Fixture | 22 sample Dhaka flags, structured fields only; statements derived through `framing.py` at load |
+| Frontend | Map risk overlay (pins + radius circles, colour by severity), status pill, **defect 3** |
+| SOS | **Defect 35** — every trigger now writes a row to `sos_incidents` |
+| Tests | `tests/invariants/` — 34 tests, 2 invariants |
+| Build | `requirements/{base,ai,agents,dev}.txt` — **defect 15** |
+
+**Verified:** `mypy` clean across all 54 backend files · 34 invariant tests pass · frontend `tsc`
+clean, `jest` 45/45 · both migrations and the fixture applied to a throwaway **PostGIS 16** container
+from an empty database, with every CHECK constraint confirmed to reject bad data · the API booted
+against that container and `GET /api/v1/risk/flags` served 20 flags, rejected four classes of bad
+bbox with 422, and returned fewer flags for a future `as_of` · `sos_service._record_incident` wrote a
+real row, with coordinates round-tripping un-swapped and no email addresses stored.
+
+### 🐛 Found while testing, not while reading: PostGIS was unreachable for every ORM write
+
+**`search_path` is now set on the engine** — `app/core/database.py`,
+`connect_args={"server_settings": {"search_path": "public,extensions"}}`.
+
+Supabase installs PostGIS into `extensions`, and **geoalchemy2 emits PostGIS functions
+unqualified**: an insert into a `Geography` column renders as `ST_GeogFromText($1)` with no schema.
+Without `extensions` on the path that fails with
+
+```
+function st_geogfromtext(unknown) does not exist
+```
+
+and the write is rolled back.
+
+This has been latent since S01 and could not have been noticed, because **nothing had ever written to
+a geography column**: `sos_incidents` was never populated — that *was* defect 35 — and
+`user_locations` still is not. D01's first write found it immediately. It also means
+`endpoints/tracking.py` would have failed the same way the moment anyone used it.
+
+Raw SQL in `app/scoring/surface_db.py` qualifies `extensions.ST_*` explicitly and never depended on
+the path. Both now work, deliberately: if a pooled connection ever comes back with a different
+`search_path`, the risk surface keeps serving.
+
+### 🐛 Found on the device: the map had never rendered on iOS
+
+**`MAP_PROVIDER` now replaces `PROVIDER_GOOGLE`** in every screen — `src/components/MapComponent.tsx`.
+
+All three map screens (`MapScreen`, `AddReportScreen`, `ReportDetailsScreen`) passed
+`provider={PROVIDER_GOOGLE}` unconditionally. On iOS that forces the Google Maps SDK, and **Expo Go
+for iOS does not ship it**. `MapView` mounted, laid out and drew nothing: a white rectangle, no error,
+no warning, markers invisible on top of it.
+
+`app.json` carried the literal string `"YOUR_GOOGLE_MAPS_API_KEY"` for both platforms. Those
+placeholders are **removed** — they were never going to work and would have silently broken an Android
+development build in exactly the same way, with the same absence of an error message.
+
+The provider is now Apple Maps on iOS (no key, works in Expo Go) and Google Maps on Android. The two
+platforms therefore look different, which is a visible consequence worth knowing before the 24th.
+Matching them means a paid Google Maps key **and** a development build — a credentials decision, not
+an engineering one, and not needed for the demo.
+
+**This is the case for the §0 walkthrough rule in one line.** The risk surface, the endpoint, the
+schema, the framing invariant and the flag count were all correct and verified — and on a phone the
+map was a blank white page. A green test suite could not have told us.
+
+### 🐛 Found on the device: one SOS froze the entire API for 2m34s
+
+**Owner approved going outside D01 for this.** It blocked the D01 gate: walkthrough step 12 cannot
+pass if beat 9 takes two and a half minutes and kills the map while it runs.
+
+`email_service.send_sos_alert` was `async def` but called `smtplib` **synchronously**. `smtplib` is
+blocking, so it did not block that request — it blocked the single event loop every request shares.
+Measured on a real SOS: **2 minutes 34 seconds** between "Video attached" and "SOS alert sent", during
+which `/health` timed out and `GET /risk/flags` could not be served. On stage that is the map dying
+mid-demo.
+
+Two causes, both fixed:
+
+| | |
+|---|---|
+| **Blocking SMTP** | `await asyncio.to_thread(self._send_blocking, msg)`. The attachment read and base64 encode moved off the loop too — same class of bug, smaller magnitude. A 120-second socket timeout added: `smtplib` otherwise inherits the system default, which is usually none, so a stalled relay would hold the thread forever. Ruff's `ASYNC230`/`ASYNC240` findings on this file are now **gone**, with no new findings added. |
+| **A 16.45 MB clip** | `SOSCameraModal` recorded 10 seconds at the iPhone's default quality. Now capped: `videoBitrate` 1.2 Mbps, `videoQuality="4:3"` (640×480 — the 16:9 options are Android-only), `codec: 'avc1'` because iOS ignores the bitrate without it, and `maxFileSize` 8 MB as a backstop if a device ignores bitrate control. ~16 MB → ~2 MB. |
+
+**Also fixed the thing that made it look hung.** `HomeScreen`'s progress bar is simulated and
+hard-capped at 98, and the label never changed, so "98% Uploading Evidence" actually meant "upload
+finished, the server is talking to the SMTP relay". It now switches to **"Alerting your contacts…"**
+when the bytes are gone. The bar was lying, and that is what sent us looking for a stall that was not
+there.
+
+**Before the fix, verified working end to end on the owner's real Supabase:** email delivered, row
+written to `sos_incidents` (`923c3459-24f0-4246-ac33-04f3eec93cb8`, `delivered=True`, 1 recipient),
+coordinates un-swapped. Defect 35 is closed. The fix is about how long it takes and what it freezes,
+not about whether it works.
+
+**Deliberately not done, so it is not rediscovered as a gap:**
+
+- **`app/llm/client.py` → D03**, its first consumer. `anthropic` is declared as a dependency; the
+  module is not written. Nothing in D01 or D02 needs an LLM.
+- **ADR 0003 (drop `public.users`) → Track B (B1).** `endpoints/sos.py` creates rows in that table on
+  every trigger and `endpoints/voice.py` imports the model. Dropping it in D01 would have broken SOS
+  silently. `risk_flags` has no `user_id`, so nothing in the demo track depends on it.
+- **No decay arithmetic in Python.** `risk_flags.expires_at` is derived by a database trigger, which
+  is the only implementation. A generated column was tried first and Postgres rejects it —
+  `timestamptz + interval` is STABLE, not IMMUTABLE. D02 adds severity-on-read, and when it needs the
+  serve threshold in Python it mirrors the value with a comment on both sides.
+- **No `RISK_SURFACE_IMPL` switch and no scoring methods on the surface.** Both were written and then
+  **deleted**: a factory that can only return one class, and `score_point`/`score_path` that nothing
+  calls until D06. D02 and D06 add them when there is a second implementation and a caller.
+- **The SOS video is still not retained.** It is attached to the email and deleted. Retaining footage
+  recorded under duress needs a bucket, a retention window and an access policy. The incident row
+  records *that* a video was attached.
+- **Flags do not reload on pan.** The map is driven by a controlled `region` prop; D01 fetches once
+  per recentre over a ~39 km box. D04 adds pull-to-refresh.
 
 ### ✅ The app works. This is the first handoff where that is true.
 
@@ -144,16 +280,18 @@ independent of, and additional to, the incident rotation above.
 |---|---|
 | Auth | ✅ **Real.** Supabase ES256 verified via JWKS (`app/core/jwks.py`), `aud=authenticated`, HS256 still accepted for legacy tokens |
 | Supabase | ✅ 7 tables, RLS on all, `avatars` bucket. `public.users` is TRANSITIONAL — ADR 0003 deletes it |
-| Frontend | ✅ Expo **SDK 57**, RN 0.86.3, React 19.2.3. `tsc --noEmit` clean. ESLint runs (3 React Compiler rules at `warn` until S08) |
+| Frontend | ✅ Expo **SDK 57**, RN 0.86.3, React 19.2.3. `tsc --noEmit` clean. ESLint 106 warnings / 0 errors (budget 106; D01 added exactly one). **Maps: Apple Maps on iOS, Google on Android** via `MAP_PROVIDER` — no API key, and no blank map |
 | Docker | ✅ `docker compose up` → `api` + `redis`; one command via `scripts/run.ps1` |
 | AI vision | ⚠️ **Runs, but measurably limited** — see the two new blockers below |
-| SOS | ⚠️ Email delivery works; **nothing is persisted** (defect 35) |
-| `app/contracts/` | ❌ Not authored — S03 |
-| `RISK_SURFACE_IMPL` | ❌ n/a — first implementation lands S04 |
+| SOS | ✅ Verified end to end on real Supabase: email delivered, row written to `sos_incidents` (defect 35 closed). SMTP now runs off the event loop, and the evidence clip is capped at ~2 MB instead of 16 MB. The clip is still not retained after sending — deliberate, see above |
+| `app/contracts/` | ✅ `risk`, `surface`, `agents`. `mypy --strict` clean. Mirrored in `frontend/src/types/contracts/` by hand; a drift check is Track B (B2) |
+| `RISK_SURFACE_IMPL` | ❌ No switch yet, on purpose — there is one implementation (`DbRiskSurface`) and a factory over one class is not a seam. D02 adds `SeededRiskSurface` and the setting together |
+| Risk surface | ✅ `risk_flags` + `DbRiskSurface` + `GET /api/v1/risk/flags`. 22 sample flags across Dhaka, rendered as coloured pins on `MapScreen`. **All sample data is marked `sample_`** — live ingestion is D04 |
+| Python env | ✅ `backend/venv` on **3.12.10**. Note the Docker image is 3.11-slim; the venv is for local `check.sh` only. The backend **cannot start without the full ~2 GB AI stack**, because `api/v1/api.py` imports the vision endpoints eagerly — Track B (B3) |
 | Agents live | **0 of 8** |
-| LLM client | ❌ `anthropic` not installed — S04. Env vars declared, unused. |
-| Migrations | ⚠️ Hand-run SQL in the Supabase editor. No runner, no `schema_migrations` — S02 (ADR 0004) |
-| `tests/invariants/` | ❌ Does not exist — S03 |
+| LLM client | ⚠️ `anthropic` is declared in `requirements/agents.txt`; `app/llm/client.py` not written — **D03**, its first consumer. Env vars declared, unused |
+| Migrations | ✅ `backend/scripts/migrate.py` — forward-only, sha256-checksummed, refuses to run if an applied file changed. `schema_migrations` ledger. `migrate.py sql` emits paste-ready SQL with the ledger insert included, for a database that refuses direct connections. ADR 0004 itself is Track B (B1) |
+| `tests/invariants/` | ✅ 34 tests over 2 invariants: mobility framing, and one source never confirmed. The other five are Track B (B2) |
 | Known defects | **17 open of 41.** 24 closed across S01/S01b/S01c/S01d. **Defects 29–41 are new since the last handoff** — see [plan §1](IMPLEMENTATION_PLAN.md) |
 | Feature flags off | `POLICE_ROUTING_ENABLED=false` — and it is now actually *checked* (defect 31) |
 
@@ -195,47 +333,53 @@ deferred** until Arafat and Nakib have discussed it.
 
 ### ▶️ RESUME HERE
 
-**Arafat, before passing the baton — two things, in this order:**
+**D01 is done and committed on `develop`. It is NOT merged to `main` — the owner is doing that by
+hand.**
 
-1. **Commit and push the working tree (60+ paths).** All of S01's work lives
-   only here. `smoke.sh` deliberately fails two assertions until it lands, and
-   both are correct to fail:
-   - *"supabase.ts is tracked by git"* — the original defect 1 was that this
-     file had never been committed.
-   - *"package-lock.json committed (tracked, not merely present)"* — defect 19.
-
-   **`git add -A` now actually picks the lockfile up.** It could not before:
-   `.gitignore` listed `package-lock.json` and `yarn.lock` outright, so the file
-   `npm install` generated was unaddable. That is the real reason defect 19
-   survived a whole sprint of being called a "manual step". Rules removed
-   (defect 19). Check it worked:
-
-   ```bash
-   git check-ignore -v frontend/package-lock.json   # must print nothing
-   ```
-2. **Tell Nakib about the incident** before he runs anything (banner item 2).
-
-**Nakib, when you take the baton:**
+Take the baton:
 
 ```bash
-git checkout develop && git pull      # do this BEFORE npm install — see the banner
-./scripts/run.ps1 && ./scripts/test.sh
-git checkout -b sprint/S02-db-foundation
+git checkout develop && git pull
+./scripts/check.sh                      # see the ruff note in Build status before panicking
+./scripts/run.ps1                       # containers + Expo
+git checkout -b sprint/D02-surface-breathes
 ```
 
-Then start **S02** in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). Its first
-task is **ADR 0001**, the Supabase-vs-FastAPI data-plane rule.
+Then open **D02** in [DEMO_PLAN.md](DEMO_PLAN.md) — *The surface breathes*, Oct 9–10. Its source
+sprints are S04, S19 and S20 in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), and **that is where
+the task text lives**; DEMO_PLAN tells you which sprint and in what order, not what the work means.
 
-Two notes on S02's scope that changed underneath you:
+**Before you write any code, re-run `docs/walkthroughs/D01.md`.** It is now the regression suite, and
+`DEMO_PLAN.md` §3 makes "every previous walkthrough still passes" a handoff gate. It takes ~12 minutes
+and it is the only thing standing between a D02 mistake and finding out on the 23rd.
 
-- **ADR 0002 (auth) is already implemented.** `app/core/jwks.py` landed early
-  because SOS was returning 401 and nothing else would work until it did. The
-  *document* is still owed. Write it to describe what is in place, not what you
-  would have chosen from scratch.
-- **ADR 0003 (collapse the three user tables) is worth more than it looks.**
-  `endpoints/sos.py` auto-provisions into `public.users` on every SOS, and that
-  is where the single row now sitting in that table came from. It exists because
-  a code path ran, not because anyone designed it.
+**Four things about D02's scope that D01 changed underneath it:**
+
+1. **`as_of` already works** — it filters on the derived `expires_at`, so 20 flags now is 16 at +6h and
+   4 at +48h. What D02 adds is *severity on read*, so a flag visibly **fades** before it vanishes.
+   Do not rebuild the parameter; build the arithmetic behind it and the on-screen control.
+2. **There is deliberately no decay code in Python.** `expires_at` is derived by the
+   `trg_risk_flags_expires_at` trigger, and that is the only implementation. When D02 needs the serve
+   threshold in Python to compute severity *now*, mirror the `5.0` with a comment on both sides — or
+   better, read it from the database. Two silent copies of one formula is the failure to avoid.
+3. **There is no `RISK_SURFACE_IMPL` switch and no scoring methods on the protocol.** Both were written
+   in D01 and then deleted on purpose: a factory over one class is not a seam, and `score_point` /
+   `score_path` had no callers until D06. `app/contracts/surface.py` declares only `flags_in_bbox` and
+   `flags_near`. Add the rest when `SeededRiskSurface` exists to dispatch to.
+4. **The fixture file D02 grows to ~200 flags already exists** at
+   `backend/data/fixtures/risk_flags.json`, with 22 entries and a loader. **It contains no
+   `mobility_statement` and must never contain one** — `scripts/seed_risk_flags.py` raises if one
+   appears, and an invariant test checks it. Set `mobility_impact` and `place`; `framing.py` writes the
+   sentence. 200 rows is 200 chances to smuggle prose past the guard.
+
+**Decision still blocking D07, deadline 17 October:** the image-analysis reasoning layer.
+`DEMO_PLAN.md` §7.1. Recommendation is local YOLOv9c detection plus Claude vision as the reasoning
+layer. **This needs an actual conversation, not a default.**
+
+**Off-baton work that should already be running** (`DEMO_PLAN.md` §9): the Dhaka gazetteer (150
+landmarks, D03), the OSRM Bangladesh graph build (D06 assumes it is done), the D07 eval set (2 of
+30–40 images), and booking a native Bangla speaker for D08. **None of it needs the baton and none of it
+compresses later.**
 
 ---
 
@@ -262,6 +406,213 @@ git push   # then PR, squash-merge to main, tell your partner
 ---
 
 # 📜 Handoff Log
+
+---
+
+## D01 — Schema, contracts, framing, first pins, and an SOS that leaves a record
+
+**Owner:** Nakib · **Dates:** 2026-10-07 · **Source sprints:** S02, S03, S05, S07 · **Plan:** [DEMO_PLAN.md](DEMO_PLAN.md) D01
+
+The first sprint of the resequenced finale track, and the first to ship under the §0 rule that every
+sprint must end in something visible on a phone. **All 20 checkboxes done. Walkthrough run on an
+iPhone; every step passed.**
+
+### Shipped
+
+**Migrations and the runner**
+
+- `backend/scripts/migrate.py` — forward-only, sha256-checksummed, `schema_migrations` ledger. Refuses
+  to run if an applied migration's file has changed. Three commands: `status`, `up`, `sql`.
+- `migrate.py sql` emits paste-ready SQL **with the ledger insert included**, for a database that will
+  not take a direct connection. This is how the schema actually reached Supabase, because `psql` is not
+  installed on the owner's machine.
+- `20261007120000__risk_flags.sql` — PostGIS `GEOGRAPHY(POINT, 4326)`, GiST index, `(status,
+  expires_at)` index, partial index on the validity window, and **seven CHECK constraints**, two of
+  which are ethical invariants at schema level: `half_life_hours > 0`, and `status <> 'confirmed' or
+  source_count >= 2`.
+- `20261007120100__ingestion_and_agent_runs.sql` — `raw_documents`, `extracted_incidents`,
+  `agent_runs`. Created now, written in D04: the schema is the cheap part, and this means D04 is a
+  sprint about scrapers rather than scrapers *and* migrations.
+- `scripts/seed.sh` rewritten — baseline, then versioned migrations, then fixtures, then verify. Plus
+  `--sql`, which writes numbered files to `.seed-sql/` to paste by hand.
+
+**Contracts and policy**
+
+- `app/contracts/{risk,surface,agents}.py` — plan §6.1–6.3. `mypy --strict` clean.
+- `frontend/src/types/contracts/{risk,crime}.ts` — hand-mirrored. No generator; a drift check is B2.
+- `app/policy/framing.py` — `to_mobility_statement()`, `assert_mobility_safe()`, 95 banned terms
+  across four groups including Bangla. **The only writer of `RiskFlag.mobility_statement`.**
+
+**The risk surface**
+
+- `app/scoring/surface_db.py` — `DbRiskSurface`, raw parameterised PostGIS SQL. `ST_Intersects` on a
+  geography column, verified to use the GiST index rather than a sequential scan.
+- `GET /api/v1/risk/flags?bbox=&as_of=` — contract shape, four classes of bad bbox rejected with 422.
+- `backend/data/fixtures/risk_flags.json` — 22 Dhaka flags, structured fields only, all 10 incident
+  kinds, 8 confirmed / 14 unconfirmed, **2 deliberately already expired**.
+- `backend/scripts/seed_risk_flags.py` — derives every statement through `framing.py` at load time,
+  validates against the table's constraints first so a bad entry is reported by name.
+
+**Frontend**
+
+- Risk overlay on `MapScreen`: pins coloured by severity in four bands, each inside a radius circle,
+  plus a status pill showing the flag count or the reason there is none.
+- `src/services/risk.service.ts` — snake_case to camelCase in one place.
+- **Defect 3 closed**, and it was two bugs: `CRIME_COLORS` was keyed `'Theft'` while the database
+  stores `'theft'`, *and* no marker was ever passed a `pinColor` at all. The authority is now
+  `types/contracts/crime.ts`, with `CRIME_COLORS` typed `Record<CrimeCategory, string>` so a missing
+  colour is a compile error.
+
+**SOS**
+
+- **Defect 35 closed.** Every trigger writes to `sos_incidents`. Verified on live Supabase: email
+  delivered, row written, coordinates un-swapped, `delivered=true`.
+- `contacts_notified` holds contact **ids**, not email addresses — the addresses already live in
+  `emergency_contacts`, and duplicating personal data into a second table with its own lifetime buys
+  nothing. Data minimisation applied where it happened to be free.
+
+**Build and tests**
+
+- `requirements.txt` split into `requirements/{base,ai,agents,dev}.txt` — **defect 15**. The old file
+  carried a 2 GB vision stack alongside FastAPI and had pytest, ruff and mypy commented out, which is
+  why `check.sh` skipped them.
+- `tests/invariants/` — 34 tests over two invariants: mobility framing, and one source never confirmed.
+
+### Found by running it on a phone — three bugs nothing else caught
+
+**1. The map had never rendered on iOS.** All three map screens passed `provider={PROVIDER_GOOGLE}`
+unconditionally, which forces a Google Maps SDK that **Expo Go for iOS does not ship**. `MapView`
+mounted, laid out and drew nothing: a white rectangle, no error, no warning, markers invisible on top.
+`app.json` also carried the literal string `"YOUR_GOOGLE_MAPS_API_KEY"` for both platforms. Fixed with
+`MAP_PROVIDER` in `src/components/MapComponent.tsx` — Apple Maps on iOS, Google on Android — and the
+placeholders removed, because they would have broken an Android development build in the same silent
+way.
+
+**2. One SOS froze the entire API for 2m34s.** `email_service.send_sos_alert` was `async def` but
+called `smtplib` **synchronously**. Blocking code on the event loop does not block one request, it
+blocks every request: `/health` timed out and `GET /risk/flags` could not be served for the duration.
+Fixed with `asyncio.to_thread` for both the send and the attachment encode, plus a 120-second socket
+timeout — `smtplib` otherwise inherits the system default, which is usually none. The evidence clip was
+also 16.45 MB for 10 seconds at default iPhone quality; now capped at ~2 MB. **Owner approved going
+outside D01 for this**, because a 2.5-minute freeze is not a passing walkthrough step.
+
+**3. PostGIS was unreachable for every ORM write.** geoalchemy2 emits PostGIS functions
+**unqualified**, and Supabase installs PostGIS into `extensions`, so any insert into a geography column
+failed with `function st_geogfromtext(unknown) does not exist`. Latent since S01 and undetectable,
+because nothing had ever written to a geography column — `sos_incidents` was empty (that *was* defect
+35) and `user_locations` still is. Fixed by setting `search_path=public,extensions` on the engine in
+`app/core/database.py`, which also covers `endpoints/tracking.py`.
+
+### Decisions
+
+1. **`expires_at` is derived by a database trigger, and there is no Python copy of the formula.** A
+   GENERATED column was tried first and Postgres rejects it: `timestamptz + interval` is STABLE, not
+   IMMUTABLE. The trigger overwrites whatever a caller supplies, so "derived, never hand-set" is
+   structural rather than a convention. One rule, one implementation.
+2. **The trigger takes `greatest(decay-derived, valid_to)`**, which is what lets D09's forward-dated
+   flags work with no schema change and no contract change on its single day.
+3. **`as_of` is threaded from day one** and turned out to be functional, not a placeholder: it filters
+   on `expires_at`, so flags genuinely drop out as the instant advances. D02 adds severity-on-read.
+4. **Fixtures store structured fields only.** No `mobility_statement` anywhere in the file; the seeder
+   raises if it finds one and an invariant test checks it. 200 rows arrive in D02 — that is 200 chances
+   to smuggle prose past the framing guard.
+5. **Sample data is marked as sample.** Every `source_id` is `sample_*` and every URL uses a `sample:`
+   scheme. Fabricated links that looked like real Prothom Alo articles would 404 if a judge tapped one.
+6. **~250 lines were written and then deleted**, on the owner's call, as unneeded indirection:
+   `app/scoring/provider.py` (a factory over one class), `app/scoring/decay.py` (nothing called it),
+   and `score_point` / `score_path` with `PointRisk` / `PathRisk` (no caller until D06). The protocol
+   now declares only what something implements. D02 and D06 add the rest when there is a second
+   implementation and a caller.
+7. **ADR 0003 stayed out of D01**, as [ADR 0005](docs/adr/0005-finale-reordering.md) decided. Dropping
+   `public.users` would have broken SOS: `endpoints/sos.py` still auto-provisions into it on every
+   trigger. Track B (B1).
+
+### Migrations
+
+| Version | Name | Applied to the owner's Supabase |
+|---|---|---|
+| `20261007120000` | `risk_flags` | ✅ by hand via `.seed-sql/2-migrations.sql` |
+| `20261007120100` | `ingestion_and_agent_runs` | ✅ same |
+
+Both idempotent. Both validated against a throwaway PostGIS 16 container from an **empty** database
+before they went near Supabase, with every CHECK confirmed to reject bad data.
+
+### Measurements
+
+| | |
+|---|---|
+| Seed flags / live / already expired | 22 / 20 / 2 |
+| Flags served at now, +6h, +12h, +48h | 20 / 16 / 10 / 4 |
+| Invariant tests | 34 passing |
+| `mypy` across the whole backend | **0 errors, 54 files** |
+| `ruff` on D01's own files | clean; **0** new findings in pre-existing files |
+| Frontend | `tsc` clean · ESLint 106 warnings / 0 errors (budget raised 105→106 for one effect) · jest 45/45 |
+| SOS evidence clip | 16.45 MB → **~2 MB** |
+| SOS end to end | 2m34s with the API frozen → **seconds, API responsive** |
+| `backend/venv` size | 2.1 GB, which is why `backend/.dockerignore` now exists |
+
+### Deliberately NOT done
+
+- **`app/llm/client.py` → D03**, its first consumer. `anthropic` is installed; the module is not
+  written. Nothing in D01 or D02 needs an LLM.
+- **No `RISK_SURFACE_IMPL` switch, no `SeededRiskSurface`** — D02, when there are two surfaces.
+- **No severity decay in Python** — D02. See decision 1 for why there is no second copy of the formula.
+- **The SOS video is not retained.** Attached to the email, then deleted. Retaining footage recorded
+  under duress needs a bucket, a retention window and an access policy. The row records *that* a video
+  was attached.
+- **Flags do not reload on pan.** One fetch per recentre over a ~39 km box. A region-change handler on
+  a controlled `region` prop risks the map fighting the user's finger. D04 adds pull-to-refresh.
+- **`4-verify.sql` was not extended** to cover D01's tables; `seed.sh` asks `risk_flags` directly
+  instead.
+- **ADRs 0001/0002/0004 not written** — Track B (B1), as ADR 0005 scheduled.
+
+### Known broken / rough edges
+
+- **`./scripts/check.sh` is not fully green: ~320 ruff findings in pre-existing code.** This is newly
+  *visible*, not newly broken — with no `backend/venv`, the ruff step was **skipped**, and a skip
+  printed like a pass. D01's files are clean and D01 added zero. Track B (B3, B5).
+- **The backend cannot start without the full ~2 GB AI stack**, because `api/v1/api.py` imports the
+  vision endpoints eagerly even though D01 touches none of them. Track B (B3).
+- **iOS and Android now show different maps** (Apple vs Google). Matching them needs a paid Google key
+  *and* a development build. A cost decision, not an engineering one. **Pick the demo device and
+  rehearse on it.**
+- **`endpoints/tracking.py` is still unexercised.** It uses the same geoalchemy2 path that was broken
+  until the `search_path` fix, so it is *probably* fine now. "Probably" is the honest word.
+- **The SOS progress bar is partly simulated** and capped at 98%. That cap is what made a working SOS
+  look hung — the upload had finished and the server was mid-SMTP. The stage label is now honest; the
+  percentage is still indicative.
+
+### Gotchas for the next agent
+
+1. **Do not add a Python implementation of the expiry formula.** The trigger owns it. If you need the
+   serve threshold, mirror `5.0` with a comment on both sides, or read it from the database.
+2. **Do not put `mobility_statement` in the fixture.** The seeder raises and an invariant test fails.
+   Set `mobility_impact` and `place`.
+3. **Do not weaken `framing.py`'s banned list to make something pass.** If the guard rejects your text,
+   the text is wrong. That is the whole mechanism.
+4. **Regenerate `3-fixtures.sql`; never reuse one.** Its timestamps are relative to generation, so an
+   old file seeds a map where everything has already expired.
+5. **Pass `as_of` with a `Z` suffix, not `+00:00`.** A literal `+` in a query string decodes to a
+   space and you get a 422 that looks like a date-parsing bug.
+6. **Never call `smtplib` or any blocking library straight from an `async def`.** One SOS proved what
+   that costs. `asyncio.to_thread` exists.
+7. **`backend/venv` is 2.1 GB and inside the Docker build context.** `backend/.dockerignore` keeps it
+   out. Do not delete that file.
+8. **Editing an applied migration is an error, not a shortcut.** `migrate.py` compares checksums and
+   refuses. Write a new migration.
+
+### Prototype Gate
+
+| Check | State |
+|---|---|
+| `check.sh` green | 🟡 mypy, tests and frontend green; ruff carries a pre-existing backlog — see above |
+| `seed.sh --fresh` works | 🟡 needs `psql`, which is not installed. The `--sql` path works and is what was used |
+| App launches on a device | ✅ iPhone, Expo Go |
+| `smoke.sh` passes | ⏭️ relaxed to best-effort until 24 Oct per ADR 0005 §Decision 5 |
+| **`docs/walkthroughs/D01.md` run on a device** | ✅ **every step passed** |
+| This file updated | ✅ |
+| `.env.example` + plan §9 | ⏭️ relaxed to best-effort until 24 Oct |
+| Nothing half-migrated | ✅ ledger matches disk |
 
 *Newest first. Append-only.*
 

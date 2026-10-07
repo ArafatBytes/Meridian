@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import MapView, {
   Marker,
-  PROVIDER_GOOGLE,
+  MAP_PROVIDER,
 } from '../../components/MapComponent';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1389,7 +1389,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
 
           <View style={styles.mapContainer}>
             <MapView
-              provider={PROVIDER_GOOGLE}
+              provider={MAP_PROVIDER}
               style={styles.map}
               region={region}
               onPress={handleMapPress}

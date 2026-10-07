@@ -1,0 +1,64 @@
+# =============================================================================
+# base — what the API needs to start and serve a request
+# =============================================================================
+# Installing only this gives you a backend that runs: auth, the database, the
+# risk endpoints, routing and SOS. No AI stack, no agents, no test tools.
+#
+# This is the layer a deployment installs. Keeping it small is the point: the AI
+# layer alone is well over two gigabytes, and a container that serves JSON has no
+# reason to carry a copy of PyTorch.
+#
+#   pip install -r requirements/base.txt
+# =============================================================================
+
+# ---- web ---------------------------------------------------------------------
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-multipart          # multipart/form-data: the SOS video upload
+
+# ---- database ----------------------------------------------------------------
+sqlalchemy[asyncio]       # [asyncio] pulls greenlet; without it app.main fails to import
+asyncpg                   # the async driver the app runs on, and scripts/migrate.py
+psycopg2-binary           # sync driver; scripts and psql-free tooling
+geoalchemy2               # the geography columns on sos_incidents and user_locations
+
+# Deliberately NOT alembic. Migrations are forward-only hand-written SQL through
+# scripts/migrate.py — see that file's module docstring for why. There is no
+# alembic.ini and nothing imports it; it was listed and never used.
+
+# ---- auth --------------------------------------------------------------------
+python-jose[cryptography]  # ES256 verification against Supabase JWKS
+passlib[bcrypt]
+bcrypt
+python-dotenv
+
+# ---- cache -------------------------------------------------------------------
+redis                      # redis.asyncio is what app/core/redis.py imports
+hiredis                    # C parser; optional, materially faster
+
+# Deliberately NOT aioredis. It was archived and folded into redis-py, nothing
+# imports it, and on recent Python it is a source of install failures.
+
+# ---- http --------------------------------------------------------------------
+httpx                      # OSRM, Nominatim, and every outbound call
+websockets
+python-socketio
+
+# ---- geospatial --------------------------------------------------------------
+shapely>=2.1               # 2.0.x was built against numpy 1.x; numpy here is 2.x
+geopy
+pyproj
+
+# ---- media -------------------------------------------------------------------
+Pillow                     # imported as PIL by every service in app/services/ai/
+
+# ---- storage and notification ------------------------------------------------
+boto3
+python-magic
+twilio                     # declared in config; the SMS path is Track B (B20)
+firebase-admin             # push notifications are Track B (B6a)
+
+# ---- validation --------------------------------------------------------------
+email-validator            # required by pydantic EmailStr in schemas/{auth,user}.py

@@ -68,6 +68,33 @@ export const SOS_ACTIVATION_PHRASE = 'Meridian Emergency';
 export const SOS_COUNTDOWN_SECONDS = 5;
 export const SOS_AUTO_CALL_DELAY = 10000; // 10 seconds
 
+// SOS evidence video.
+//
+// These exist because of a measurement, not a guess. A 10-second clip recorded at
+// an iPhone's default quality came out at 16.45 MB; base64-encoded as an email
+// attachment that is ~22 MB, just under Gmail's 25 MB limit, and it took 2 minutes
+// 34 seconds to send. An emergency alert that takes two and a half minutes to
+// leave the building is not an emergency alert.
+//
+// At 1.2 Mbps a 10-second clip is about 1.5 MB plus audio, which sends in seconds
+// and is still perfectly legible as evidence of what was happening.
+export const SOS_VIDEO_DURATION_SECONDS = 10;
+
+/** Target bitrate in bits per second. iOS additionally needs the codec set on recordAsync. */
+export const SOS_VIDEO_BITRATE = 1_200_000;
+
+/**
+ * Hard ceiling on the recording, in bytes. Recording stops here.
+ *
+ * A backstop, not the mechanism: at the bitrate above a 10-second clip is nowhere
+ * near this. It matters if bitrate control is ignored on some device, where it
+ * turns "16 MB and a two-minute send" into "a shorter clip that actually sends".
+ * Partial evidence that arrives beats complete evidence that does not.
+ *
+ * Well under the backend's own 25 MB limit (SOS_VIDEO_MAX_SIZE_MB).
+ */
+export const SOS_VIDEO_MAX_BYTES = 8 * 1024 * 1024; // 8MB
+
 // Emergency Contacts
 export const MAX_EMERGENCY_CONTACTS = 5;
 export const MIN_EMERGENCY_CONTACTS = 1;

@@ -1,0 +1,575 @@
+{
+  "_README": [
+    "Seed risk flags for Dhaka central. Loaded by backend/scripts/seed_risk_flags.py.",
+    "",
+    "THIS IS SAMPLE DATA. Every source_id is prefixed `sample_` and every url uses",
+    "a `sample:` scheme, so nothing here can be mistaken for real reporting and no",
+    "link resolves. Real flags arrive in D04, extracted from live Bangla news with",
+    "genuine article URLs. If you are demoing and the flags on screen still say",
+    "`sample_`, you are showing the fixture, and the honest thing to say on stage is",
+    "that this is the seeded surface and live ingestion is the next beat.",
+    "",
+    "THERE IS NO mobility_statement FIELD HERE, AND THERE MUST NEVER BE ONE.",
+    "Flag text is produced only by app/policy/framing.py::to_mobility_statement(),",
+    "from `kind`, `mobility_impact` and `place`, when this file is loaded. A fixture",
+    "containing hand-written flag prose would walk straight past the framing",
+    "invariant that D01 ships a test for, and the cheap way out would be to weaken",
+    "the test. Do not take it. See DEMO_PLAN.md D01.",
+    "",
+    "Times are RELATIVE, in hours, to the moment the seeder runs. A fixture with",
+    "absolute timestamps is stale the next morning, and a demo whose flags are all",
+    "expired is worse than no demo. `observed_offset_hours: -2` means 'two hours",
+    "ago'.",
+    "",
+    "`expires_at` is absent for the same reason it is absent from every INSERT: the",
+    "database derives it (trg_risk_flags_expires_at). Supplying it here would be",
+    "ignored, which is the design.",
+    "",
+    "Half-lives and radii follow the concept document section 5.6 table. D01 seeds",
+    "~20 flags; D02 grows this same file to ~200 and adds SeededRiskSurface over it.",
+    "Two flags are deliberately already below the serve threshold, so that the",
+    "endpoint's expiry filter is visible in the D01 walkthrough rather than assumed."
+  ],
+  "flags": [
+    {
+      "event_key": "seed-bangshal-fire",
+      "kind": "fire",
+      "status": "confirmed",
+      "place": "Bangshal",
+      "lat": 23.7104,
+      "lon": 90.4074,
+      "radius_m": 400,
+      "severity_0": 74,
+      "half_life_hours": 3.5,
+      "mobility_impact": "road_blocked",
+      "observed_offset_hours": -1.5,
+      "source_count": 3,
+      "sources": [
+        {
+          "source_id": "sample_prothom_alo",
+          "url": "sample:prothom_alo/seed/bangshal-fire",
+          "published_offset_hours": -1.7,
+          "title": "Fire service responds in Bangshal, traffic diverted"
+        },
+        {
+          "source_id": "sample_the_daily_star",
+          "url": "sample:the_daily_star/seed/bangshal-fire",
+          "published_offset_hours": -1.4,
+          "title": "Bangshal blaze: roads closed to traffic"
+        },
+        {
+          "source_id": "sample_bdnews24",
+          "url": "sample:bdnews24/seed/bangshal-fire",
+          "published_offset_hours": -1.2,
+          "title": "Traffic held up around Bangshal"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-mirpur10-accident",
+      "kind": "road_accident",
+      "status": "unconfirmed",
+      "place": "Mirpur 10 golchattar",
+      "lat": 23.8069,
+      "lon": 90.3687,
+      "radius_m": 150,
+      "severity_0": 58,
+      "half_life_hours": 1.0,
+      "mobility_impact": "lane_closed",
+      "observed_offset_hours": -0.4,
+      "source_count": 1,
+      "sources": [
+        {
+          "source_id": "sample_jugantor",
+          "url": "sample:jugantor/seed/mirpur10-collision",
+          "published_offset_hours": -0.5,
+          "title": "Bus and CNG collide at Mirpur 10"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-shahbagh-gathering",
+      "kind": "procession",
+      "status": "confirmed",
+      "place": "Shahbagh",
+      "lat": 23.7389,
+      "lon": 90.3958,
+      "radius_m": 600,
+      "severity_0": 66,
+      "half_life_hours": 5.0,
+      "mobility_impact": "heavy_crowd",
+      "observed_offset_hours": -2.0,
+      "source_count": 2,
+      "sources": [
+        {
+          "source_id": "sample_the_daily_star",
+          "url": "sample:the_daily_star/seed/shahbagh-gathering",
+          "published_offset_hours": -2.2,
+          "title": "Shahbagh intersection closed to vehicles"
+        },
+        {
+          "source_id": "sample_prothom_alo",
+          "url": "sample:prothom_alo/seed/shahbagh-gathering",
+          "published_offset_hours": -1.9,
+          "title": "Traffic rerouted around Shahbagh"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-jatrabari-waterlogging",
+      "kind": "waterlogging",
+      "status": "confirmed",
+      "place": "Jatrabari chourasta",
+      "lat": 23.7104,
+      "lon": 90.4336,
+      "radius_m": 800,
+      "severity_0": 61,
+      "half_life_hours": 6.0,
+      "mobility_impact": "delay_likely",
+      "observed_offset_hours": -3.0,
+      "source_count": 2,
+      "sources": [
+        {
+          "source_id": "sample_kaler_kantho",
+          "url": "sample:kaler_kantho/seed/jatrabari-water",
+          "published_offset_hours": -3.3,
+          "title": "Knee-deep water at Jatrabari after overnight rain"
+        },
+        {
+          "source_id": "sample_bdnews24",
+          "url": "sample:bdnews24/seed/jatrabari-water",
+          "published_offset_hours": -2.8,
+          "title": "Jatrabari commuters face long delays"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-gulshan1-construction",
+      "kind": "construction",
+      "status": "confirmed",
+      "place": "Gulshan 1",
+      "lat": 23.7806,
+      "lon": 90.415,
+      "radius_m": 200,
+      "severity_0": 40,
+      "half_life_hours": 720.0,
+      "mobility_impact": "lane_closed",
+      "observed_offset_hours": -96.0,
+      "source_count": 2,
+      "sources": [
+        {
+          "source_id": "sample_dhaka_tribune",
+          "url": "sample:dhaka_tribune/seed/gulshan-utility-works",
+          "published_offset_hours": -100.0,
+          "title": "Gulshan 1 lane closure for drainage works"
+        },
+        {
+          "source_id": "sample_dncc_notice",
+          "url": "sample:dncc_notice/seed/gulshan-works",
+          "published_offset_hours": -110.0,
+          "title": "Notice: drainage works, Gulshan 1"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-mohakhali-blockade",
+      "kind": "blockade",
+      "status": "unconfirmed",
+      "place": "Mohakhali flyover",
+      "lat": 23.7781,
+      "lon": 90.399,
+      "radius_m": 600,
+      "severity_0": 70,
+      "half_life_hours": 4.0,
+      "mobility_impact": "impassable",
+      "observed_offset_hours": -0.8,
+      "source_count": 1,
+      "sources": [
+        {
+          "source_id": "sample_samakal",
+          "url": "sample:samakal/seed/mohakhali-blocked",
+          "published_offset_hours": -0.9,
+          "title": "Mohakhali road closed, vehicles stuck"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-farmgate-chronic",
+      "kind": "chronic",
+      "status": "confirmed",
+      "place": "Farmgate",
+      "lat": 23.7583,
+      "lon": 90.3897,
+      "radius_m": 250,
+      "severity_0": 52,
+      "half_life_hours": 2160.0,
+      "mobility_impact": "heavy_crowd",
+      "observed_offset_hours": -720.0,
+      "source_count": 4,
+      "sources": [
+        {
+          "source_id": "sample_bd_police_stats",
+          "url": "sample:bd_police_stats/seed/unit-stats",
+          "published_offset_hours": -2160.0,
+          "title": "Unit statistics, Tejgaon"
+        },
+        {
+          "source_id": "sample_the_daily_star",
+          "url": "sample:the_daily_star/seed/farmgate-congestion",
+          "published_offset_hours": -1400.0,
+          "title": "Farmgate remains the city's worst pinch point"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-karwanbazar-accident",
+      "kind": "road_accident",
+      "status": "unconfirmed",
+      "place": "Karwan Bazar",
+      "lat": 23.7509,
+      "lon": 90.3934,
+      "radius_m": 150,
+      "severity_0": 48,
+      "half_life_hours": 1.0,
+      "mobility_impact": "delay_likely",
+      "observed_offset_hours": -0.2,
+      "source_count": 1,
+      "sources": [
+        {
+          "source_id": "sample_ittefaq",
+          "url": "sample:ittefaq/seed/karwanbazar",
+          "published_offset_hours": -0.3,
+          "title": "Truck breakdown slows Karwan Bazar traffic"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-motijheel-utility",
+      "kind": "utility_outage",
+      "status": "unconfirmed",
+      "place": "Motijheel",
+      "lat": 23.733,
+      "lon": 90.4172,
+      "radius_m": 300,
+      "severity_0": 35,
+      "half_life_hours": 4.0,
+      "mobility_impact": "lane_closed",
+      "observed_offset_hours": -2.5,
+      "source_count": 1,
+      "sources": [
+        {
+          "source_id": "sample_desco_notice",
+          "url": "sample:desco_notice/seed/motijheel",
+          "published_offset_hours": -2.6,
+          "title": "Cable repair, Motijheel: one lane closed"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-paltan-crowd",
+      "kind": "clash",
+      "status": "unconfirmed",
+      "place": "Paltan",
+      "lat": 23.734,
+      "lon": 90.4119,
+      "radius_m": 500,
+      "severity_0": 68,
+      "half_life_hours": 9.0,
+      "mobility_impact": "road_blocked",
+      "observed_offset_hours": -5.0,
+      "source_count": 1,
+      "sources": [
+        {
+          "source_id": "sample_bdnews24",
+          "url": "sample:bdnews24/seed/paltan",
+          "published_offset_hours": -5.2,
+          "title": "Paltan road closed to traffic"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-dhanmondi27-waterlogging",
+      "kind": "waterlogging",
+      "status": "unconfirmed",
+      "place": "Dhanmondi 27",
+      "lat": 23.7533,
+      "lon": 90.3742,
+      "radius_m": 500,
+      "severity_0": 44,
+      "half_life_hours": 6.0,
+      "mobility_impact": "delay_likely",
+      "observed_offset_hours": -4.0,
+      "source_count": 1,
+      "sources": [
+        {
+          "source_id": "sample_jugantor",
+          "url": "sample:jugantor/seed/dhanmondi-water",
+          "published_offset_hours": -4.1,
+          "title": "Water on Dhanmondi 27 after rain"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-newmarket-crowd",
+      "kind": "other",
+      "status": "confirmed",
+      "place": "New Market",
+      "lat": 23.7336,
+      "lon": 90.3847,
+      "radius_m": 300,
+      "severity_0": 50,
+      "half_life_hours": 3.0,
+      "mobility_impact": "heavy_crowd",
+      "observed_offset_hours": -1.0,
+      "source_count": 2,
+      "sources": [
+        {
+          "source_id": "sample_dhaka_tribune",
+          "url": "sample:dhaka_tribune/seed/newmarket",
+          "published_offset_hours": -1.2,
+          "title": "New Market footfall slows nearby roads"
+        },
+        {
+          "source_id": "sample_samakal",
+          "url": "sample:samakal/seed/newmarket",
+          "published_offset_hours": -0.9,
+          "title": "Heavy footfall around New Market"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-uttara7-accident",
+      "kind": "road_accident",
+      "status": "unconfirmed",
+      "place": "Uttara Sector 7",
+      "lat": 23.87,
+      "lon": 90.3984,
+      "radius_m": 150,
+      "severity_0": 55,
+      "half_life_hours": 1.0,
+      "mobility_impact": "lane_closed",
+      "observed_offset_hours": -0.6,
+      "source_count": 1,
+      "sources": [
+        {
+          "source_id": "sample_kaler_kantho",
+          "url": "sample:kaler_kantho/seed/uttara7",
+          "published_offset_hours": -0.7,
+          "title": "Two-vehicle collision in Uttara"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-airport-road-construction",
+      "kind": "construction",
+      "status": "confirmed",
+      "place": "Airport Road, Kurmitola",
+      "lat": 23.848,
+      "lon": 90.4043,
+      "radius_m": 200,
+      "severity_0": 38,
+      "half_life_hours": 720.0,
+      "mobility_impact": "lane_closed",
+      "observed_offset_hours": -240.0,
+      "source_count": 2,
+      "sources": [
+        {
+          "source_id": "sample_dhaka_tribune",
+          "url": "sample:dhaka_tribune/seed/airport-road-works",
+          "published_offset_hours": -250.0,
+          "title": "Airport Road lane closures continue"
+        },
+        {
+          "source_id": "sample_rajuk_notice",
+          "url": "sample:rajuk_notice/seed/airport-road",
+          "published_offset_hours": -260.0,
+          "title": "Notice: Airport Road works"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-sayedabad-blockade",
+      "kind": "blockade",
+      "status": "unconfirmed",
+      "place": "Sayedabad bus terminal",
+      "lat": 23.7117,
+      "lon": 90.4295,
+      "radius_m": 600,
+      "severity_0": 63,
+      "half_life_hours": 4.0,
+      "mobility_impact": "road_blocked",
+      "observed_offset_hours": -2.2,
+      "source_count": 1,
+      "sources": [
+        {
+          "source_id": "sample_ittefaq",
+          "url": "sample:ittefaq/seed/sayedabad",
+          "published_offset_hours": -2.3,
+          "title": "Sayedabad approach road closed"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-tejgaon-fire",
+      "kind": "fire",
+      "status": "unconfirmed",
+      "place": "Tejgaon industrial area",
+      "lat": 23.7639,
+      "lon": 90.399,
+      "radius_m": 400,
+      "severity_0": 59,
+      "half_life_hours": 3.5,
+      "mobility_impact": "road_blocked",
+      "observed_offset_hours": -2.8,
+      "source_count": 1,
+      "sources": [
+        {
+          "source_id": "sample_prothom_alo",
+          "url": "sample:prothom_alo/seed/tejgaon-fire",
+          "published_offset_hours": -2.9,
+          "title": "Fire at Tejgaon warehouse, approach road closed"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-kamalapur-crowd",
+      "kind": "other",
+      "status": "unconfirmed",
+      "place": "Kamalapur station",
+      "lat": 23.7324,
+      "lon": 90.4262,
+      "radius_m": 300,
+      "severity_0": 42,
+      "half_life_hours": 3.0,
+      "mobility_impact": "heavy_crowd",
+      "observed_offset_hours": -1.8,
+      "source_count": 1,
+      "sources": [
+        {
+          "source_id": "sample_bdnews24",
+          "url": "sample:bdnews24/seed/kamalapur",
+          "published_offset_hours": -1.9,
+          "title": "Queues outside Kamalapur slow local roads"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-badda-chronic",
+      "kind": "chronic",
+      "status": "confirmed",
+      "place": "Badda",
+      "lat": 23.7806,
+      "lon": 90.4258,
+      "radius_m": 250,
+      "severity_0": 46,
+      "half_life_hours": 2160.0,
+      "mobility_impact": "delay_likely",
+      "observed_offset_hours": -600.0,
+      "source_count": 3,
+      "sources": [
+        {
+          "source_id": "sample_bd_police_stats",
+          "url": "sample:bd_police_stats/seed/unit-stats-badda",
+          "published_offset_hours": -2160.0,
+          "title": "Unit statistics, Badda"
+        },
+        {
+          "source_id": "sample_dhaka_tribune",
+          "url": "sample:dhaka_tribune/seed/badda-congestion",
+          "published_offset_hours": -900.0,
+          "title": "Badda corridor congestion persists"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-sciencelab-accident",
+      "kind": "road_accident",
+      "status": "unconfirmed",
+      "place": "Science Lab",
+      "lat": 23.7389,
+      "lon": 90.3835,
+      "radius_m": 150,
+      "severity_0": 51,
+      "half_life_hours": 1.0,
+      "mobility_impact": "delay_likely",
+      "observed_offset_hours": -0.9,
+      "source_count": 1,
+      "sources": [
+        {
+          "source_id": "sample_samakal",
+          "url": "sample:samakal/seed/sciencelab",
+          "published_offset_hours": -1.0,
+          "title": "Minor collision at Science Lab crossing"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-mugda-utility",
+      "kind": "utility_outage",
+      "status": "unconfirmed",
+      "place": "Mugda",
+      "lat": 23.7372,
+      "lon": 90.4278,
+      "radius_m": 300,
+      "severity_0": 31,
+      "half_life_hours": 4.0,
+      "mobility_impact": "lane_closed",
+      "observed_offset_hours": -3.5,
+      "source_count": 1,
+      "sources": [
+        {
+          "source_id": "sample_titas_notice",
+          "url": "sample:titas_notice/seed/mugda",
+          "published_offset_hours": -3.6,
+          "title": "Gas line repair, Mugda"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-expired-banani-accident",
+      "kind": "road_accident",
+      "status": "unconfirmed",
+      "place": "Banani 11",
+      "lat": 23.7937,
+      "lon": 90.4066,
+      "radius_m": 150,
+      "severity_0": 60,
+      "half_life_hours": 1.0,
+      "mobility_impact": "lane_closed",
+      "observed_offset_hours": -9.0,
+      "source_count": 1,
+      "_why": "Nine hours at a one-hour half-life: severity is ~0.1 and the database has already marked it expired. It must NOT appear on the map. This is how the D01 walkthrough shows the expiry filter working rather than taking it on trust.",
+      "sources": [
+        {
+          "source_id": "sample_jugantor",
+          "url": "sample:jugantor/seed/banani-old",
+          "published_offset_hours": -9.1,
+          "title": "Collision in Banani cleared"
+        }
+      ]
+    },
+    {
+      "event_key": "seed-expired-gulshan2-fire",
+      "kind": "fire",
+      "status": "unconfirmed",
+      "place": "Gulshan 2",
+      "lat": 23.7925,
+      "lon": 90.4078,
+      "radius_m": 400,
+      "severity_0": 55,
+      "half_life_hours": 3.5,
+      "mobility_impact": "road_blocked",
+      "observed_offset_hours": -36.0,
+      "source_count": 1,
+      "_why": "Yesterday's fire. Long gone, and the surface must not still be claiming a blocked road. Concept document: no stale red zones.",
+      "sources": [
+        {
+          "source_id": "sample_the_daily_star",
+          "url": "sample:the_daily_star/seed/gulshan2-old",
+          "published_offset_hours": -36.2,
+          "title": "Gulshan 2 fire extinguished"
+        }
+      ]
+    }
+  ]
+}

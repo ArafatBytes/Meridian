@@ -1,0 +1,31 @@
+# =============================================================================
+# agents — ingestion, the LLM client and the scheduler
+# =============================================================================
+# Everything the eight agents need that the API itself does not. Installed on a
+# worker, and on a developer machine that is running a sprint from D03 onward.
+#
+#   pip install -r requirements/base.txt -r requirements/agents.txt
+#
+# Added in D01 rather than sprint by sprint — defect 15. Discovering a missing
+# dependency at the start of a one-day sprint costs more than carrying it early.
+# =============================================================================
+
+# ---- the only module that may import this is app/llm/client.py (D03) ---------
+anthropic
+
+# ---- scheduling --------------------------------------------------------------
+celery              # D04 registers the agent crons; the two phantom beat
+                    # entries are deleted in the same sprint
+flower              # worker dashboard
+
+# ---- ingestion (D04) ---------------------------------------------------------
+beautifulsoup4      # static pages
+lxml                # the parser bs4 should be using
+playwright          # pages that need a browser. NOTE: also needs a one-off
+                    # `playwright install chromium` — pip is not enough
+feedparser          # several Bangla outlets publish usable RSS
+
+# ---- deduplication (D05) -----------------------------------------------------
+sentence-transformers  # semantic dedup across outlets, so four reports of one
+                       # fire collapse into one event rather than four
+                       # corroborations. Pulls torch; see requirements/ai.txt.

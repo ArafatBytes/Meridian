@@ -146,49 +146,54 @@ Then trigger an SOS and **see a row appear in the incident history** — the ale
 **Gate:** `docs/walkthroughs/D01.md` passes on a real device, and `./scripts/seed.sh --fresh` builds
 the schema from zero.
 
-- [ ] `scripts/migrate.py` + `schema_migrations` table — forward-only timestamped SQL *(S02)*
-- [ ] Migration: **`risk_flags`** — PostGIS `GEOGRAPHY(POINT, 4326)`, GiST index on location, index
+- [x] `scripts/migrate.py` + `schema_migrations` table — forward-only timestamped SQL *(S02)*
+- [x] Migration: **`risk_flags`** — PostGIS `GEOGRAPHY(POINT, 4326)`, GiST index on location, index
       on `(status, expires_at)`, **`CHECK (half_life_hours > 0)`**. The check is the decay invariant
       at schema level; it is not optional *(S02)*
-- [ ] **`valid_from` / `valid_to` on `risk_flags`, nullable, in this migration.** D09's forward-dated
+- [x] **`valid_from` / `valid_to` on `risk_flags`, nullable, in this migration.** D09's forward-dated
       flags need them. Adding them now costs nothing; adding them in D09 would mean a schema change
       *and* a contract change on D09's single day — and per CONTRIBUTING.md a contract change means
       updating every consumer and the TypeScript mirror
-- [ ] Migration: `raw_documents`, `extracted_incidents`, `agent_runs` *(S02)*
-- [ ] `scripts/seed.sh` — rebuild a dev DB from migrations + fixtures in one command, for real *(S02)*
-- [ ] `app/contracts/{risk,agents,surface}.py` — the shapes from plan §6.1–6.3, **plus `valid_from`
+- [x] Migration: `raw_documents`, `extracted_incidents`, `agent_runs` *(S02)*
+- [x] `scripts/seed.sh` — rebuild a dev DB from migrations + fixtures in one command, for real *(S02)*
+- [x] `app/contracts/{risk,agents,surface}.py` — the shapes from plan §6.1–6.3, **plus `valid_from`
       and `valid_to` on `RiskFlag`** *(S03)*
-- [ ] `frontend/src/types/contracts/` — hand-mirrored TypeScript *(S03)*
-- [ ] `app/policy/framing.py` — `to_mobility_statement()`, `assert_mobility_safe()`, banned-term
+- [x] `frontend/src/types/contracts/` — hand-mirrored TypeScript *(S03)*
+- [x] `app/policy/framing.py` — `to_mobility_statement()`, `assert_mobility_safe()`, banned-term
       list. **Flag text is only ever written here** *(S03)*
-- [ ] `backend/tests/invariants/` with **two** tests: mobility framing, and one source can never
+- [x] `backend/tests/invariants/` with **two** tests: mobility framing, and one source can never
       produce a `confirmed` flag *(S03)*
-- [ ] `requirements.txt` → `requirements/{base,ai,agents,dev}.txt`, with every dependency the demo
+- [x] `requirements.txt` → `requirements/{base,ai,agents,dev}.txt`, with every dependency the demo
       track needs added now — **defect 15** *(S04)*
-- [ ] **A minimal `DbRiskSurface` behind the `RiskSurface` protocol.** D01 renders *through the
+- [x] **A minimal `DbRiskSurface` behind the `RiskSurface` protocol.** D01 renders *through the
       protocol*, not around it, so D02 can add `SeededRiskSurface` and the scoring engine behind the
       same seam with no client rework and nothing orphaned
-- [ ] **`GET /api/v1/risk/flags?bbox=&as_of=`** — flags in the contract shape, through the protocol.
+- [x] **`GET /api/v1/risk/flags?bbox=&as_of=`** — flags in the contract shape, through the protocol.
       **`as_of` is accepted and threaded from day one** even though it does nothing until D02; it is
       what D02's time control and D09's forward-looking view both hang off
-- [ ] **~20 seed flags, loaded into `risk_flags` by `seed.sh`.** The full 200 is D02
-- [ ] ⚠️ **Fixtures store structured fields only — never `mobility_statement`.** `kind`, `severity`,
+- [x] **~20 seed flags, loaded into `risk_flags` by `seed.sh`.** The full 200 is D02
+- [x] ⚠️ **Fixtures store structured fields only — never `mobility_statement`.** `kind`, `severity`,
       `location`, `half_life_hours`. The statement is **derived through `framing.py` at load time**.
       A fixture containing hand-written flag prose violates the framing invariant this sprint ships
       a test for, and the cheap way out would be to weaken the test. Do not take it
-- [ ] 📱 **`MapScreen` risk overlay — thin.** Pins plus a radius circle, colour by severity. No detail
+- [x] 📱 **`MapScreen` risk overlay — thin.** Pins plus a radius circle, colour by severity. No detail
       sheet yet, no filtering. Just: they are on the map and they are the right colour
-- [ ] 📱 **Defect 3 — `CRIME_COLORS` to lowercase keys matching the DB enum**, derived from the
+- [x] 📱 **Defect 3 — `CRIME_COLORS` to lowercase keys matching the DB enum**, derived from the
       contract type so it cannot drift again. *Every crime marker currently renders with no colour.*
       Moved forward from D06 because it is an hour of work and it is visible *(S07)*
-- [ ] **Defect 35 — SOS leaves no audit trail.** `trigger_sos` never inserts into `sos_incidents`,
+- [x] **Defect 35 — SOS leaves no audit trail.** `trigger_sos` never inserts into `sos_incidents`,
       and `_save_video` deletes the clip after attaching it. After a verified delivery the table
       still holds zero rows. Fits here because it is migration-adjacent work, it is beat 9's
       foundation, and it gives this sprint a second visible result *(S05)*
-- [ ] **`docs/walkthroughs/D01.md` must include a full SOS trigger.** SOS is the only feature that
+- [x] **`docs/walkthroughs/D01.md` must include a full SOS trigger.** SOS is the only feature that
       currently works end to end. From here on, every walkthrough re-run protects it
-- [ ] `mypy --strict` clean on `app/contracts`, `app/policy`
-- [ ] 📄 `docs/walkthroughs/D01.md`
+- [x] `mypy --strict` clean on `app/contracts`, `app/policy`
+- [x] 📄 `docs/walkthroughs/D01.md`
+- [x] **Not planned, found by running the walkthrough on a phone — both fixed:**
+      the map was a **blank white page on iOS** (`PROVIDER_GOOGLE` forces a Google Maps SDK that Expo
+      Go for iOS does not ship), and **one SOS froze the entire API for 2m34s** (`smtplib` called
+      synchronously inside `async def`, blocking the event loop for every request). Neither was
+      detectable from a green test suite. This is §0 earning its place
 
 > **Two things deliberately *not* in this sprint, and why:**
 >

@@ -5,3 +5,5 @@ export { default as NotificationService } from './notification.service';
 export { crimeService } from './crime.service';
 export type { CrimeAnalysisResult } from './crime.service';
 export { default as speechService } from './speech.service';
+export { riskService } from './risk.service';
+export type { RiskFlagsResult, MapRegion } from './risk.service';

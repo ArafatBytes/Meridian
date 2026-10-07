@@ -57,7 +57,11 @@ RUN pip install --no-cache-dir \
         --index-url https://download.pytorch.org/whl/cpu \
         torch torchvision
 
-COPY requirements.txt .
+# Both the aggregate file and the layer files it includes. requirements.txt is
+# now a set of `-r requirements/*.txt` lines (D01, defect 15), so copying it alone
+# gives pip a file full of references to paths that do not exist in the image.
+COPY requirements.txt ./
+COPY requirements/ ./requirements/
 
 RUN pip install --no-cache-dir -r requirements.txt
 

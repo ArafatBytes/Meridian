@@ -2,12 +2,15 @@ import logging
 import os
 import tempfile
 import csv
+import json
 import math
 from typing import List, Optional, Dict
+from geoalchemy2 import WKTElement
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import UploadFile
 from app.models.emergency_contact import EmergencyContact
+from app.models.sos import SOSIncident
 from app.services.email_service import email_service
 from app.core.config import settings
 
@@ -151,7 +154,34 @@ class SOSService:
                 video_path=video_path
             )
 
-            # Clean up temporary video file
+            # 5. Record the incident -- defect 35.
+            #
+            # This used to be missing entirely: an SOS could be delivered, the
+            # user told "emergency contacts have been notified", and
+            # `sos_incidents` would still hold zero rows afterwards. The README's
+            # claim that incidents are "logged in database" was simply false.
+            #
+            # Written whether or not delivery succeeded. An alert that failed to
+            # send is precisely the event worth having a record of, and a table
+            # that only contains successes cannot answer "did my SOS go out?".
+            incident_id = await self._record_incident(
+                db=db,
+                user_id=user_id,
+                location=location,
+                contact_ids=[str(c.id) for c in contacts],
+                recipient_count=len(recipient_emails),
+                police_station_count=len(police_emails),
+                delivered=success,
+                video_attached=video_path is not None,
+            )
+
+            # Clean up the temporary video file.
+            #
+            # The clip is not retained. Keeping it would mean a storage bucket, a
+            # retention window and an access policy for what is by definition
+            # footage recorded under duress, none of which exists yet. Until it
+            # does, deleting is correct behaviour rather than an oversight -- and
+            # the incident row records that a video WAS attached to the alert.
             if video_path and os.path.exists(video_path):
                 try:
                     os.remove(video_path)
@@ -163,7 +193,8 @@ class SOSService:
                 "message": "SOS alert sent successfully" if success else "Failed to send SOS alert",
                 "contacts_notified": len(recipient_emails) if success else 0,
                 "video_attached": video_path is not None,
-                "police_stations_found": len(police_emails)
+                "police_stations_found": len(police_emails),
+                "incident_id": incident_id,
             }
 
         except Exception as e:
@@ -173,6 +204,84 @@ class SOSService:
                 "message": str(e),
                 "contacts_notified": 0
             }
+
+    async def _record_incident(
+        self,
+        *,
+        db: AsyncSession,
+        user_id: str,
+        location: dict,
+        contact_ids: list[str],
+        recipient_count: int,
+        police_station_count: int,
+        delivered: bool,
+        video_attached: bool,
+    ) -> str | None:
+        """
+        Write one row to `sos_incidents`. Returns its id, or None if the write
+        failed.
+
+        Committed immediately rather than left to the request session's cleanup.
+        The endpoint wraps this whole call in a try/except that raises
+        HTTPException, and a rollback there would take the audit row with it. An
+        audit trail that disappears when something downstream goes wrong is not an
+        audit trail.
+
+        A failure to record is logged and swallowed. The alert has already gone out
+        by this point, and failing the request would tell someone in an emergency
+        that their SOS did not work when it did.
+
+        ## What goes in `contacts_notified`
+
+        A JSON object, not a list of email addresses:
+
+            {"contact_ids": [...], "recipient_count": 2,
+             "police_station_count": 0, "delivered": true, "video_attached": false}
+
+        Contact **ids**, deliberately. The addresses already live in
+        `emergency_contacts`; copying them here would duplicate personal data into
+        a second table with its own lifetime for no gain, since the history screen
+        (D09) needs to say "2 contacts notified" rather than list them. That is the
+        data minimisation invariant applied where it happens to be cheap.
+        """
+        try:
+            incident = SOSIncident(
+                user_id=user_id,
+                # geoalchemy2 wants WKT with an explicit SRID. Note the order:
+                # POINT takes longitude first, the reverse of how the rest of this
+                # service passes coordinates around.
+                location=WKTElement(
+                    f"POINT({float(location['longitude'])} {float(location['latitude'])})",
+                    srid=4326,
+                ),
+                video_url=None,  # see the cleanup comment in trigger_sos_alert
+                contacts_notified=json.dumps(
+                    {
+                        "contact_ids": contact_ids,
+                        "recipient_count": recipient_count,
+                        "police_station_count": police_station_count,
+                        "delivered": delivered,
+                        "video_attached": video_attached,
+                    }
+                ),
+                voice_activated=False,  # the voice path sets this once S18 lands
+                status="active",
+            )
+            db.add(incident)
+            await db.commit()
+            await db.refresh(incident)
+            logger.info(
+                "Recorded SOS incident %s for user %s (delivered=%s, recipients=%d)",
+                incident.id,
+                user_id,
+                delivered,
+                recipient_count,
+            )
+            return str(incident.id)
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Failed to record SOS incident for user {user_id}: {e}")
+            return None
 
     async def _get_emergency_contacts(self, user_id: str, db: AsyncSession) -> List[EmergencyContact]:
         """Fetch user's emergency contacts"""

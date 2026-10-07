@@ -47,10 +47,16 @@ describe('API_BASE_URL', () => {
 describe('crime categories', () => {
   it('match the lowercase values the database enum accepts', () => {
     // SCHEMA.sql defines crime_category with lowercase values, and
-    // AddReportScreen sends lowercase ids. The capitalised list here is
-    // currently unused by the report form; if anything starts using it for a
-    // write, the values must be lowercased first or the insert is rejected.
-    // Tracked as defect 3 (S07).
+    // AddReportScreen sends lowercase ids. The capitalised list here is a UI
+    // picker list, still unused by the report form; if anything starts using it
+    // for a write, the values must be lowercased first or the insert is rejected.
+    //
+    // Defect 3 itself is FIXED (D01): the authority is now
+    // src/types/contracts/crime.ts, whose values are lowercase and from which
+    // MapScreen's CRIME_COLORS is typed, so a missing colour is a compile error.
+    // This list is the remaining capitalised one, kept because it names
+    // categories the database enum does not have (Kidnapping, Murder, ...).
+    // Reconciling the two is Track B (B3).
     const { CRIME_CATEGORIES } = require('./app.constants');
     const dbEnum = [
       'theft', 'assault', 'harassment', 'vandalism',

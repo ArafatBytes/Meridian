@@ -50,6 +50,10 @@ const HomeScreen: React.FC = () => {
   const [isSOSModalVisible, setIsSOSModalVisible] = useState(false);
   const [isSendingSOS, setIsSendingSOS] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  // Which half of the SOS we are in. The upload finishes long before the alert
+  // does — the server then talks to the SMTP relay — and showing "uploading" through
+  // that second phase is what made a working SOS look hung at 98%.
+  const [sosStage, setSosStage] = useState<'uploading' | 'sending'>('uploading');
 
   const handleSOSPress = () => {
     setIsSOSModalVisible(true);
@@ -131,6 +135,12 @@ const HomeScreen: React.FC = () => {
         setUploadProgress(prev => Math.max(prev, Math.floor(simulatedProgress)));
       }, 200);
 
+      // Once the bytes are gone, the wait is the server's: it is talking to the
+      // SMTP relay. Saying "uploading 98%" through that is how a working SOS looks
+      // broken — which is exactly how it read the first time this was run on a
+      // phone. Tell the truth instead.
+      setSosStage('uploading');
+
       const data: any = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', `${API_BASE_URL}/sos/trigger`);
@@ -145,6 +155,9 @@ const HomeScreen: React.FC = () => {
               simulatedProgress = newProgress;
               return newProgress;
             });
+            if (event.loaded >= event.total) {
+              setSosStage('sending');
+            }
           }
         };
 
@@ -258,14 +271,22 @@ const HomeScreen: React.FC = () => {
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingCard}>
             <ActivityIndicator size="large" color={colors.danger} />
-            <Text style={styles.loadingText}>Uploading Evidence...</Text>
+            <Text style={styles.loadingText}>
+              {sosStage === 'sending'
+                ? 'Alerting your contacts...'
+                : 'Uploading Evidence...'}
+            </Text>
 
             <View style={styles.progressBarContainer}>
               <View style={[styles.progressBarFill, { width: `${uploadProgress}%` }]} />
             </View>
             <Text style={styles.progressText}>{uploadProgress}% Completed</Text>
 
-            <Text style={styles.loadingSubText}>Please do not close the app</Text>
+            <Text style={styles.loadingSubText}>
+              {sosStage === 'sending'
+                ? 'Evidence uploaded. Sending the alert — do not close the app.'
+                : 'Please do not close the app'}
+            </Text>
           </View>
         </View>
       </Modal>

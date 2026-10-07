@@ -1,6 +1,7 @@
 """
 Email service for sending emergency notifications
 """
+import asyncio
 import smtplib
 import logging
 from email.mime.multipart import MIMEMultipart
@@ -172,27 +173,31 @@ class EmailService:
 
             msg.attach(MIMEText(body, 'html'))
 
-            # Attach video if provided
-            if video_path and Path(video_path).exists():
-                try:
-                    with open(video_path, 'rb') as attachment:
-                        part = MIMEBase('application', 'octet-stream')
-                        part.set_payload(attachment.read())
-                        encoders.encode_base64(part)
-                        part.add_header(
-                            'Content-Disposition',
-                            f'attachment; filename=sos_video_{Path(video_path).name}'
-                        )
-                        msg.attach(part)
-                        logger.info(f"Video attached: {video_path}")
-                except Exception as e:
-                    logger.error(f"Failed to attach video: {e}")
+            # Attach the video, off the event loop.
+            #
+            # Same reason as the send below, smaller magnitude: reading ~16 MB from
+            # disk and base64-encoding it to ~22 MB is I/O plus CPU on the single
+            # thread every other request shares. Not the 2-minute freeze the SMTP
+            # call caused, but not free either, and it is the same mistake.
+            if video_path:
+                part = await asyncio.to_thread(self._build_video_part, video_path)
+                if part is not None:
+                    msg.attach(part)
+                    logger.info(f"Video attached: {video_path}")
 
-            # Send email
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_user, self.smtp_password)
-                server.send_message(msg)
+            # Send email, off the event loop.
+            #
+            # `smtplib` is synchronous. Calling it directly inside an `async def`
+            # blocks the single thread FastAPI's event loop runs on, which means
+            # it does not block this request -- it blocks EVERY request. Measured
+            # on a real SOS with a 16.45 MB video: 2 minutes 34 seconds during
+            # which /health timed out and the map could not load risk flags. On
+            # stage that is the demo freezing while beat 9 sends.
+            #
+            # `asyncio.to_thread` hands the blocking call to a worker thread. The
+            # SOS still takes as long as the upload takes; everything else keeps
+            # working while it does.
+            await asyncio.to_thread(self._send_blocking, msg)
 
             logger.info(f"SOS alert sent to {len(to_emails)} recipients")
             return True
@@ -200,6 +205,52 @@ class EmailService:
         except Exception as e:
             logger.error(f"Failed to send SOS email: {e}")
             return False
+
+    def _build_video_part(self, video_path: str) -> MIMEBase | None:
+        """
+        Read a video from disk and wrap it as a base64 MIME attachment.
+
+        **Synchronous. Only call through `asyncio.to_thread`.**
+
+        Returns None rather than raising if the file is missing or unreadable: an
+        SOS with no video attached still has to go out. Losing the evidence is bad;
+        losing the alert is worse.
+        """
+        try:
+            if not Path(video_path).exists():
+                logger.warning(f"Video not found, sending alert without it: {video_path}")
+                return None
+            with open(video_path, 'rb') as attachment:
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(attachment.read())
+            encoders.encode_base64(part)
+            part.add_header(
+                'Content-Disposition',
+                f'attachment; filename=sos_video_{Path(video_path).name}'
+            )
+            return part
+        except Exception as e:
+            logger.error(f"Failed to attach video: {e}")
+            return None
+
+    def _send_blocking(self, msg: MIMEMultipart) -> None:
+        """
+        The actual SMTP conversation. **Synchronous, and must stay that way.**
+
+        Separated out so there is exactly one blocking call and it is obvious. Only
+        ever call this through `asyncio.to_thread` -- calling it directly from an
+        async function reintroduces the freeze described above.
+
+        A timeout is set deliberately. Without one, `smtplib` inherits the system
+        default socket timeout, which on most hosts is none at all: an SMTP server
+        that accepts the connection and then stalls would hold the thread forever,
+        and the caller would wait forever with it. 120 seconds is generous for a
+        25 MB attachment on a slow connection and still finite.
+        """
+        with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=120) as server:
+            server.starttls()
+            server.login(self.smtp_user, self.smtp_password)
+            server.send_message(msg)
 
 
 # Singleton instance
