@@ -65,6 +65,11 @@ COPY requirements/ ./requirements/
 
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Chromium for Playwright (D04): Channel 24 renders its article body client-side.
+# `--with-deps` pulls the shared libraries headless Chromium needs on slim Debian.
+# ~115 MB browser plus its libraries; a separate layer, so it caches like pip.
+RUN playwright install --with-deps chromium
+
 # -----------------------------------------------------------------------------
 # YOLOv9c weights, baked in
 # -----------------------------------------------------------------------------

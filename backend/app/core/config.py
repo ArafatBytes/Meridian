@@ -205,7 +205,15 @@ class Settings(BaseSettings):
     # Add a feature by declaring LLM_CHAIN_<NAME> here and adding <NAME> to
     # app.llm.client.KNOWN_FEATURES. An unknown feature raises at the call site.
     LLM_CHAIN_GEO: str = "gemini:gemini-3.5-flash-lite,groq:openai/gpt-oss-120b"
-    
+
+    # D04: reading news articles into incidents. Gemini only, on its own keys
+    # (GEMINI_KEY_EXTRACT_*) from a separate Google project, so an ingestion loop
+    # can never spend the search box's quota. No Groq fallback: gpt-oss-120b
+    # scored 15.6% on Dhaka place names in D03, and extraction is mostly a
+    # place-name task. A rate-limited run leaves articles unread and the next run
+    # picks them up — nothing is lost by waiting.
+    LLM_CHAIN_EXTRACT: str = "gemini:gemini-3.5-flash-lite"
+
     
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60

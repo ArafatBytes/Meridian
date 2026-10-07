@@ -159,7 +159,8 @@ _ROTATION: dict[tuple[str, str], itertools.count[int]] = {}
 # `app/core/config.py`, and keys named `<PROVIDER>_KEY_<name>_*`. Listed so a
 # typo'd feature fails loudly at the call rather than quietly finding no keys.
 FEATURE_GEO: Final = "GEO"
-KNOWN_FEATURES: Final = frozenset({FEATURE_GEO})
+FEATURE_EXTRACT: Final = "EXTRACT"
+KNOWN_FEATURES: Final = frozenset({FEATURE_GEO, FEATURE_EXTRACT})
 
 
 def _env_pairs() -> dict[str, str]:

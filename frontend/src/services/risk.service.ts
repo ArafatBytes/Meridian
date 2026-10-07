@@ -155,7 +155,58 @@ export function regionToBbox(
   return [round(west), round(south), round(east), round(north)].join(',');
 }
 
+/**
+ * The last Live Risk Agent run, from `GET /ingestion/status` (D04).
+ *
+ * `mode: 'replay'` means the backend is serving the captured offline replay
+ * (`RISK_SURFACE_IMPL=seeded`) and there is no run to report.
+ */
+export interface IngestionStatus {
+  mode: 'live' | 'replay';
+  lastRun: {
+    startedAt: string;
+    finishedAt: string | null;
+    status: 'running' | 'ok' | 'partial' | 'failed';
+    documentsRead: number;
+    flagsPublished: number;
+  } | null;
+}
+
+interface IngestionStatusWire {
+  mode: 'live' | 'replay';
+  last_run: {
+    started_at: string;
+    finished_at: string | null;
+    status: 'running' | 'ok' | 'partial' | 'failed';
+    documents_read: number;
+    flags_published: number;
+  } | null;
+}
+
 class RiskService {
+  async getIngestionStatus(): Promise<IngestionStatus> {
+    // Same unwrapped-body situation as getFlagsInRegion below.
+    const wire = (await apiService.get<IngestionStatusWire>(
+      '/ingestion/status',
+    )) as unknown as IngestionStatusWire;
+    const run = wire.last_run;
+    return {
+      mode: wire.mode,
+      lastRun: run && {
+        startedAt: run.started_at,
+        finishedAt: run.finished_at,
+        status: run.status,
+        documentsRead: run.documents_read,
+        flagsPublished: run.flags_published,
+      },
+    };
+  }
+
+  /** Ask the backend to read the news now. Returns once the run is accepted, not done. */
+  async runIngestion(): Promise<void> {
+    await apiService.post('/ingestion/run');
+  }
+
   /**
    * Live risk flags inside a map region.
    *

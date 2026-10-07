@@ -58,6 +58,14 @@ FIXTURE_PATH: Final[Path] = (
     Path(__file__).resolve().parent.parent.parent / "data" / "fixtures" / "risk_flags.json"
 )
 
+REPLAY_PATH: Final[Path] = FIXTURE_PATH.with_name("live_replay.json")
+"""
+Captured live news flags (D04), in this same compact entry form, written by
+`python -m app.agents export-replay`. Served only by `SeededRiskSurface` — the
+offline demo path — and never seeded into the database, where the live agent's own
+rows already are. Absent until a capture has been made, which is not an error.
+"""
+
 SEED_KEY_PREFIX: Final[str] = "seed-"
 """
 Every row this module produces carries it.
@@ -268,14 +276,21 @@ def fixture_rows(
     now: datetime,
     *,
     include_chronic: bool = True,
+    include_replay: bool = False,
     fixture_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     """
-    The whole seeded surface: hand-built event flags, then the chronic baseline.
+    The whole seeded surface: hand-built event flags, then the chronic baseline, then
+    (for the offline surface only) the captured live news flags.
 
     `include_chronic` exists for one case — a test that wants only the hand-built
     entries, because the chronic layer is derived from a data file rather than from
     this fixture and has its own tests. Nothing in the demo path turns it off.
+
+    `include_replay` is off by default so the seeder never writes captured news into
+    a database that already holds the live originals. Replay entries go through the
+    same `_row_from_entry` and `check_rows` as everything else: no prose, `seed-`
+    keys, the same constraints.
     """
     path = fixture_path or FIXTURE_PATH
     raw = json.loads(path.read_text(encoding="utf-8"))
@@ -283,6 +298,9 @@ def fixture_rows(
     rows = [_row_from_entry(entry, now) for entry in raw["flags"]]
     if include_chronic:
         rows += chronic_rows(now)
+    if include_replay and REPLAY_PATH.is_file():
+        replay = json.loads(REPLAY_PATH.read_text(encoding="utf-8"))
+        rows += [_row_from_entry(entry, now) for entry in replay["flags"]]
 
     check_rows(rows)
     return rows
