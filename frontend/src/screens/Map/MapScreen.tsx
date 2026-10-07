@@ -34,6 +34,8 @@ import type { RiskFlag } from '../../types/contracts/risk';
 import { routeService, RouteResponse, Location } from '../../services/route.service';
 import { riskService } from '../../services/risk.service';
 import RiskFlagSheet, { riskBand } from '../../components/RiskFlagSheet';
+import PlaceSearch from '../../components/PlaceSearch';
+import type { GeoResolution } from '../../types/contracts/geo';
 
 interface CrimeReportData {
   id: string;
@@ -148,6 +150,9 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   const [riskFlags, setRiskFlags] = useState<RiskFlag[]>([]);
   const [riskError, setRiskError] = useState<string | null>(null);
   const [selectedFlag, setSelectedFlag] = useState<RiskFlag | null>(null);
+  // Where a place search landed, so the map can show it. Null until a search
+  // resolves; an unresolved search deliberately leaves this alone (no pin).
+  const [resolvedPlace, setResolvedPlace] = useState<GeoResolution | null>(null);
   // The instant the server evaluated the surface at, echoed back in the response. The
   // sheet needs it to say how long a flag has left *from the moment being shown*, not
   // from now -- otherwise dragging the time control forward would show a flag with
@@ -435,6 +440,24 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     );
   };
 
+
+  // A place search resolved: move the map to it and drop a pin.
+  //
+  // The zoom follows the entry's own radius, so a junction fills the screen and a
+  // suburb does not pretend to be a point. Only called for resolved answers —
+  // PlaceSearch does not report an unresolved one, which is what keeps the "never
+  // guess" invariant visible on the map rather than only in the API.
+  const flyToResolved = (resolution: GeoResolution) => {
+    const span = Math.max(0.01, (resolution.radiusM / 111_000) * 8);
+    setResolvedPlace(resolution);
+    setRegion({
+      latitude: resolution.lat,
+      longitude: resolution.lon,
+      latitudeDelta: span,
+      longitudeDelta: span,
+    });
+  };
+
   return (
     <View style={styles.container}>
       <MapView
@@ -534,6 +557,19 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         })}
 
         {/* Crime Report Markers */}
+        {!routeMode && resolvedPlace && (
+          <Marker
+            coordinate={{ latitude: resolvedPlace.lat, longitude: resolvedPlace.lon }}
+            title={resolvedPlace.resolvedName}
+            description={
+              resolvedPlace.method === 'gazetteer'
+                ? 'From our Dhaka gazetteer'
+                : 'Inferred by AI'
+            }
+            pinColor={resolvedPlace.method === 'gazetteer' ? '#2E7D32' : '#1565C0'}
+          />
+        )}
+
         {!routeMode && crimeReports.map(crime => (
           <Marker
             key={crime.id}
@@ -552,10 +588,33 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         ))}
       </MapView>
 
+      {/* Place search - demo beat 3. Hidden in route mode, which has its own inputs. */}
+      {!routeMode && (
+        <View style={[styles.searchContainer, { top: insets.top + spacing.xs }]}>
+          <PlaceSearch onResolved={flyToResolved} />
+        </View>
+      )}
+
       {/* Route Search Interface (Google Maps Style) */}
       {routeMode && (
         <View style={[styles.searchContainer, { top: insets.top + spacing.xs }]}>
           <View style={styles.searchBox}>
+            {/* The way out of route mode. It lives inside the card because the
+                floating button that used to do this job sat underneath the card and
+                could not be tapped, and route mode has no other exit — a reload was
+                the only escape. A close control belongs on the thing it closes. */}
+            <View style={styles.routeHeader}>
+              <Text style={styles.routeHeaderTitle}>Plan a route</Text>
+              <TouchableOpacity
+                onPress={toggleRouteMode}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Close route planning"
+              >
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
             {/* Source Input */}
             <View style={styles.inputRow}>
               <View style={[styles.inputDot, styles.sourceDot]} />
@@ -646,20 +705,28 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         </TouchableOpacity>
       )}
 
-      {/* Route Button */}
-      <TouchableOpacity
-        style={[
-          styles.actionButton,
-          {
-            top: insets.top + spacing.xl + (routeMode ? 0 : 70),
-            right: spacing.lg,
-            backgroundColor: routeMode ? colors.error : colors.primary
-          }
-        ]}
-        onPress={toggleRouteMode}
-      >
-        <Ionicons name={routeMode ? "close" : "navigate"} size={24} color={colors.white} />
-      </TouchableOpacity>
+      {/* Enter route mode. Leaving it is the card's own close control, not this
+          button: in route mode this sat inside the route card and under it, so it
+          could not be tapped at all. It is hidden there now rather than restyled,
+          because a 56px floating circle on top of a text field was reachable but
+          still wrong. */}
+      {!routeMode && (
+        <TouchableOpacity
+          style={[
+            styles.actionButton,
+            {
+              top: insets.top + spacing.xl + 70,
+              right: spacing.lg,
+              backgroundColor: colors.primary
+            }
+          ]}
+          onPress={toggleRouteMode}
+          accessibilityRole="button"
+          accessibilityLabel="Plan a route"
+        >
+          <Ionicons name="navigate" size={24} color={colors.white} />
+        </TouchableOpacity>
+      )}
 
       {/* Route Info Card */}
       {routeMode && calculatedRoutes.length > 0 && (
@@ -944,6 +1011,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
   },
+  // Enters route mode. Keep it above the search card: it sits just below that card
+  // and the card grows when a place resolves, so without this it can end up buried.
+  //
+  // That is not hypothetical. In route mode this button used to be the only way
+  // *out*, positioned inside the route card which carries zIndex 10 and elevation 8
+  // — it lost every stacking contest, could not be tapped, and left a reload as the
+  // only escape. Found on a phone during D03's walkthrough with tsc, ESLint and Jest
+  // all green; z-order and reachability are not things they can see.
+  //
+  // Both values are needed: zIndex settles it on iOS, elevation on Android.
   actionButton: {
     position: 'absolute',
     width: 56,
@@ -951,11 +1028,23 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 4,
+    zIndex: 11,
+    elevation: 9,
     shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
+  },
+  routeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  routeHeaderTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.text,
   },
   routeInfoCard: {
     position: 'absolute',

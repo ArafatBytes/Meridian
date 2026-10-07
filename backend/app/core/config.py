@@ -166,9 +166,45 @@ class Settings(BaseSettings):
 
     # Anthropic (first used in S04; declared now so the values are not silently
     # dropped by extra="ignore" the way SUPABASE_URL was)
+    #
+    # Unused as of D03: this project has no Anthropic key. The LLM tier runs on
+    # the free Gemini and Groq endpoints instead, both of which speak the OpenAI
+    # wire format — see LLM_CHAIN below and app/llm/client.py. Kept declared so a
+    # key can be dropped in later without a code change.
     ANTHROPIC_API_KEY: str = ""
     LLM_MODEL_JUDGMENT: str = "claude-opus-5-5"
     LLM_MODEL_BULK: str = "claude-sonnet-5-5"
+
+    # Which models answer, in order, as `provider:model` pairs. The first that
+    # returns a validated response wins; a rate limit moves to the next key for
+    # that provider and then to the next pair. Providers are the keys of
+    # app.llm.client.PROVIDERS, and their API keys are discovered from every
+    # variable named GEMINI_KEY_* / GROQ_KEY_*, so adding a second account's key
+    # widens the quota with no code change.
+    #
+    # This default was measured, not guessed — a six-case probe of real Dhaka
+    # place names on 2026-10-07. gemini-3.5-flash-lite answered 6/6 and refused
+    # both fabricated places. gpt-oss-120b is second because it is a *different
+    # provider*: a same-provider fallback shares the rate limit and so fails at
+    # the same moment as the primary. gemini-3.1-flash-lite is deliberately
+    # absent despite scoring 5/6 — it invented coordinates for a place that does
+    # not exist, reproducibly, at 0.95 confidence.
+    # Named per FEATURE, not globally. A feature is one job that needs a model:
+    # GEO here, and later EXTRACT (D04), VISION (D07), CASEWORK (D08). Two reasons
+    # the split is worth a longer variable name:
+    #
+    #   Different jobs want different models. openai/gpt-oss-120b is a sound
+    #   fallback for place names and is NOT multimodal, so the same chain would
+    #   simply fail for D07's images — behind a name that gave no hint of it.
+    #
+    #   Keys are per-feature too (GEMINI_KEY_GEO_ONE, GROQ_KEY_GEO_ONE, ...). On
+    #   this project multiple keys belong to different accounts, so their quotas
+    #   are independent: D04's ingestion loop cannot exhaust the daily budget
+    #   D03's search box needs. Sharing one pool hides that until a rehearsal.
+    #
+    # Add a feature by declaring LLM_CHAIN_<NAME> here and adding <NAME> to
+    # app.llm.client.KNOWN_FEATURES. An unknown feature raises at the call site.
+    LLM_CHAIN_GEO: str = "gemini:gemini-3.5-flash-lite,groq:openai/gpt-oss-120b"
     
     
     # Rate Limiting

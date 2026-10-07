@@ -242,3 +242,8 @@ temp_interactive_push.bat
 # Regenerated on demand and carrying timestamps relative to when they were made,
 # so never worth committing.
 .seed-sql/
+
+# Raw Overpass answers cached by scripts/harvest_gazetteer.py so a re-run resumes
+# after a mirror times out. Regenerable, a few hundred KB, and not the gazetteer
+# itself — backend/data/gazetteer/*.json IS committed.
+backend/data/gazetteer/.osm-cache/

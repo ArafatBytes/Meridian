@@ -1,0 +1,325 @@
+{
+  "_README": {
+    "what": "Held-out reference set for Dhaka place resolution. Measured by scripts/eval_geocoding.py.",
+    "how_to_read_a_case": {
+      "query": "What a user types. Bangla script, romanised, or mixed — as people actually write.",
+      "lat/lon": "Where the place really is. null means the query must be REFUSED.",
+      "note": "Why this case is here, when that is not obvious."
+    },
+    "scoring": [
+      "A positive case passes if the method is gazetteer or llm_gazetteer and the",
+      "answer is within TOLERANCE_KM of lat/lon. Refusing a real place is a miss.",
+      "A negative case (lat null) passes only if the method is unresolved. Returning",
+      "coordinates for a place that does not exist is the worst outcome in this set",
+      "and is counted separately as a FABRICATION, because it is the failure the",
+      "discard invariant exists to prevent."
+    ],
+    "honesty_about_this_set": [
+      "These references were written by the person building the feature, not by an",
+      "independent annotator, and the coordinates for gazetteer-covered places come",
+      "from the same OpenStreetMap data the gazetteer was harvested from. So this",
+      "measures 'does a realistic query reach the right record', not 'are the",
+      "coordinates independently correct'. Treat it as a regression set with a",
+      "meaningful headline number, not as a survey.",
+      "Deliberately held out: none of these exact strings were added to",
+      "data/gazetteer/aliases.json. The spelling variants here are the ones the",
+      "fuzzy matcher and the LLM tier have to earn."
+    ],
+    "tolerance_km": 1.0,
+    "tolerance_rule": "Effective tolerance is max(tolerance_km, the matched entry's radius_m / 1000). Demanding a 1 km fix on 'Uttara', an area 1,200 m in radius, measures the reference writer's choice of centroid rather than the resolver. An answer inside the place's own extent is correct.",
+    "corrections_log": "Two reference coordinates were corrected after the first run, both because the reference was wrong and OSM was right: Uttara and Sat rasta. Listed in their own notes. No reference was changed to make a failing case pass where the resolver was at fault."
+  },
+  "cases": [
+    {
+      "query": "Mirpur 10 golchattar",
+      "lat": 23.8071,
+      "lon": 90.3686,
+      "note": "DEMO_PLAN beat 3, verbatim"
+    },
+    {
+      "query": "মিরপুর ১০ গোলচত্বর",
+      "lat": 23.8071,
+      "lon": 90.3686,
+      "note": "the same, Bangla script"
+    },
+    {
+      "query": "Mirpur 10 Circle",
+      "lat": 23.8071,
+      "lon": 90.3686,
+      "note": "the OSM spelling"
+    },
+    {
+      "query": "মিরপুর-১০ গোলচক্কর",
+      "lat": 23.8071,
+      "lon": 90.3686
+    },
+    {
+      "query": "Mirpur 10 golchokkor",
+      "lat": 23.8071,
+      "lon": 90.3686,
+      "note": "romanised the OSM way; not an alias"
+    },
+    {
+      "query": "Jatrabari chourasta",
+      "lat": 23.71,
+      "lon": 90.4346,
+      "note": "D03 heading"
+    },
+    {
+      "query": "যাত্রাবাড়ী চৌরাস্তা",
+      "lat": 23.71,
+      "lon": 90.4346
+    },
+    {
+      "query": "Jatrabari mor",
+      "lat": 23.71,
+      "lon": 90.4346
+    },
+    {
+      "query": "Shahbagh mor",
+      "lat": 23.7381,
+      "lon": 90.3958,
+      "note": "S10 vocabulary"
+    },
+    {
+      "query": "শাহবাগ মোড়",
+      "lat": 23.7381,
+      "lon": 90.3958
+    },
+    {
+      "query": "Shahbag",
+      "lat": 23.7381,
+      "lon": 90.3958
+    },
+    {
+      "query": "Farmgate",
+      "lat": 23.759,
+      "lon": 90.3871,
+      "note": "was wrongly refused as ambiguous once"
+    },
+    {
+      "query": "ফার্মগেট",
+      "lat": 23.759,
+      "lon": 90.3871
+    },
+    {
+      "query": "Motijheel",
+      "lat": 23.733,
+      "lon": 90.4172
+    },
+    {
+      "query": "মতিঝিল",
+      "lat": 23.733,
+      "lon": 90.4172
+    },
+    {
+      "query": "Gulistan",
+      "lat": 23.725,
+      "lon": 90.4106
+    },
+    {
+      "query": "গুলিস্তান",
+      "lat": 23.725,
+      "lon": 90.4106
+    },
+    {
+      "query": "Shapla chattar",
+      "lat": 23.7276,
+      "lon": 90.4186,
+      "note": "চত্বর vs চত্তর spelling"
+    },
+    {
+      "query": "শাপলা চত্বর",
+      "lat": 23.7276,
+      "lon": 90.4186
+    },
+    {
+      "query": "Zero Point",
+      "lat": 23.7305,
+      "lon": 90.41
+    },
+    {
+      "query": "Gabtoli bus terminal",
+      "lat": 23.781,
+      "lon": 90.344
+    },
+    {
+      "query": "গাবতলী",
+      "lat": 23.781,
+      "lon": 90.344
+    },
+    {
+      "query": "Sayedabad bus terminal",
+      "lat": 23.7135,
+      "lon": 90.428
+    },
+    {
+      "query": "সায়েদাবাদ",
+      "lat": 23.7135,
+      "lon": 90.428
+    },
+    {
+      "query": "Kamalapur railway station",
+      "lat": 23.732,
+      "lon": 90.4263
+    },
+    {
+      "query": "কমলাপুর রেলস্টেশন",
+      "lat": 23.732,
+      "lon": 90.4263
+    },
+    {
+      "query": "Mohakhali",
+      "lat": 23.7806,
+      "lon": 90.4053
+    },
+    {
+      "query": "মহাখালী",
+      "lat": 23.7806,
+      "lon": 90.4053
+    },
+    {
+      "query": "Dhanmondi",
+      "lat": 23.7479,
+      "lon": 90.3746
+    },
+    {
+      "query": "ধানমন্ডি",
+      "lat": 23.7479,
+      "lon": 90.3746
+    },
+    {
+      "query": "Uttara",
+      "lat": 23.8693,
+      "lon": 90.3927,
+      "note": "Reference CORRECTED 2026-10-07: first written as 23.8759,90.3795, which is about 1.5 km northwest of Uttara's centre. OSM's place node is right and this set was wrong. Recorded rather than quietly edited."
+    },
+    {
+      "query": "Bongshal mor",
+      "lat": 23.719,
+      "lon": 90.407
+    },
+    {
+      "query": "Fakirapool mor",
+      "lat": 23.734,
+      "lon": 90.4139
+    },
+    {
+      "query": "Kaptan bazar",
+      "lat": 23.7214,
+      "lon": 90.4136
+    },
+    {
+      "query": "Nilkhet mor",
+      "lat": 23.733,
+      "lon": 90.3853
+    },
+    {
+      "query": "Sat rasta",
+      "lat": 23.7568,
+      "lon": 90.3989,
+      "note": "Reference CORRECTED 2026-10-07: first written as 23.7700,90.3970, which is about 1.5 km north of the Tejgaon Saat Rasta crossing. The ground truth was wrong, not the resolver."
+    },
+    {
+      "query": "TSC",
+      "lat": 23.734,
+      "lon": 90.393,
+      "note": "abbreviation, no place word at all"
+    },
+    {
+      "query": "Doinik Bangla mor",
+      "lat": 23.732,
+      "lon": 90.416
+    },
+    {
+      "query": "Mirpur 1",
+      "lat": 23.7985,
+      "lon": 90.3537,
+      "note": "must not become Mirpur 10 or 11"
+    },
+    {
+      "query": "Mirpur 11",
+      "lat": 23.8191,
+      "lon": 90.3653,
+      "note": "must not become Mirpur 10"
+    },
+    {
+      "query": "Sector 10",
+      "lat": 23.8823,
+      "lon": 90.3894,
+      "note": "must not become Sector 11"
+    },
+    {
+      "query": "Mirpur 10 Cirlce",
+      "lat": 23.8071,
+      "lon": 90.3686,
+      "note": "transposed letters; fuzzy tier"
+    },
+    {
+      "query": "Hatirjheel",
+      "lat": 23.7556,
+      "lon": 90.4042,
+      "note": "not harvested; LLM tier must earn it"
+    },
+    {
+      "query": "Road 27 Dhanmondi",
+      "lat": 23.7517,
+      "lon": 90.3756,
+      "note": "LLM tier"
+    },
+    {
+      "query": "Bashundhara City",
+      "lat": 23.7509,
+      "lon": 90.3903,
+      "note": "shopping centre; LLM tier likely"
+    },
+    {
+      "query": "Kolabagan Antarctic Research Station",
+      "lat": null,
+      "lon": null,
+      "note": "does not exist anywhere"
+    },
+    {
+      "query": "মিরপুর ৯৯ নম্বর গোলচত্বর",
+      "lat": null,
+      "lon": null,
+      "note": "Mirpur has no sector 99; a model fabricated this one"
+    },
+    {
+      "query": "Eiffel Tower",
+      "lat": null,
+      "lon": null,
+      "note": "real, but not in Dhaka — the bbox gate"
+    },
+    {
+      "query": "Dhaka Interplanetary Spaceport",
+      "lat": null,
+      "lon": null,
+      "note": "plausible-sounding and fictional"
+    },
+    {
+      "query": "zzzzqqqq wwww",
+      "lat": null,
+      "lon": null,
+      "note": "not a place name at all"
+    },
+    {
+      "query": "Sector 11",
+      "lat": null,
+      "lon": null,
+      "note": "genuinely ambiguous in Dhaka: Uttara and Bashundhara, 10 km apart. Refusing is correct; the LLM tier may still answer, which this case records rather than hides."
+    },
+    {
+      "query": "Gulshan 97 golchattar",
+      "lat": null,
+      "lon": null,
+      "note": "Gulshan has no circle 97"
+    },
+    {
+      "query": "Times Square Dhaka",
+      "lat": null,
+      "lon": null,
+      "note": "borrowed name for a place that is not a Dhaka landmark"
+    }
+  ]
+}

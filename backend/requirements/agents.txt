@@ -10,7 +10,13 @@
 # dependency at the start of a one-day sprint costs more than carrying it early.
 # =============================================================================
 
-# ---- the only module that may import this is app/llm/client.py (D03) ---------
+# ---- the only module that may import these is app/llm/client.py (D03) --------
+# openai is the SDK in use, pointed at Gemini and Groq: both serve the OpenAI
+# Chat Completions wire format, so one client reaches either by changing the
+# base URL, the key and the model name. See LLM_CHAIN in .env.example.
+openai
+# anthropic is unused as of D03 — this project has no Anthropic key. Kept so a
+# key can be dropped in later without touching requirements.
 anthropic
 
 # ---- scheduling --------------------------------------------------------------

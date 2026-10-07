@@ -1,0 +1,1002 @@
+{
+  "gazetteer_only": {
+    "summary": {
+      "total": 53,
+      "counts": {
+        "HIT": 42,
+        "MISS": 3,
+        "REFUSED": 8
+      },
+      "by_method": {
+        "gazetteer": 42,
+        "unresolved": 11
+      },
+      "positives": 45,
+      "negatives": 8,
+      "accuracy_on_real_places": 0.9333,
+      "refusal_rate_on_fakes": 1.0,
+      "fabrications": 0,
+      "median_error_km": 0.006,
+      "max_error_km": 0.581
+    },
+    "rows": [
+      {
+        "query": "Mirpur 10 golchattar",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Mirpur-10 Circle",
+        "note": "DEMO_PLAN beat 3, verbatim"
+      },
+      {
+        "query": "মিরপুর ১০ গোলচত্বর",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Mirpur-10 Circle",
+        "note": "the same, Bangla script"
+      },
+      {
+        "query": "Mirpur 10 Circle",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Mirpur-10 Circle",
+        "note": "the OSM spelling"
+      },
+      {
+        "query": "মিরপুর-১০ গোলচক্কর",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Mirpur-10 Circle",
+        "note": ""
+      },
+      {
+        "query": "Mirpur 10 golchokkor",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 0.9,
+        "error_km": 0.002,
+        "resolved_name": "Mirpur-10 Circle",
+        "note": "romanised the OSM way; not an alias"
+      },
+      {
+        "query": "Jatrabari chourasta",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.005,
+        "resolved_name": "Jatrabari Mor",
+        "note": "D03 heading"
+      },
+      {
+        "query": "যাত্রাবাড়ী চৌরাস্তা",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.005,
+        "resolved_name": "Jatrabari Mor",
+        "note": ""
+      },
+      {
+        "query": "Jatrabari mor",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.005,
+        "resolved_name": "Jatrabari Mor",
+        "note": ""
+      },
+      {
+        "query": "Shahbagh mor",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Shahbag Intersection",
+        "note": "S10 vocabulary"
+      },
+      {
+        "query": "শাহবাগ মোড়",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Shahbag Intersection",
+        "note": ""
+      },
+      {
+        "query": "Shahbag",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.153,
+        "resolved_name": "Shahbagh",
+        "note": ""
+      },
+      {
+        "query": "Farmgate",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.004,
+        "resolved_name": "Farmgate",
+        "note": "was wrongly refused as ambiguous once"
+      },
+      {
+        "query": "ফার্মগেট",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.004,
+        "resolved_name": "Farmgate",
+        "note": ""
+      },
+      {
+        "query": "Motijheel",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.581,
+        "resolved_name": "Motijheel",
+        "note": ""
+      },
+      {
+        "query": "মতিঝিল",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.581,
+        "resolved_name": "Motijheel",
+        "note": ""
+      },
+      {
+        "query": "Gulistan",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.151,
+        "resolved_name": "Gulistan",
+        "note": ""
+      },
+      {
+        "query": "গুলিস্তান",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.151,
+        "resolved_name": "Gulistan",
+        "note": ""
+      },
+      {
+        "query": "Shapla chattar",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.312,
+        "resolved_name": "Shapla Square",
+        "note": "চত্বর vs চত্তর spelling"
+      },
+      {
+        "query": "শাপলা চত্বর",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.312,
+        "resolved_name": "Shapla Square",
+        "note": ""
+      },
+      {
+        "query": "Zero Point",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.319,
+        "resolved_name": "Zero Point",
+        "note": ""
+      },
+      {
+        "query": "Gabtoli bus terminal",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.006,
+        "resolved_name": "Gabtoli Bus station",
+        "note": ""
+      },
+      {
+        "query": "গাবতলী",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.264,
+        "resolved_name": "গাবতলী",
+        "note": ""
+      },
+      {
+        "query": "Sayedabad bus terminal",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.004,
+        "resolved_name": "Saydabad",
+        "note": ""
+      },
+      {
+        "query": "সায়েদাবাদ",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.004,
+        "resolved_name": "Saydabad",
+        "note": ""
+      },
+      {
+        "query": "Kamalapur railway station",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.006,
+        "resolved_name": "Kamalapur Railway Station",
+        "note": ""
+      },
+      {
+        "query": "কমলাপুর রেলস্টেশন",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.006,
+        "resolved_name": "Kamalapur Railway Station",
+        "note": ""
+      },
+      {
+        "query": "Mohakhali",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.143,
+        "resolved_name": "Mohakhali",
+        "note": ""
+      },
+      {
+        "query": "মহাখালী",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.143,
+        "resolved_name": "Mohakhali",
+        "note": ""
+      },
+      {
+        "query": "Dhanmondi",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Dhanmondi",
+        "note": ""
+      },
+      {
+        "query": "ধানমন্ডি",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Dhanmondi",
+        "note": ""
+      },
+      {
+        "query": "Uttara",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.003,
+        "resolved_name": "Uttara",
+        "note": "Reference CORRECTED 2026-10-07: first written as 23.8759,90.3795, which is about 1.5 km northwest of Uttara's centre. OSM's place node is right and this set was wrong. Recorded rather than quietly edited."
+      },
+      {
+        "query": "Bongshal mor",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.241,
+        "resolved_name": "Bongshal Mor",
+        "note": ""
+      },
+      {
+        "query": "Fakirapool mor",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.359,
+        "resolved_name": "Fakirapool Mor",
+        "note": ""
+      },
+      {
+        "query": "Kaptan bazar",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.112,
+        "resolved_name": "Kaptan Bazar",
+        "note": ""
+      },
+      {
+        "query": "Nilkhet mor",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.187,
+        "resolved_name": "Nilkhet (Gawsul Azam) Mor",
+        "note": ""
+      },
+      {
+        "query": "Sat rasta",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.001,
+        "resolved_name": "Sat Rasta",
+        "note": "Reference CORRECTED 2026-10-07: first written as 23.7700,90.3970, which is about 1.5 km north of the Tejgaon Saat Rasta crossing. The ground truth was wrong, not the resolver."
+      },
+      {
+        "query": "TSC",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.303,
+        "resolved_name": "TSC Mor",
+        "note": "abbreviation, no place word at all"
+      },
+      {
+        "query": "Doinik Bangla mor",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.208,
+        "resolved_name": "Doinik Bangla Mor",
+        "note": ""
+      },
+      {
+        "query": "Mirpur 1",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.405,
+        "resolved_name": "Mirpur 1",
+        "note": "must not become Mirpur 10 or 11"
+      },
+      {
+        "query": "Mirpur 11",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Mirpur 11",
+        "note": "must not become Mirpur 10"
+      },
+      {
+        "query": "Sector 10",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.005,
+        "resolved_name": "Sector 10",
+        "note": "must not become Sector 11"
+      },
+      {
+        "query": "Mirpur 10 Cirlce",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 0.938,
+        "error_km": 0.002,
+        "resolved_name": "Mirpur-10 Circle",
+        "note": "transposed letters; fuzzy tier"
+      },
+      {
+        "query": "Hatirjheel",
+        "outcome": "MISS",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "Hatirjheel",
+        "note": "not harvested; LLM tier must earn it"
+      },
+      {
+        "query": "Road 27 Dhanmondi",
+        "outcome": "MISS",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "Road 27 Dhanmondi",
+        "note": "LLM tier"
+      },
+      {
+        "query": "Bashundhara City",
+        "outcome": "MISS",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "Bashundhara City",
+        "note": "shopping centre; LLM tier likely"
+      },
+      {
+        "query": "Kolabagan Antarctic Research Station",
+        "outcome": "REFUSED",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "Kolabagan Antarctic Research Station",
+        "note": "does not exist anywhere"
+      },
+      {
+        "query": "মিরপুর ৯৯ নম্বর গোলচত্বর",
+        "outcome": "REFUSED",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "মিরপুর ৯৯ নম্বর গোলচত্বর",
+        "note": "Mirpur has no sector 99; a model fabricated this one"
+      },
+      {
+        "query": "Eiffel Tower",
+        "outcome": "REFUSED",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "Eiffel Tower",
+        "note": "real, but not in Dhaka — the bbox gate"
+      },
+      {
+        "query": "Dhaka Interplanetary Spaceport",
+        "outcome": "REFUSED",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "Dhaka Interplanetary Spaceport",
+        "note": "plausible-sounding and fictional"
+      },
+      {
+        "query": "zzzzqqqq wwww",
+        "outcome": "REFUSED",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "zzzzqqqq wwww",
+        "note": "not a place name at all"
+      },
+      {
+        "query": "Sector 11",
+        "outcome": "REFUSED",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "Sector 11",
+        "note": "genuinely ambiguous in Dhaka: Uttara and Bashundhara, 10 km apart. Refusing is correct; the LLM tier may still answer, which this case records rather than hides."
+      },
+      {
+        "query": "Gulshan 97 golchattar",
+        "outcome": "REFUSED",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "Gulshan 97 golchattar",
+        "note": "Gulshan has no circle 97"
+      },
+      {
+        "query": "Times Square Dhaka",
+        "outcome": "REFUSED",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "Times Square Dhaka",
+        "note": "borrowed name for a place that is not a Dhaka landmark"
+      }
+    ]
+  },
+  "with_llm": {
+    "summary": {
+      "total": 53,
+      "counts": {
+        "HIT": 45,
+        "REFUSED": 8
+      },
+      "by_method": {
+        "gazetteer": 42,
+        "llm_gazetteer": 3,
+        "unresolved": 8
+      },
+      "positives": 45,
+      "negatives": 8,
+      "accuracy_on_real_places": 1.0,
+      "refusal_rate_on_fakes": 1.0,
+      "fabrications": 0,
+      "median_error_km": 0.006,
+      "max_error_km": 0.581
+    },
+    "rows": [
+      {
+        "query": "Mirpur 10 golchattar",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Mirpur-10 Circle",
+        "note": "DEMO_PLAN beat 3, verbatim"
+      },
+      {
+        "query": "মিরপুর ১০ গোলচত্বর",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Mirpur-10 Circle",
+        "note": "the same, Bangla script"
+      },
+      {
+        "query": "Mirpur 10 Circle",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Mirpur-10 Circle",
+        "note": "the OSM spelling"
+      },
+      {
+        "query": "মিরপুর-১০ গোলচক্কর",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Mirpur-10 Circle",
+        "note": ""
+      },
+      {
+        "query": "Mirpur 10 golchokkor",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 0.9,
+        "error_km": 0.002,
+        "resolved_name": "Mirpur-10 Circle",
+        "note": "romanised the OSM way; not an alias"
+      },
+      {
+        "query": "Jatrabari chourasta",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.005,
+        "resolved_name": "Jatrabari Mor",
+        "note": "D03 heading"
+      },
+      {
+        "query": "যাত্রাবাড়ী চৌরাস্তা",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.005,
+        "resolved_name": "Jatrabari Mor",
+        "note": ""
+      },
+      {
+        "query": "Jatrabari mor",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.005,
+        "resolved_name": "Jatrabari Mor",
+        "note": ""
+      },
+      {
+        "query": "Shahbagh mor",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Shahbag Intersection",
+        "note": "S10 vocabulary"
+      },
+      {
+        "query": "শাহবাগ মোড়",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Shahbag Intersection",
+        "note": ""
+      },
+      {
+        "query": "Shahbag",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.153,
+        "resolved_name": "Shahbagh",
+        "note": ""
+      },
+      {
+        "query": "Farmgate",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.004,
+        "resolved_name": "Farmgate",
+        "note": "was wrongly refused as ambiguous once"
+      },
+      {
+        "query": "ফার্মগেট",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.004,
+        "resolved_name": "Farmgate",
+        "note": ""
+      },
+      {
+        "query": "Motijheel",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.581,
+        "resolved_name": "Motijheel",
+        "note": ""
+      },
+      {
+        "query": "মতিঝিল",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.581,
+        "resolved_name": "Motijheel",
+        "note": ""
+      },
+      {
+        "query": "Gulistan",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.151,
+        "resolved_name": "Gulistan",
+        "note": ""
+      },
+      {
+        "query": "গুলিস্তান",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.151,
+        "resolved_name": "Gulistan",
+        "note": ""
+      },
+      {
+        "query": "Shapla chattar",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.312,
+        "resolved_name": "Shapla Square",
+        "note": "চত্বর vs চত্তর spelling"
+      },
+      {
+        "query": "শাপলা চত্বর",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.312,
+        "resolved_name": "Shapla Square",
+        "note": ""
+      },
+      {
+        "query": "Zero Point",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.319,
+        "resolved_name": "Zero Point",
+        "note": ""
+      },
+      {
+        "query": "Gabtoli bus terminal",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.006,
+        "resolved_name": "Gabtoli Bus station",
+        "note": ""
+      },
+      {
+        "query": "গাবতলী",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.264,
+        "resolved_name": "গাবতলী",
+        "note": ""
+      },
+      {
+        "query": "Sayedabad bus terminal",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.004,
+        "resolved_name": "Saydabad",
+        "note": ""
+      },
+      {
+        "query": "সায়েদাবাদ",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.004,
+        "resolved_name": "Saydabad",
+        "note": ""
+      },
+      {
+        "query": "Kamalapur railway station",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.006,
+        "resolved_name": "Kamalapur Railway Station",
+        "note": ""
+      },
+      {
+        "query": "কমলাপুর রেলস্টেশন",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.006,
+        "resolved_name": "Kamalapur Railway Station",
+        "note": ""
+      },
+      {
+        "query": "Mohakhali",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.143,
+        "resolved_name": "Mohakhali",
+        "note": ""
+      },
+      {
+        "query": "মহাখালী",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.143,
+        "resolved_name": "Mohakhali",
+        "note": ""
+      },
+      {
+        "query": "Dhanmondi",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Dhanmondi",
+        "note": ""
+      },
+      {
+        "query": "ধানমন্ডি",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Dhanmondi",
+        "note": ""
+      },
+      {
+        "query": "Uttara",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.003,
+        "resolved_name": "Uttara",
+        "note": "Reference CORRECTED 2026-10-07: first written as 23.8759,90.3795, which is about 1.5 km northwest of Uttara's centre. OSM's place node is right and this set was wrong. Recorded rather than quietly edited."
+      },
+      {
+        "query": "Bongshal mor",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.241,
+        "resolved_name": "Bongshal Mor",
+        "note": ""
+      },
+      {
+        "query": "Fakirapool mor",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.359,
+        "resolved_name": "Fakirapool Mor",
+        "note": ""
+      },
+      {
+        "query": "Kaptan bazar",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.112,
+        "resolved_name": "Kaptan Bazar",
+        "note": ""
+      },
+      {
+        "query": "Nilkhet mor",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.187,
+        "resolved_name": "Nilkhet (Gawsul Azam) Mor",
+        "note": ""
+      },
+      {
+        "query": "Sat rasta",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.001,
+        "resolved_name": "Sat Rasta",
+        "note": "Reference CORRECTED 2026-10-07: first written as 23.7700,90.3970, which is about 1.5 km north of the Tejgaon Saat Rasta crossing. The ground truth was wrong, not the resolver."
+      },
+      {
+        "query": "TSC",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.303,
+        "resolved_name": "TSC Mor",
+        "note": "abbreviation, no place word at all"
+      },
+      {
+        "query": "Doinik Bangla mor",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.208,
+        "resolved_name": "Doinik Bangla Mor",
+        "note": ""
+      },
+      {
+        "query": "Mirpur 1",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.405,
+        "resolved_name": "Mirpur 1",
+        "note": "must not become Mirpur 10 or 11"
+      },
+      {
+        "query": "Mirpur 11",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.002,
+        "resolved_name": "Mirpur 11",
+        "note": "must not become Mirpur 10"
+      },
+      {
+        "query": "Sector 10",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.005,
+        "resolved_name": "Sector 10",
+        "note": "must not become Sector 11"
+      },
+      {
+        "query": "Mirpur 10 Cirlce",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 0.938,
+        "error_km": 0.002,
+        "resolved_name": "Mirpur-10 Circle",
+        "note": "transposed letters; fuzzy tier"
+      },
+      {
+        "query": "Hatirjheel",
+        "outcome": "HIT",
+        "method": "llm_gazetteer",
+        "confidence": 0.75,
+        "error_km": 0.387,
+        "resolved_name": "Hatirjheel",
+        "note": "not harvested; LLM tier must earn it"
+      },
+      {
+        "query": "Road 27 Dhanmondi",
+        "outcome": "HIT",
+        "method": "llm_gazetteer",
+        "confidence": 0.75,
+        "error_km": 0.061,
+        "resolved_name": "Road 27 Dhanmondi",
+        "note": "LLM tier"
+      },
+      {
+        "query": "Bashundhara City",
+        "outcome": "HIT",
+        "method": "llm_gazetteer",
+        "confidence": 0.75,
+        "error_km": 0.113,
+        "resolved_name": "Bashundhara City",
+        "note": "shopping centre; LLM tier likely"
+      },
+      {
+        "query": "Kolabagan Antarctic Research Station",
+        "outcome": "REFUSED",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "Kolabagan Antarctic Research Station",
+        "note": "does not exist anywhere"
+      },
+      {
+        "query": "মিরপুর ৯৯ নম্বর গোলচত্বর",
+        "outcome": "REFUSED",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "মিরপুর ৯৯ নম্বর গোলচত্বর",
+        "note": "Mirpur has no sector 99; a model fabricated this one"
+      },
+      {
+        "query": "Eiffel Tower",
+        "outcome": "REFUSED",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "Eiffel Tower",
+        "note": "real, but not in Dhaka — the bbox gate"
+      },
+      {
+        "query": "Dhaka Interplanetary Spaceport",
+        "outcome": "REFUSED",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "Dhaka Interplanetary Spaceport",
+        "note": "plausible-sounding and fictional"
+      },
+      {
+        "query": "zzzzqqqq wwww",
+        "outcome": "REFUSED",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "zzzzqqqq wwww",
+        "note": "not a place name at all"
+      },
+      {
+        "query": "Sector 11",
+        "outcome": "REFUSED",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "Sector 11",
+        "note": "genuinely ambiguous in Dhaka: Uttara and Bashundhara, 10 km apart. Refusing is correct; the LLM tier may still answer, which this case records rather than hides."
+      },
+      {
+        "query": "Gulshan 97 golchattar",
+        "outcome": "REFUSED",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "Gulshan 97 golchattar",
+        "note": "Gulshan has no circle 97"
+      },
+      {
+        "query": "Times Square Dhaka",
+        "outcome": "REFUSED",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
+        "resolved_name": "Times Square Dhaka",
+        "note": "borrowed name for a place that is not a Dhaka landmark"
+      }
+    ]
+  }
+}
