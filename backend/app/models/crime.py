@@ -7,6 +7,7 @@ from datetime import datetime
 import uuid
 import enum
 from app.core.database import Base
+from app.models.columns import UUIDStr
 
 
 class CrimeCategory(str, enum.Enum):
@@ -30,9 +31,9 @@ class CrimeSeverity(str, enum.Enum):
 class CrimeReport(Base):
     __tablename__ = "crime_reports"
     
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    category = Column(SQLEnum(CrimeCategory), nullable=False)
+    id = Column(UUIDStr, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(UUIDStr, ForeignKey("users.id"), nullable=False)
+    category = Column(SQLEnum(CrimeCategory, name="crime_category"), nullable=False)
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=False)
     incident_date_time = Column(DateTime, nullable=False, index=True)

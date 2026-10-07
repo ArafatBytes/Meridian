@@ -4,15 +4,23 @@ export const APP_NAME = 'Meridian';
 export const APP_VERSION = '1.0.0';
 
 // API Configuration
-// Use your machine's local IP address for physical device testing
-// Run 'ifconfig' (Mac/Linux) or 'ipconfig' (Windows) to find it
-// Don't use 'localhost' for Android emulator or physical device
-export const API_BASE_URL = 'http://192.168.0.103:8000/api/v1';
-
-// For Android Emulator, use:
-// export const API_BASE_URL = 'http://10.0.2.2:8000/api/v1';
-// For Production, use:
-// export const API_BASE_URL = 'https://api.Meridian.com/api/v1';
+//
+// Set EXPO_PUBLIC_API_BASE_URL in frontend/.env. `scripts/run.ps1` and
+// `scripts/run.sh` detect your LAN IP and set it automatically, which is the
+// point: this used to be a hardcoded 192.168.0.103 that was only ever correct
+// on one machine, so the app silently could not reach the backend on any other.
+//
+// Never 'localhost' for a physical device or an Android emulator — that
+// resolves to the device itself, not your machine.
+//   Physical device  → http://<your-LAN-IP>:8000/api/v1
+//   Android emulator → http://10.0.2.2:8000/api/v1
+//   iOS simulator    → http://localhost:8000/api/v1
+//   Production       → https://api.meridian.app/api/v1
+//
+// The fallback keeps the historical value so an unset env var behaves as before
+// rather than failing in a new way.
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://192.168.0.103:8000/api/v1';
 
 export const API_TIMEOUT = 30000; // 30 seconds
 

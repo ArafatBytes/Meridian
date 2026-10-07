@@ -1,0 +1,41 @@
+# =============================================================================
+# Meridian — line endings
+# =============================================================================
+# We both develop on Windows and CI runs on Linux. Without this, Git checks out
+# shell scripts with CRLF and bash fails with `\r: command not found` — a
+# genuinely confusing hour to lose.
+# =============================================================================
+
+# Normalise text in the repo, let Git pick the working-tree ending.
+* text=auto
+
+# These MUST be LF regardless of platform: they are executed by bash or by a
+# Linux container.
+*.sh            text eol=lf
+*.bash          text eol=lf
+Dockerfile      text eol=lf
+*.Dockerfile    text eol=lf
+.gitattributes  text eol=lf
+.gitignore      text eol=lf
+
+# Windows-only helpers must stay CRLF.
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+*.ps1           text eol=crlf
+
+# Binary — never touch, never diff.
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.webp   binary
+*.ico    binary
+*.ttf    binary
+*.otf    binary
+*.woff   binary
+*.woff2  binary
+*.pt     binary
+*.onnx   binary
+*.keystore binary
+
+# Treat large data files as binary in diffs — a 1,105-row CSV diff is noise.
+*.csv  text eol=lf -diff

@@ -42,6 +42,17 @@ class SOSService:
                         except (ValueError, TypeError):
                             continue
                 logger.info(f"✅ Loaded {len(self.police_stations)} police stations")
+                # One distinct email across hundreds of stations means the
+                # contact column is placeholder data, not real routing.
+                distinct = {s.get("email", "") for s in self.police_stations if s.get("email")}
+                if len(self.police_stations) > 10 and len(distinct) <= 1:
+                    logger.warning(
+                        "⚠️  All %d police stations share %d distinct email address(es) - "
+                        "this is placeholder data. Keep POLICE_ROUTING_ENABLED=false "
+                        "until it is replaced (defect 17).",
+                        len(self.police_stations),
+                        len(distinct),
+                    )
             else:
                 logger.warning(f"⚠️ Police stations file not found at {csv_path}")
         except Exception as e:
@@ -59,7 +70,18 @@ class SOSService:
         return R * c
 
     def _get_nearby_police_emails(self, lat: float, lon: float, radius_km: float = 5.0) -> List[str]:
-        """Get emails of police stations within radius"""
+        """Get emails of police stations within radius."""
+        # Off by default. police_stations.csv currently has one placeholder
+        # address repeated across all 606 rows, so with this enabled an SOS
+        # from anywhere in Dhaka emails a stranger. Enable once the CSV holds
+        # real contacts (defect 17, S05).
+        if not settings.POLICE_ROUTING_ENABLED:
+            logger.info(
+                "Police routing disabled (POLICE_ROUTING_ENABLED=false); "
+                "alerting emergency contacts only"
+            )
+            return []
+
         emails = []
         for station in self.police_stations:
             s_lat = station['latitude']

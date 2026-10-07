@@ -1,0 +1,212 @@
+name: CI
+
+# The five jobs from IMPLEMENTATION_PLAN.md §3.5. Three check code; two enforce
+# the relay protocol itself.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ==========================================================================
+  # 1. backend — ruff, mypy, pytest
+  # ==========================================================================
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # Only the tooling, not requirements.txt — that pulls torch, ultralytics
+      # and mediapipe (>2 GB, several minutes) which no check here needs: ruff
+      # never imports, and mypy runs with ignore_missing_imports.
+      # S04 switches this to `pip install -r backend/requirements/dev.txt`.
+      - name: Install tooling
+        run: pip install ruff==0.6.9 mypy==1.11.2 pytest pytest-asyncio pytest-cov
+
+      - name: ruff
+        run: ruff check backend
+
+      - name: ruff format
+        run: ruff format --check backend
+
+      - name: mypy
+        run: mypy --config-file backend/pyproject.toml backend/app
+
+      # No test files exist before S03. Once they do, this enforces the plan's
+      # 70% floor on app/.
+      - name: pytest
+        working-directory: backend
+        run: |
+          if compgen -G "tests/**/test_*.py" > /dev/null; then
+            pytest --cov=app --cov-report=term-missing --cov-fail-under=70
+          else
+            echo "::notice::No test files yet — first land in S03. Skipping."
+          fi
+
+  # ==========================================================================
+  # 1b. supply-chain — injected / obfuscated code
+  # ==========================================================================
+  # Its own job so that when this is the red check, it is unmistakably a
+  # security finding rather than a failing test. frontend/babel.config.js
+  # carried obfuscated malware from the initial commit until S01b; it ran on
+  # every bundle and every Jest invocation.
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for injected code
+        run: bash scripts/scan-injection.sh
+
+  # ==========================================================================
+  # 2. frontend — tsc, eslint, jest
+  # ==========================================================================
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # `npm ci` requires a lockfile, which this repo does not have yet — see
+      # the lockfile-present job below. Switch to `npm ci` once it is committed.
+      - name: Install dependencies
+        working-directory: frontend
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            echo "::warning title=No lockfile::frontend/package-lock.json is not committed. Installs are not reproducible between machines. Commit it (S01 follow-up)."
+            npm install --no-audit --no-fund
+          fi
+
+      # The app reads Supabase config from the environment and throws at import
+      # time if it is absent. These are placeholders so the bundle typechecks;
+      # nothing here connects to a real project.
+      - name: Typecheck
+        working-directory: frontend
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+        run: npx tsc --noEmit
+
+      - name: eslint
+        working-directory: frontend
+        # A RATCHET, not a target. 105 warnings after the SDK 57 upgrade: 69 are the
+        # new React Compiler rules from eslint-plugin-react-hooks v6 (refs,
+        # immutability, set-state-in-effect) firing on pre-existing idiomatic
+        # code -- each one was inspected and none is a live bug. S07/S08 fix
+        # them while decomposing the screens. The rest are unused vars and
+        # exhaustive-deps. This number may only ever go DOWN.
+        #
+        # Errors are always zero-tolerance: ESLint had never run in this repo at
+        # all, and its first successful run is what found the malware in
+        # babel.config.js.
+        run: npx eslint . --max-warnings=105
+
+      - name: jest
+        working-directory: frontend
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+        run: npx jest --passWithNoTests --ci --silent
+
+  # ==========================================================================
+  # 3. invariants — IMPLEMENTATION_PLAN.md §4
+  # ==========================================================================
+  # Separated from `backend` on purpose: when this job is the one that is red,
+  # an ethical constraint has been violated, not a type annotation. That should
+  # be visible from the checks list without opening a log.
+  invariants:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install tooling
+        run: pip install pytest pytest-asyncio
+
+      - name: Run invariant tests
+        working-directory: backend
+        run: |
+          if [ -d tests/invariants ] && compgen -G "tests/invariants/test_*.py" > /dev/null; then
+            pytest tests/invariants -v
+          else
+            echo "::notice::tests/invariants/ does not exist yet — created in S03."
+          fi
+
+  # ==========================================================================
+  # 4. migrations-guard — a merged migration is immutable
+  # ==========================================================================
+  # Forward-only means forward-only: a wrong migration is corrected by a new
+  # migration, never by editing one that has already run against a database.
+  migrations-guard:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for modified migrations
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          # M = modified, D = deleted, R = renamed. Added (A) is the whole point.
+          CHANGED=$(git diff --name-only --diff-filter=MDR "$BASE"...HEAD \
+                    -- 'backend/migrations/versions/**' || true)
+          if [ -n "$CHANGED" ]; then
+            echo "::error::A migration already merged to ${{ github.base_ref }} was modified or deleted:"
+            echo "$CHANGED" | sed 's/^/  /'
+            echo "Forward-only: add a NEW migration that corrects it instead."
+            exit 1
+          fi
+          echo "No merged migration was altered."
+          # NOTE: backend/migrations/supabase/*.sql is deliberately exempt — it
+          # is the idempotent pre-S02 bootstrap and is meant to be re-runnable.
+          # That exemption ends when ADR 0004 lands the real runner in S02.
+
+  # ==========================================================================
+  # 5. handoff-log — relay Rule 3
+  # ==========================================================================
+  # Your partner's agent has no memory of your session. PROGRESS.md is that
+  # memory, so an unlogged push is an incomplete push.
+  handoff-log:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a PROGRESS.md update
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          if git diff --name-only "$BASE"...HEAD | grep -qx 'PROGRESS.md'; then
+            echo "PROGRESS.md updated."
+            exit 0
+          fi
+          echo "::error title=Missing handoff log::This PR does not touch PROGRESS.md."
+          echo ""
+          echo "Relay Rule 3 (IMPLEMENTATION_PLAN.md §2.2): a push without a"
+          echo "handoff-log entry is an incomplete push. Add a new entry at the"
+          echo "top of the log and overwrite the CURRENT STATE block."
+          echo ""
+          echo "Docs-only or hotfix PR? Add the 'skip-handoff-log' label."
+          exit 1
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-handoff-log') }}

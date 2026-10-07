@@ -45,7 +45,17 @@ const ProfileScreen: React.FC<Props> = ({ navigation }) => {
     ]);
   };
 
-  const menuItems = [
+  // `icon` must be typed, not inferred. An array literal infers `icon: string`,
+  // and Ionicons' `name` prop is a union of ~1,300 glyph names, so a plain
+  // string is not assignable. Typing it here also means a typo in an icon name
+  // is a compile error rather than a silently blank icon.
+  type MenuItem = {
+    icon: React.ComponentProps<typeof Ionicons>['name'];
+    title: string;
+    onPress: () => void;
+  };
+
+  const menuItems: MenuItem[] = [
     {
       icon: 'person-outline',
       title: 'Edit Profile',

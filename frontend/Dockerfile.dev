@@ -1,0 +1,42 @@
+# =============================================================================
+# Meridian frontend — Expo dev server (optional)
+# =============================================================================
+# Used only by `docker compose --profile mobile up`. See the long comment on the
+# `expo` service in docker-compose.yml for why running Expo on the host is the
+# better default; this exists for when you want everything containerised.
+#
+# This is a DEV image. There is no production target here: a React Native app
+# ships as an .ipa/.apk built by EAS, not as a container.
+# =============================================================================
+FROM node:20-slim
+
+WORKDIR /app
+
+# Node 20 deliberately: Expo SDK 54 targets Node 20/22, and the host currently
+# has Node 24, which is ahead of what Metro is tested against.
+
+# git is needed by some Expo postinstall steps; curl for healthchecks.
+RUN apt-get update && apt-get install --no-install-recommends -y \
+        git \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Dependency layer, cached independently of source changes. `npm ci` once a
+# lockfile is committed; `npm install` until then.
+COPY package.json package-lock.json* ./
+RUN if [ -f package-lock.json ]; then \
+        npm ci --no-audit --no-fund; \
+    else \
+        echo "WARNING: no package-lock.json — installs are not reproducible" && \
+        npm install --no-audit --no-fund; \
+    fi
+
+COPY . .
+
+# Metro, Expo dev server, Expo web
+EXPOSE 8081 19000 19001 19006
+
+# --host lan makes Metro bind on all interfaces so a phone on the same network
+# can reach it. Combined with REACT_NATIVE_PACKAGER_HOSTNAME (set in compose),
+# the bundle URL it prints is one the phone can actually resolve.
+CMD ["npx", "expo", "start", "--host", "lan"]

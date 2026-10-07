@@ -1,0 +1,138 @@
+{
+  "saved_at": "2026-10-07T01:56:19",
+  "capability": {
+    "coco_classes": 80,
+    "signals_wanted": 21,
+    "signals_reachable": [
+      "backpack",
+      "baseball bat",
+      "bicycle",
+      "car",
+      "cell phone",
+      "handbag",
+      "knife",
+      "laptop",
+      "person",
+      "thrown object"
+    ],
+    "signals_impossible": [
+      "blood",
+      "broken window",
+      "building",
+      "crowbar",
+      "damaged property",
+      "door",
+      "graffiti",
+      "gun",
+      "money",
+      "spray paint",
+      "window"
+    ],
+    "pose_analysis_live": false,
+    "scene_analysis_live": true,
+    "gates": {
+      "assault": {
+        "reachable": true,
+        "reasons": [
+          "pose dead -> requires a visible baseball bat/knife"
+        ]
+      },
+      "robbery": {
+        "reachable": true,
+        "reasons": [
+          "pose dead -> requires a visible knife"
+        ]
+      },
+      "theft": {
+        "reachable": false,
+        "reasons": [
+          "needs a pose action, pose analysis is not running"
+        ]
+      },
+      "burglary": {
+        "reachable": true,
+        "reasons": [
+          "entry signs unreachable -> only detectable at night"
+        ]
+      },
+      "harassment": {
+        "reachable": false,
+        "reasons": [
+          "needs pose interaction, pose analysis is not running"
+        ]
+      },
+      "vandalism": {
+        "reachable": false,
+        "reasons": [
+          "needs damage evidence ['broken window', 'damaged property', 'graffiti'] - none emittable"
+        ]
+      }
+    },
+    "structurally_unreachable_classes": [
+      "harassment",
+      "theft",
+      "vandalism"
+    ]
+  },
+  "summary": {
+    "n": 2,
+    "accuracy": 1.0,
+    "per_class": {
+      "none": {
+        "support": 2,
+        "tp": 2,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      }
+    },
+    "confusion": {
+      "none": {
+        "none": 2
+      }
+    },
+    "failures": {},
+    "mean_seconds": 0.46,
+    "pose_null_rate": 1.0
+  },
+  "records": [
+    {
+      "image": "seed-bus-pedestrians.jpg",
+      "expected": "none",
+      "predicted": null,
+      "correct": true,
+      "confidence": 0.0,
+      "failure": "correct",
+      "objects": [
+        "person",
+        "car"
+      ],
+      "person_count": 0,
+      "poses_detected": 0,
+      "scene_type": "public transport",
+      "scene_confidence": 0.944,
+      "seconds": 0.52,
+      "notes": "SEED. Negative. Several small/distant pedestrians by a bus - tests whether MediaPipe returns any pose for figures that are not frame-filling."
+    },
+    {
+      "image": "seed-two-people-close.jpg",
+      "expected": "none",
+      "predicted": null,
+      "correct": true,
+      "confidence": 0.0,
+      "failure": "correct",
+      "objects": [
+        "person",
+        "tie"
+      ],
+      "person_count": 0,
+      "poses_detected": 0,
+      "scene_type": "public transport",
+      "scene_confidence": 0.577,
+      "seconds": 0.39,
+      "notes": "SEED. Negative. Two people close together, upper body - the exact shape of input the multi-person interaction path was written for, and which defect 5 prevents reaching."
+    }
+  ]
+}

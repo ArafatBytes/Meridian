@@ -34,12 +34,21 @@ export interface AuthResponse {
 }
 
 // Emergency Contact types
+// Mirrors the `emergency_contacts` table and
+// backend/app/models/emergency_contact.py. A second, conflicting declaration
+// used to exist in the SOS section below with `relationship` required and an
+// `isPrimary` field that exists in no table and is read by no screen.
+// TypeScript merges duplicate interfaces rather than erroring, so the live type
+// was the union of both with every field required -- which is why
+// EmergencyContactCreate never satisfied it. Defect 12.
 export interface EmergencyContact {
   id: string;
   user_id: string;
   name: string;
   phone: string;
   email: string;
+  /** Nullable in the schema; the app does not currently write it. */
+  relationship?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -157,14 +166,6 @@ export interface DangerZone {
 }
 
 // SOS related types
-export interface EmergencyContact {
-  id: string;
-  name: string;
-  phone: string;
-  relationship: string;
-  isPrimary: boolean;
-}
-
 export interface SOSIncident {
   id: string;
   userId: string;

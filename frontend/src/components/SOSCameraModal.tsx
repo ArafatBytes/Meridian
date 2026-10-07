@@ -163,10 +163,10 @@ const styles = StyleSheet.create({
         backgroundColor: 'black',
     },
     camera: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,  // RN 0.86 removed absoluteFillObject; absoluteFill is now the plain object
     },
     overlay: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,  // RN 0.86 removed absoluteFillObject; absoluteFill is now the plain object
         backgroundColor: 'rgba(0,0,0,0.5)',
         justifyContent: 'space-between',
         padding: 30,

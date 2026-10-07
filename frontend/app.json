@@ -75,10 +75,6 @@
       "expo-secure-store",
       "expo-asset",
       "expo-font"
-    ],
-    "extra": {
-      "supabaseUrl": "https://lpfsoinrwkapkxwprhpc.supabase.co",
-      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwZnNvaW5yd2thcGt4d3ByaHBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwNTI3MjIsImV4cCI6MjA4MDYyODcyMn0.5JKvblcBeyczyoWg6sj5qrZt0CRs0UCsU1PUOEw59wM"
-    }
+    ]
   }
 }

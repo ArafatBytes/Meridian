@@ -12,29 +12,62 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     APP_ENV: str = "development"
     DEBUG: bool = True
-    SECRET_KEY: str
-    
+
+    # Declared since the beginning and read by nothing — JWT_SECRET_KEY is what
+    # actually signs and validates tokens. It had no default, so a .env without
+    # it crashed the app at import with a pydantic ValidationError. Given a
+    # default rather than removed, because .env.example has always shipped it.
+    # S04 drops it when config moves to app/config/.
+    SECRET_KEY: str = "unused-see-JWT_SECRET_KEY"
+
     # Server
     HOST: str = "0.0.0.0"
     PORT: int = 8000
-    
+
     # Database
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str
-    POSTGRES_DB: str
+    #
+    # DATABASE_URL is the only one that matters: database.py builds the engine
+    # from it directly and nothing reads the POSTGRES_* parts. They are kept as
+    # optional hints for a local-Postgres setup; with Supabase they stay empty.
+    # Requiring them meant six dead values in every .env just to boot.
+    POSTGRES_USER: str = ""
+    POSTGRES_PASSWORD: str = ""
+    POSTGRES_DB: str = ""
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
     DATABASE_URL: str
-    
+
+    # Supabase
+    #
+    # SUPABASE_URL is REQUIRED for authentication: app/core/jwks.py fetches the
+    # project's JWT signing keys from
+    # {SUPABASE_URL}/auth/v1/.well-known/jwks.json. Supabase signs access
+    # tokens with ES256 by default, so there is no shared secret to verify
+    # against -- see docs/adr/0002-auth.md.
+    #
+    # These were added to .env.example in S01b but not declared here, and
+    # pydantic-settings is configured with extra="ignore", so the values sat in
+    # .env and were silently dropped. The symptom was
+    # AttributeError: 'Settings' object has no attribute 'SUPABASE_URL'.
+    SUPABASE_URL: str = ""
+
+    # Server-side only; bypasses Row Level Security. Never expose to the app.
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
+
     # Redis
+    # Defaults target a local install; docker-compose overrides the host to
+    # `redis`. Redis is unused until the geo-proxy cache lands in S05.
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
-    REDIS_URL: str
-    
+    REDIS_URL: str = "redis://localhost:6379/0"
+
     # Celery
-    CELERY_BROKER_URL: str
-    CELERY_RESULT_BACKEND: str
+    # No tasks are defined yet and the beat schedule still points at two modules
+    # that do not exist, so the worker is deliberately left out of
+    # docker-compose. S04 replaces this with the agent schedule registry.
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
     
     # JWT
     JWT_SECRET_KEY: str
@@ -95,11 +128,34 @@ class Settings(BaseSettings):
     EMERGENCY_RESPONSE_RADIUS_KM: int = 10
     
     # Email Configuration (SMTP)
+    #
+    # REQUIRED FOR SOS. email_service.py is the only alert channel, so with
+    # SMTP_USER/SMTP_PASSWORD/FROM_EMAIL empty an SOS trigger reports success to
+    # the user and delivers nothing. Gmail needs an App Password, not the
+    # account password.
     SMTP_SERVER: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     FROM_EMAIL: str = ""
+
+    # Whether SOS also emails nearby police stations.
+    #
+    # Default OFF, and that matters: every one of the 606 rows in
+    # police_stations.csv carries the same placeholder address
+    # (noorlabib@iut-dhaka.edu). With this on and no real data, an SOS from
+    # anywhere in Dhaka emails a stranger -- once per test.
+    #
+    # This flag was documented in .env.example and docs/ from S01b but never
+    # declared here and never checked by sos_service, so it did nothing. Both
+    # are fixed now. Turn it on when the CSV has real contacts (defect 17, S05).
+    POLICE_ROUTING_ENABLED: bool = False
+
+    # Anthropic (first used in S04; declared now so the values are not silently
+    # dropped by extra="ignore" the way SUPABASE_URL was)
+    ANTHROPIC_API_KEY: str = ""
+    LLM_MODEL_JUDGMENT: str = "claude-opus-5-5"
+    LLM_MODEL_BULK: str = "claude-sonnet-5-5"
     
     
     # Rate Limiting

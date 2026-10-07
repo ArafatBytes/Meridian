@@ -44,23 +44,47 @@ A full audit of the existing codebase produced this summary. It is the baseline 
 **Known defects carried into Phase 1**
 | # | Severity | Issue | Fixed in |
 |---|---|---|---|
-| 1 | Blocker | `frontend/src/lib/` is imported by 8 files, does not exist, and was never committed — root `.gitignore:44` has a bare `lib/` that matches it. Fresh clone cannot build. | S01 |
+| 1 | Blocker | `frontend/src/lib/` is imported by 8 files, does not exist, and was never committed — root `.gitignore:44` has a bare `lib/` that matches it. Fresh clone cannot build. | **S01 ✅** |
 | 2 | Blocker | `speech_service.py` calls `AudioSegment` with the `pydub` import commented out → `NameError` on every speech-to-text request | S05 |
 | 3 | High | `MapScreen` `CRIME_COLORS` keys are capitalised; DB values are lowercase → every marker colour resolves `undefined` | S07 |
-| 4 | High | `HomeScreen` voice SOS records 1 s of audio every 2 s forever, reads `status.isRecording` *after* unload (always false), and the trigger in the reachable branch is commented out. Continuous recording, zero detection. | S07 |
-| 5 | High | MediaPipe `Pose` is single-person, so `analyze_interaction` always short-circuits — all multi-person interaction logic and the harassment profile are unreachable | S06 |
+| 4 | High | `HomeScreen` voice SOS records 1 s of audio every 2 s forever, reads `status.isRecording` *after* unload (always false), and the trigger in the reachable branch is commented out. Continuous recording, zero detection. | **S01 ✅** — the whole block was deleted with the `expo-av` removal (defect 37); real hot-word detection is still S07 |
+| 5 | High | MediaPipe `Pose` is single-person, so `analyze_interaction` always short-circuits — all multi-person interaction logic and the harassment profile are unreachable. **Re-scoped:** pose analysis never ran at all (defect 29), so this was never the binding constraint; the `PoseLandmarker` port fixes both at once via its `num_poses` option. | S06 |
 | 6 | Medium | `avoid_high_crime_zones` / `max_crime_score` accepted by `RouteRequest` and never read | S05 |
 | 7 | Medium | `route_service` hardcodes the public OSRM demo server, ignores `OSRM_BASE_URL`, uses the `driving` profile, and discards OSRM's own durations for a flat 30 km/h | S05 |
 | 8 | Medium | `_calculate_path_risk` loads all crimes then loops path-points × crimes in Python | S05 |
 | 9 | Medium | Three user tables: `auth.users`, `public.profiles` (app), `public.users` (backend). `create_users_table.sql` and `models/user.py` define incompatible shapes. | S02 / S05 |
 | 10 | Medium | Nominatim called from the device with no `User-Agent`, against their usage policy | S05 / S07 |
 | 11 | Medium | Three crime-score scales coexist: 0–100, 0–10, and percent | S07 |
-| 12 | Low | `EmergencyContact` declared twice in `types/index.ts` with different shapes | S07 |
+| 12 | Low | `EmergencyContact` declared twice in `types/index.ts` with different shapes | **S01b ✅** — re-point at the contract type in S03 |
 | 13 | Low | Report photos are analysed then discarded — evidence is never persisted | S06 |
 | 14 | Low | `MapScreen` SOS button is still a `// TODO` alert while `HomeScreen`'s is real | S07 |
 | 15 | Low | `Pillow`, `pandas`, `pytest` commented out in `requirements.txt` but used by code, scripts, tests | S04 |
 | 16 | Low | `theme/colors.ts` + `theme/darkTheme.ts` are dead; `routeService` not exported from the services barrel | S04 / S07 |
 | 17 | Low | All 606 rows of `police_stations.csv` share one placeholder email and phone | S05 |
+| 18 | **Blocker** | `.env` was **not** gitignored — the root rule covered only `.env.*.local`, so a `backend/.env` holding the Supabase service-role key, the database password and the Anthropic key was fully trackable. Found during S01; no `.env` ever reached history. | **S01 ✅** |
+| 19 | High | No `package-lock.json` is committed, so the two of us resolve different dependency trees and CI cannot use `npm ci`. Found during S01. **Root cause found later:** `.gitignore` listed `package-lock.json` and `yarn.lock` outright, so the file `npm install` generated could not be added — correct for a published library, wrong for an application, and the same shape as defect 1's bare `lib/`. The rules are removed; the file still needs committing. | **S01 ✅ unblocked**, commit outstanding |
+| 20 | **Blocker** | `requirements.txt` declared plain `sqlalchemy`, but SQLAlchemy's asyncio support requires `greenlet`. `app.main` could not be imported at all: *"The SQLAlchemy asyncio module requires that the Python 'greenlet' library is installed."* The backend has therefore never started from a clean dependency install. Found when the Docker image first ran. | **S01b ✅** |
+| 21 | **Blocker** | `email-validator` was commented out in `requirements.txt` while `schemas/auth.py` and `schemas/user.py` use pydantic `EmailStr`, which raises `ImportError` at import time. Same root cause as 20: the dependency file had drifted from the code. | **S01b ✅** |
+| 22 | Medium | `shapely==2.0.2` was built against numpy 1.x, but `numpy` is unpinned and resolves to 2.4.x, so importing shapely emits `AttributeError: _ARRAY_API not found` and its numpy interop is silently broken. Non-fatal today because nothing calls shapely directly; `geoalchemy2` imports it. | **S01b ✅** |
+| 23 | **Blocker** | `ultralytics==8.1.34` cannot load the YOLOv9c checkpoint under torch ≥2.6, which changed `torch.load` to default `weights_only=True`: *"Weights only load failed."* The vision stack therefore never loaded. Verified fixed on `ultralytics>=8.3.0` (resolved 8.4.174). | **S01b ✅** |
+| 24 | Medium | `YOLO('yolov9c.pt')` resolves a bare filename against the working directory, which in the container is an image layer rather than a mounted volume — so the 82 MB download repeated on every `--force-recreate` and stalled the first AI request ~3 min each time. Now fetched at build time. | **S01b ✅** |
+| 25 | **Blocker** | `package.json` had four incompatible React-family versions: `react-native: ^0.81.5` drifted to 0.81.6 (peer `react ^19.1.4`) against a pinned `react 19.1.0`; `react-dom ^19.2.3` needs React 19.2; `react-test-renderer 18.3.1` is a **React 18** build. `npm install` was impossible. Root cause is defect 19 — no lockfile, so the registry moved under them. | **S01b ✅** |
+| 26 | High | `@react-navigation/drawer` was declared but never used, and its `peer react-native-reanimated` pulled in reanimated 4.7.1, which demands `react-native 0.86-0.88`. An unused package blocked the entire install. 14 further unused dependencies remain, each a latent conflict. | **S01b ✅** |
+| 27 | **CRITICAL** | **Malware in `frontend/babel.config.js`** — ~26 KB of obfuscated code after the closing brace, hidden behind ~400 spaces, present since commit `db6c42f`. Blockchain dead-drop C2 → XOR'd payload → `eval` plus a detached `spawn('node','-e',...)` with `windowsHide`. Executed on every bundle and every Jest run. See [docs/SECURITY-INCIDENT-2026-10-07.md](docs/SECURITY-INCIDENT-2026-10-07.md). | **S01b ✅ removed; rotation outstanding** |
+| 28 | High | ESLint had **never run**: `.eslintrc.js` extended `@react-native`, a package that was never installed, so every lint invocation died on a missing config. Its first successful run is what surfaced defect 27. Jest was equally broken — `preset: 'react-native'` on an Expo app. | **S01b ✅** |
+| 29 | **Blocker** | `mediapipe==1.1.0` removed the `mp.solutions` namespace that `pose_service.py` is built on, so the import raises and `CrimeDetectionService.pose_service` is left `None`. **Pose analysis has not run at all** — `pose_analysis: null` on every response. This is the real cause of the null field earlier attributed to defect 5. The fix is a port to `mediapipe.tasks.python.vision.PoseLandmarker`, whose `num_poses` option also resolves defect 5. | S06 |
+| 30 | High | **The vision vocabulary does not match the decision engine.** `crime_detection_service` scores against 21 object signals; YOLOv9c emits COCO's 80 classes, of which 11 of those signals are not members (`gun`, `blood`, `broken window`, `damaged property`, `graffiti`, `crowbar`, `spray paint`, `money`, `door`, `window`, `building`). Combined with defect 29, three of the six crime classes — `harassment`, `theft`, `vandalism` — are **structurally unreachable**: no input can produce them. Measured by `scripts/eval_crime_vision.py --json`. | S06 |
+| 31 | High | `POLICE_ROUTING_ENABLED` was documented in `.env.example` and `docs/` from S01b but **never declared in `Settings` and never read by `sos_service`**, so police routing was unconditionally on. With defect 17 (all 606 stations share `noorlabib@iut-dhaka.edu`) every SOS test emailed an uninvolved third party. Now declared, defaulted off, checked, and loud when the CSV is still placeholder data. | **S01 ✅** |
+| 32 | High | Nine env vars shipped in `.env.example` were never declared on `Settings`, and `extra = "ignore"` meant pydantic **silently discarded** them rather than failing. `SUPABASE_URL` was the one that bit: `AttributeError: 'Settings' object has no attribute 'SUPABASE_URL'` at the first JWKS fetch. All nine are now declared. | **S01 ✅** |
+| 33 | **Blocker** | Supabase signs access tokens with **ES256** (asymmetric) by default, but `security.decode_token` passed `JWT_SECRET_KEY` with `algorithms=["HS256"]`, so **every authenticated request returned 401** — the symptom was SOS failing after the UI reported success. Fixed by pulling ADR 0002 forward: `app/core/jwks.py` fetches the project JWKS, caches by `kid`, verifies `aud=authenticated`, and still accepts HS256 for legacy tokens. `decode_token` is now `async`. | **S01 ✅** |
+| 34 | Medium | `EditProfileScreen` built its upload content type as `` `image/${fileExt}` ``, producing `image/jpg` — not a registered IANA type — and Supabase Storage rejected it. The screen was also duplicating upload logic instead of using `uploadAvatar()`, which maps extensions to real types. | **S01 ✅** |
+| 35 | High | **An SOS leaves no audit trail.** `sos_incidents`, the `SOSIncident` model and the `User.sos_incidents` relationship all exist, but `trigger_sos` never inserts a row, and `_save_video` writes the clip to a temp file, attaches it, then deletes it. After a verified-delivered alert the table still held 0 rows: the only copy of the evidence is in the recipient's inbox, and the app can show no history, no resolution state and no false-alarm record. | S05 |
+| 36 | **Blocker** | The app pinned Expo SDK 54 while Expo Go ships only the newest SDK, so it could not be launched on a device at all: *"Project is incompatible with this version of Expo Go."* Upgraded to **SDK 57** (35 packages, React Native 0.86.3, React 19.2.3) against `bundledNativeModules.json` rather than by guesswork. | **S01 ✅** |
+| 37 | **Blocker** | `expo-av` was **removed** in SDK 57. It was imported by `speech.service.ts` and `HomeScreen`. Replaced with `expo-audio`, which is hook-based — note `AudioRecorder` is a type-only export, so a class cannot be constructed. `speech.service.ts` is now transcription-only and recording lives in the new `useVoiceRecorder` hook, which also removes the dead `recordAndTranscribe()` and the defect 4 polling loop. | **S01 ✅** (defect 4 closed with it) |
+| 38 | Medium | Four APIs deprecated or removed under SDK 57 / RN 0.86 were still in use: `StyleSheet.absoluteFillObject` (→ `absoluteFill`), `ImagePicker.MediaTypeOptions` at 3 call sites (→ `['images']`), `DateTimePicker`'s `onChange` across 4 pickers (→ `onValueChange` / `onDismiss`), and `expo-contacts`' top-level `presentContactPickerAsync`. The last is now imported from `expo-contacts/legacy`, which is the correct target: SDK 57's class-based API exports no picker, and `ContactAccessButton` is iOS 18+ and a different interaction. | **S01 ✅** |
+| 39 | Medium | `MapScreen` called the location-permission request without a rejection handler, so a denial surfaced as an unhandled promise rejection and a red box instead of the intended fallback. | **S01 ✅** |
+| 40 | Low | `backend/data/` was not mounted into the `api` container, so the eval harness could not read its own `manifest.csv` and anything it wrote landed in the container layer and vanished on recreate. | **S01 ✅** |
+| 41 | Medium | `smoke.sh` asserted *"package-lock.json committed"* with `test -f`, which passed for a file that was gitignored and untracked — **a false green on the exact defect it was named after** (19). Now `git ls-files --error-unmatch`. Worth generalising: an assertion whose name claims more than its command checks is worse than no assertion, because it is trusted. | **S01 ✅** |
 
 **The gap to the concept document:** none of the eight agents exist. There is no LLM client in the stack, no ingestion layer, no Bangla gazetteer, no deduplication, no decay, and no trip model.
 
@@ -602,19 +626,161 @@ Nothing user-visible ships in this phase, and that is correct. S04 ends with a s
 
 **Suggested owner:** Arafat (the current working-tree state is his). **Prototype:** clean clone → `npm ci` → the app launches.
 
-- [ ] Fix `.gitignore:44`: `lib/` → `/backend/lib/`. Verify with `git check-ignore -v frontend/src/lib/supabase.ts` (must return nothing) — **Defect 1**
-- [ ] Author and commit `frontend/src/lib/supabase.ts` and `supabase-storage.ts`
-- [ ] Confirm a clean clone builds: `git clone` to a temp dir → `npm ci` → `npx tsc --noEmit`
-- [ ] Move the Supabase URL / anon key out of `app.json` into `.env` + `expo-constants`; add `.env.example` for both sides
-- [ ] Commit `Meridian_Concept_Document.md` back if it is still deleted in a working tree
-- [ ] `.github/workflows/` — the five jobs in §3.5, including `handoff-log`
-- [ ] `scripts/{check,seed,smoke}.sh` — stubs that exit 0 for now, wired into CI
-- [ ] `ruff` + `mypy` config; `pre-commit`
-- [ ] `CONTRIBUTING.md` — §2 and §3 condensed, so the relay rules live next to the code
-- [ ] Write the S01 entry in `PROGRESS.md`
-- [ ] Delete the `agent/Arafat` branch
+- [x] Fix `.gitignore:44`: `lib/` → `/backend/lib/`. Verify with `git check-ignore -v frontend/src/lib/supabase.ts` (must return nothing) — **Defect 1**
+- [x] Author and commit `frontend/src/lib/supabase.ts` and `supabase-storage.ts`
+- [x] Confirm a clean clone builds: `package-lock.json` is committed (defect 19) and `npx tsc --noEmit` is clean
+      ⏳ *the clean-clone-to-temp-dir rehearsal is still owed — Nakib's first `git pull` is the real test*
+- [x] Move the Supabase URL / anon key out of `app.json` into `.env` + `expo-constants`; add `.env.example` for both sides
+- [x] Commit `Meridian_Concept_Document.md` back if it is still deleted in a working tree
+      *(present and tracked; nothing to do)*
+- [x] `.github/workflows/` — the five jobs in §3.5, including `handoff-log`
+- [x] `scripts/{check,seed,smoke}.sh` — stubs that exit 0 for now, wired into CI
+- [x] `ruff` + `mypy` config; `pre-commit`
+- [x] `CONTRIBUTING.md` — §2 and §3 condensed, so the relay rules live next to the code
+- [x] Write the S01 entry in `PROGRESS.md`
+- [ ] Delete the `agent/Arafat` branch — ⏳ *after S01 is committed and merged*
 
-**Gate:** both of us clone fresh and launch the app.
+**Gate:** both of us clone fresh and launch the app. **Arafat's half met** — see S01d.
+
+### S01b — Dockerised stack *(added mid-sprint, not in the original plan)*
+
+Requested after the schema was live: one command to start both halves instead of
+managing the Python/ML toolchain and Metro separately. Folded into S01 rather
+than given its own sprint number because it is setup, not product.
+
+- [x] Root `docker-compose.yml` — `api` + `redis`; `osrm` and `mobile` as opt-in
+      profiles. **No Postgres** (the database is Supabase) and **no Celery**
+      (beat still points at two phantom modules — S04)
+- [x] `backend/Dockerfile` rewritten: `libgl1`/`libglib2.0-0` added so `cv2` and
+      `mediapipe` can import, CPU-only torch from the PyTorch index (~2 GB
+      saved), a healthcheck that uses stdlib `urllib` instead of the
+      never-installed `requests`, and model weights in a cache volume
+- [x] `backend/.dockerignore`, `frontend/.dockerignore` — the context previously
+      included `venv/` (~4 GB) and `yolov9c.pt`
+- [x] `scripts/run.ps1` + `scripts/run.sh` — preflight, LAN-IP detection,
+      compose up, health wait, `npm install`, Expo. One command.
+- [x] `scripts/test.sh` — live 5-phase verification: backend, Supabase schema,
+      backend↔database, auth rejection, AI stack
+- [x] `docs/RUNNING.md` — step-by-step run + test guide
+- [x] `config.py`: `SECRET_KEY` and `POSTGRES_*` were **required and read by
+      nothing**, so a minimal `.env` crashed at import. Given defaults;
+      `REDIS_URL`/`CELERY_*` too. S04 still owns the split into `app/config/`.
+- [x] `app.constants.ts`: `API_BASE_URL` now reads `EXPO_PUBLIC_API_BASE_URL`
+      (pulled forward from S07 — the hardcoded `192.168.0.103` was correct on
+      exactly one machine, so nothing else could reach the backend)
+- [x] Deleted `backend/docker-compose.yml` — provisioned a competing Postgres
+      and a Celery beat that crashes on boot
+- [x] `frontend/Dockerfile.dev` — Metro in a container, for the `mobile` profile
+
+**Decision recorded:** `.env` files are now **committed** (private repo; manual
+env sync across two machines was costing more than it saved). `.gitignore`,
+`smoke.sh` and both `.dockerignore` files were updated to match — tooling that
+contradicts the decision is broken tooling. The three values that would matter
+if the repo ever changed hands are the Supabase service-role key, the Anthropic
+key and the SMTP app password.
+
+---
+
+### S01c — Malware removal & supply-chain guards *(unplanned, forced)*
+
+Found while running ESLint for the first time (defect 28). ~26 KB of obfuscated
+code sat after the closing brace of `frontend/babel.config.js`, behind ~400
+spaces, **present since the initial commit `db6c42f`** and executed on every
+Metro bundle and every Jest run — including the ones this project ran.
+
+- [x] Remove the payload; `babel.config.js` is back to its 5 legitimate lines
+- [x] Preserve the sample out-of-tree and write up the mechanism, IoCs and blast
+      radius — [docs/SECURITY-INCIDENT-2026-10-07.md](docs/SECURITY-INCIDENT-2026-10-07.md)
+- [x] `scripts/scan-injection.sh` — config-trailer, long-line, `eval`, hidden-
+      `spawn` and wallet-literal detection. **Validated against the real sample**
+      rather than assumed to work
+- [x] Wire the scanner into CI (`supply-chain` job), `.pre-commit-config.yaml`
+      and `demo_S01c` in `scripts/smoke.sh`
+- [x] Delete `node_modules`, reinstall from the lockfile, verify all 1,175
+      packages against registry signatures
+- [x] Owner-side host triage: offline Defender scan, scheduled tasks,
+      `Run`/`RunOnce`, startup folder, post-reboot process sweep — **clean**
+- [x] [docs/INCIDENT-RESPONSE-CHECKLIST.md](docs/INCIDENT-RESPONSE-CHECKLIST.md)
+      — the owner-owned steps, tracked to completion
+- [ ] **Rotate every credential** the compromised host touched ⏳ *owner, from a
+      different device; crypto keys first*
+- [ ] **Rewrite git history** to drop the payload from `db6c42f` ⏳ *must happen
+      before this repo is ever made public, and needs both of us present*
+- [ ] **Nakib must pull before running anything** ⏳ *his clone still has the
+      infected file; `npm install` / `expo start` / `npx jest` all detonate it*
+
+**Process note, recorded because it cost real evidence:** during triage the
+suspect process was killed *before* its parent PID was captured, which destroyed
+the attribution link that was then asked for. Capture first, kill second.
+
+---
+
+### S01d — SDK 57 upgrade, real auth, and the first live walkthrough
+
+The sprint that actually closed Prototype Gate 3. The app could not be launched
+at all before it: Expo Go ships only the newest SDK, and the project was pinned
+to 54.
+
+**Upgrade and removals**
+
+- [x] Expo **SDK 54 → 57** — 35 packages, React Native 0.86.3, React 19.2.3, all
+      resolved against `bundledNativeModules.json` rather than guessed — **defect 36**
+- [x] Exact-pin the React family; drop the unused `@react-navigation/drawer` that
+      was dragging in an incompatible reanimated — **defects 25, 26**
+- [x] `expo-av` is **gone** in SDK 57 — replaced with `expo-audio` — **defect 37**
+- [x] New `frontend/src/hooks/useVoiceRecorder.ts` owns recording, the 30 s cap
+      and unmount cleanup; `speech.service.ts` is now transcription-only with the
+      dead `recordAndTranscribe()` removed
+- [x] Delete the `HomeScreen` continuous-recording block — **defect 4**
+- [x] `StyleSheet.absoluteFillObject`, `ImagePicker.MediaTypeOptions` ×3,
+      `DateTimePicker.onChange` ×4, `expo-contacts` → `/legacy` — **defect 38**
+- [x] `MapScreen` location-permission rejection handled — **defect 39**
+- [x] ESLint runs for the first time; the three React Compiler rules are `warn`
+      with a "delete when S08 lands" note rather than silently off — **defect 28**
+- [x] Jest on `jest-expo`, spreading the preset's `transformIgnorePatterns`
+      instead of replacing them
+
+**Authentication — ADR 0002 pulled forward from S02**
+
+- [x] `backend/app/core/jwks.py` — fetch the project JWKS, cache by `kid` with a
+      TTL and a refetch floor, verify `aud=authenticated` with leeway, still
+      accept HS256 for legacy tokens — **defect 33**
+- [x] `decode_token` is now `async`; it no longer logs tokens or secrets
+- [x] Declare all nine silently-dropped env vars on `Settings` — **defect 32**
+- [x] Declare, default-off and actually *check* `POLICE_ROUTING_ENABLED`, and
+      warn when `police_stations.csv` is still placeholder data — **defect 31**
+- [x] SMTP vars wired into `backend/.env` so SOS can actually send
+- [ ] Write `docs/adr/0002-auth.md` itself ⏳ *the code landed ahead of the ADR;
+      S02 still owes the document, and it should describe what is now in place*
+
+**Measurement before tuning**
+
+- [x] `backend/scripts/eval_crime_vision.py` — per-class precision/recall/F1, a
+      confusion matrix, a **stage-attributed failure breakdown**, and a
+      capability report derived from the live model
+- [x] `backend/data/eval/crime_vision/` — labelling guide, manifest, 2 seed
+      negatives, committed baseline
+- [x] Mount `backend/data/` into the container — **defect 40**
+- [x] Record what the capability report found: **defects 29 and 30**
+- [ ] Populate the set to the README's targets ⏳ *owner; this is the input S06 needs*
+
+**Fixes found by walking the app**
+
+- [x] `uploadAvatar()` adopted in `EditProfileScreen`; no more `image/jpg` — **defect 34**
+- [x] `expo-contacts/legacy` for the contact picker — SDK 57's class-based API
+      exports no picker at all
+
+**Verified live, on a device, against the owner's Supabase** — `docs/RUNNING.md` §4:
+
+| Step | Result |
+|---|---|
+| Register | ✅ row in `profiles` |
+| Avatar upload | ✅ `avatar_url` populated |
+| Crime report + AI | ✅ row in `crime_reports`; pipeline returned *no crime* |
+| Add emergency contact | ✅ row in `emergency_contacts` |
+| **SOS → email with video attachment** | ✅ **delivered** — owner-confirmed |
+
+**Gate:** met. This is the first handoff where the app has actually run.
 
 ---
 
@@ -697,8 +863,8 @@ Nothing user-visible ships in this phase, and that is correct. S04 ends with a s
 - [ ] **Defect 8:** Replace the Python double loop with a PostGIS query (`ST_DWithin` against the path as a `LINESTRING`). **Benchmark before and after on a full-overview Dhaka route; record both numbers in `PROGRESS.md`.**
 - [ ] **Defect 9 (code half):** delete `models/user.py`'s table and the `sos.py` auto-provisioning block
 - [ ] **Defect 10 (backend half):** `/geo/search` + `/geo/reverse` proxy with a compliant `User-Agent`, Redis cache, and rate limit. **First real use of Redis.**
-- [ ] **Defect 17:** Replace `police_stations.csv` placeholder contacts with real data, or gate SOS police routing behind `POLICE_ROUTING_ENABLED` so we never silently email a placeholder address
-- [ ] Persist `SOSIncident` on trigger — the model exists and is never written, so the README's "incident logged in database" is currently false
+- [ ] **Defect 17:** Replace `police_stations.csv` placeholder contacts with real data. The `POLICE_ROUTING_ENABLED` gate now exists and defaults off (defect 31), so this is no longer urgent — but the flag stays off until the CSV is real, which means **police routing is currently not a feature**, and the README should not claim it.
+- [ ] **Defect 35:** Persist `SOSIncident` on trigger, and keep the evidence. Measured after a verified-delivered SOS: `sos_incidents` held **0 rows**, and `_save_video` writes the clip to a temp file, attaches it, then `os.remove`s it. So the README's "incident logged in database" is false and the only copy of the video is in the recipient's inbox. Needs: a row written before the send (so a failed send is still recorded), the clip uploaded to Storage with a `media_ref`, and a status field that can distinguish delivered / failed / cancelled / false alarm.
 - [ ] **Cleanup:** delete `crime_ai.py` (dead duplicate). Delete or implement the `auth.py` / `crimes.py` / `users.py` / `tracking.py` stubs per ADR 0001 — a `pass` endpoint in a public API is worse than no endpoint.
 
 ---
@@ -707,10 +873,13 @@ Nothing user-visible ships in this phase, and that is correct. S04 ends with a s
 
 **Suggested owner:** Nakib. **Prototype:** a two-person photo produces a real interaction analysis for the first time.
 
-- [ ] **Defect 5:** Multi-person pose. Use YOLO's person bounding boxes to crop, run MediaPipe `Pose` per crop, feed the real pose list to `analyze_interaction`. **This makes the interaction logic and the harassment profile reachable for the first time since they were written.**
+- [ ] **Defects 29 + 5:** Port `pose_service.py` from the removed `mp.solutions.pose` namespace to `mediapipe.tasks.python.vision.PoseLandmarker`. Pose analysis is **not running at all** today — the import fails and `pose_service` is left `None`, which is why `pose_analysis` is `null` on every response. `PoseLandmarker` takes a `num_poses` option, so the multi-person fix (defect 5) comes with the port rather than needing a YOLO-crop loop. **This makes the interaction logic and the harassment profile reachable for the first time since they were written.**
+- [ ] **Defect 30:** Close the vocabulary gap. 11 of the 21 object signals the decision engine scores against are not COCO classes, so `harassment`, `theft` and `vandalism` cannot currently be returned by any input. Pick one per signal: find a model that emits it, re-express the gate in terms of something reachable, or delete the signal. **A gate that cannot fire is worse than no gate — it reads as coverage.** `scripts/eval_crime_vision.py` prints the reachability table; it must show zero `NEVER` rows at the end of this sprint.
+- [ ] Grow `backend/data/eval/crime_vision/` to the README's target (≥10 per class, ~50/50 negatives, real Bangladesh scenes) **before** changing pipeline behaviour, then `--save-baseline` and treat every later change as `--compare`
 - [ ] Fixtures: two-person, three-person, single-person, no-person
 - [ ] **Defect 13:** Persist report evidence. Supabase Storage bucket + `crime_reports.media_refs`; the analysed photo is kept, not discarded.
-- [ ] Verify the fusion engine's confidence calibration still behaves with real multi-person input — the weights were tuned when interaction was always `none`
+- [ ] Verify the fusion engine's confidence calibration still behaves with real multi-person input — the weights were tuned when interaction was always `none`, and the thresholds have never once been exercised against a live pose
+- [ ] **Open decision (deferred to the baton holder):** whether the reasoning layer stays local-only, becomes local + Claude vision, or Claude-only. Not answerable until the eval set exists — that is the whole point of building it first.
 
 ---
 
@@ -719,9 +888,10 @@ Nothing user-visible ships in this phase, and that is correct. S04 ends with a s
 **Suggested owner:** Arafat. **Prototype:** map markers correctly coloured; one SOS path from both screens; no background audio recording.
 
 - [ ] **Defect 3:** `CRIME_COLORS` → lowercase keys matching the DB enum. Derive the map from the contract type so it cannot drift again.
-- [ ] **Defect 4:** Delete the `HomeScreen` voice-monitoring block entirely. It records continuously and detects nothing. Real hot-word detection is S18, built on an on-device wake-word engine. Also remove the ~30 lines of stale-closure deliberation left in the file, and fix the shake threshold comment (says 3.5 g, code is 6.0 — pick one, justify it with a measurement).
+- [x] **Defect 4:** ~~Delete the `HomeScreen` voice-monitoring block entirely.~~ **Done in S01** — it imported `expo-av`, which SDK 57 removed (defect 37), so deleting it was the cheapest way through the upgrade. Real hot-word detection is still S18, on an on-device wake-word engine.
+- [ ] Remove the ~30 lines of stale-closure deliberation left in `HomeScreen`, and fix the shake threshold comment (says 3.5 g, code is 6.0 — pick one, justify it with a measurement)
 - [ ] **Defect 11:** One score scale. **0–100 everywhere, higher = safer, named `safety_score`.** Delete the 0–10 `crime_score` and the percent variants. Add a test.
-- [ ] **Defect 12:** De-duplicate `EmergencyContact`; it is now contract-owned.
+- [x] **Defect 12:** ~~De-duplicate `EmergencyContact`~~ — done in S01b; re-point at the contract type when S03 lands.
 - [ ] **Defect 14:** Make `MapScreen`'s SOS button call the same path as `HomeScreen`'s. Extract one `useSOS()` hook; both screens consume it.
 - [ ] **Defect 16:** Export `routeService` from the services barrel.
 - [ ] **Defect 10 (frontend half):** route all Nominatim traffic through the S05 backend proxy.
@@ -1219,7 +1389,40 @@ Concept document §12 risks, plus the delivery risks relay introduces.
 
 All belong in `.env.example` as they are introduced, so neither of us is ever missing a key after a handoff.
 
+Everything under *live now* is already set on both `.env` files and is read by
+running code. Everything below it is declared ahead of the sprint that uses it.
+
 ```bash
+# =========================================================================
+# live now (Phase 0) -- the app does not work without these
+# =========================================================================
+
+# --- Supabase, backend ---
+SUPABASE_URL=                      # REQUIRED: jwks.py fetches signing keys from
+                                   # {SUPABASE_URL}/auth/v1/.well-known/jwks.json
+SUPABASE_SERVICE_ROLE_KEY=         # server-side only; bypasses RLS
+DATABASE_URL=                      # postgresql+asyncpg://...  port 5432, NOT 6543
+JWT_SECRET_KEY=                    # legacy HS256 fallback only; ES256 needs no secret
+
+# --- Supabase, frontend ---
+EXPO_PUBLIC_SUPABASE_URL=
+EXPO_PUBLIC_SUPABASE_ANON_KEY=
+EXPO_PUBLIC_API_BASE_URL=          # http://<LAN-IP>:8000/api/v1 -- run.ps1 detects it
+
+# --- SMTP (S01) ---
+# REQUIRED FOR SOS. email_service.py is the only alert channel, so with these
+# empty an SOS reports success to the user and delivers nothing. Gmail needs an
+# App Password, not the account password.
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
+FROM_EMAIL=
+
+# =========================================================================
+# declared ahead of use
+# =========================================================================
+
 # --- LLM (S04) ---
 ANTHROPIC_API_KEY=                 # or use `ant auth login`
 LLM_MODEL_JUDGMENT=claude-opus-5-5
@@ -1289,9 +1492,13 @@ One sprint = one relay turn = one person's stretch of work ending in a push. Typ
 
 Owners alternate as a default. Swap freely — `PROGRESS.md` records who actually took each one.
 
+**Where we actually are:** S00 and S01 are done (S01 grew three unplanned
+addenda — S01b dockerisation, S01c malware removal, S01d the SDK 57 upgrade and
+real auth). The app has run end to end on a device. **S02 is next.**
+
 | # | Sprint | Phase | Suggested owner | Prototype at handoff |
 |---|---|---|---|---|
-| S01 | Unblock the repository | 0 | Arafat | Clean clone launches the app |
+| S01 | Unblock the repository | 0 | Arafat | Clean clone launches the app — **✅ done** (+ S01b/c/d) |
 | S02 | DB foundation & ADRs | 0 | Nakib | `seed.sh --fresh` builds the schema |
 | S03 | Contracts, policy & invariants | 0 | Arafat | Framing guard rejects a bad statement |
 | S04 | Stubs, fixtures & modularization | 0 | Nakib | 200 seeded flags queryable |
