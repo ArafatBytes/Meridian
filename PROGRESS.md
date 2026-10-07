@@ -74,11 +74,33 @@ Full write-up, indicators of compromise and the remediation checklist:
 | | |
 |---|---|
 | **Last sprint completed** | **S01 — ✅ closed.** Grew three unplanned addenda: S01b dockerisation, S01c malware removal, S01d SDK 57 + real auth |
-| **NEXT SPRINT** | **S02 — DB foundation & ADRs** → [plan](IMPLEMENTATION_PLAN.md) |
+| **NEXT SPRINT** | **D01 — Schema, contracts, framing, LLM client** → [DEMO_PLAN.md](DEMO_PLAN.md). *Was S02; resequenced by [ADR 0005](docs/adr/0005-finale-reordering.md).* |
 | **Baton holder** | **free — passing to Nakib** |
-| **Trunk** | `develop` @ `d78416b` · **60 uncommitted paths in the working tree** (see RESUME HERE) |
+| **Trunk** | `develop` @ `2d924a2` · **clean.** The 60 paths were committed in `2d924a2`; the RESUME HERE note below is stale on this point. |
 | **Build status** | 🟢 **GREEN** — backend `test.sh --ai` 14/14, and the app has now run end to end on a real device |
 | **Phase** | 0 — Foundation & Contracts |
+
+### 🗓️ PLAN RESEQUENCED — read [DEMO_PLAN.md](DEMO_PLAN.md) before IMPLEMENTATION_PLAN.md
+
+**2026-10-07, Nakib, without Arafat's sign-off.** The finale is **24 October** — 17 days — and
+`IMPLEMENTATION_PLAN.md` line 6 disclaims that deadline. Phase 0 alone would have finished four days
+*after* the demo, with 0 of 8 agents built.
+
+- **[DEMO_PLAN.md](DEMO_PLAN.md)** is now the authoritative **sequence**: ten sprints, `D01`–`D10`.
+- **[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)** remains the authoritative **specification**.
+  Every `D` sprint cites its source sprint there. **Nothing was deleted from it.**
+- Everything not demo-critical is in `DEMO_PLAN.md` §6 as **Track B**, in order. §5 is a coverage
+  table mapping all 39 original sprints, so "nothing was dropped" is checkable.
+- Rationale, consequences and alternatives: **[ADR 0005](docs/adr/0005-finale-reordering.md)**.
+- **Crime detection from image is in the demo** (`D07`), against plan §12. Owner's call.
+- Prototype Gate relaxed to gates 1 and 4 only until 24 Oct, **plus one new mandatory gate:**
+  **every `D` sprint ships `docs/walkthroughs/D<nn>.md`** — a play-script run on a real device, in
+  the same commit. No walkthrough, no handoff. Format: [`docs/walkthroughs/README.md`](docs/walkthroughs/README.md).
+  Rationale in `DEMO_PLAN.md` §0: work that is invisible on the device is indistinguishable from
+  work that does not exist.
+
+**Blocked decision:** the image-analysis reasoning layer must be settled by **16 October** or `D07`
+cannot start. See `DEMO_PLAN.md` §7.1 — recommendation is local detection + Claude vision.
 
 ### ✅ The app works. This is the first handoff where that is true.
 
