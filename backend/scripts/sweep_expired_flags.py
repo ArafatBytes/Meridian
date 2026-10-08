@@ -28,13 +28,11 @@ passed. Rows are not DELETEd. An expired flag is the evidence that the surface r
 things on its own, which is demo beat 5's claim, and throwing it away would make that
 claim unverifiable the next morning.
 
-Why it is not a Celery beat yet
--------------------------------
-There is no Celery worker in `docker-compose.yml` and the beat schedule still points at
-two modules that do not exist; D04 builds the schedule registry and is the first sprint
-that actually needs a worker. Registering this task against a broken schedule now would
-mean a task that looks scheduled and never runs — worse than a script somebody runs.
-When D04 lands the registry, `sweep_expired()` below is the function to register.
+Scheduled since D04
+-------------------
+`app/agents/expiry_sweep.py` runs the same UPDATE every 30 minutes from the worker in
+`docker-compose.yml`. This script stays as the manual path and for `--sql`, which needs
+no database connection. If the statement changes, change both.
 """
 
 from __future__ import annotations
@@ -99,8 +97,7 @@ async def sweep_expired(*, dry_run: bool = False) -> int:
     """
     Retire every live flag past its expiry. Returns how many were (or would be) retired.
 
-    Importable: this is the function D04's schedule registry should register, so the
-    scheduled path and the manual path cannot drift.
+    The manual path. The scheduled one is `app/agents/expiry_sweep.py`.
     """
     conn = await connect()
     try:

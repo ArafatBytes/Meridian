@@ -32,7 +32,7 @@ import { CrimeCategory, MainTabParamList } from '../../types';
 import { crimeCategoryLabel } from '../../types/contracts/crime';
 import type { RiskFlag } from '../../types/contracts/risk';
 import { routeService, RouteResponse, Location } from '../../services/route.service';
-import { riskService } from '../../services/risk.service';
+import { riskService, type IngestionStatus } from '../../services/risk.service';
 import RiskFlagSheet, { riskBand } from '../../components/RiskFlagSheet';
 import PlaceSearch from '../../components/PlaceSearch';
 import type { GeoResolution } from '../../types/contracts/geo';
@@ -119,6 +119,27 @@ const asOfFromOffset = (offsetHours: number): Date | undefined =>
   offsetHours === 0 ? undefined : new Date(Date.now() + offsetHours * 3600 * 1000);
 
 /**
+ * The news half of the status badge: "news 4 min ago", "reading news…", "offline replay".
+ *
+ * Module scope for the same `react-hooks/purity` reason as `asOfFromOffset`. D04's
+ * point is that ingestion is visible as an event, not inferred from pins changing.
+ */
+function newsLabel(status: IngestionStatus | null, fetching: boolean): string | null {
+  if (status?.mode === 'replay') return 'offline replay';
+  if (fetching || status?.lastRun?.status === 'running') return 'reading news…';
+  const finished = status?.lastRun?.finishedAt;
+  if (!finished) return status ? 'no news run yet' : null;
+  const minutes = Math.round((Date.now() - new Date(finished).getTime()) / 60000);
+  if (minutes < 1) return 'news just now';
+  if (minutes < 60) return `news ${minutes} min ago`;
+  return `news ${Math.round(minutes / 60)} h ago`;
+}
+
+/** How long "fetch news now" waits for the run to finish: 36 polls, 5 s apart. */
+const NEWS_POLL_MS = 5000;
+const NEWS_POLL_LIMIT = 36;
+
+/**
  * Hex colour plus an alpha channel, for the radius circles.
  *
  * `react-native-maps` takes rgba strings for fill and stroke. Eight-digit hex is
@@ -149,6 +170,8 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   const [crimeReports, setCrimeReports] = useState<CrimeReportData[]>([]);
   const [riskFlags, setRiskFlags] = useState<RiskFlag[]>([]);
   const [riskError, setRiskError] = useState<string | null>(null);
+  const [ingestion, setIngestion] = useState<IngestionStatus | null>(null);
+  const [isFetchingNews, setIsFetchingNews] = useState(false);
   const [selectedFlag, setSelectedFlag] = useState<RiskFlag | null>(null);
   // Where a place search landed, so the map can show it. Null until a search
   // resolves; an unresolved search deliberately leaves this alone (no pin).
@@ -330,6 +353,58 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
+  /** The last news run. A failure just hides the news label; flags still render. */
+  const refreshNewsStatus = async () => {
+    try {
+      setIngestion(await riskService.getIngestionStatus());
+    } catch (error: any) {
+      console.warn('Ingestion status unavailable:', error?.message ?? error);
+      setIngestion(null);
+    }
+  };
+
+  /** D04's refresh: the flags for this instant, and when the news was last read. */
+  const refreshRiskLayer = () => {
+    fetchRiskFlags();
+    refreshNewsStatus();
+  };
+
+  /**
+   * "Fetch news now" — start a Live Risk Agent run and wait for it, then reload.
+   *
+   * The run takes a minute or two (polite fetching plus a model call per relevant
+   * article), so this polls the status rather than holding a request open. A run
+   * that started within the last minute counts as ours: if the schedule happened to
+   * start one just before the tap, the backend skips the duplicate and that run is
+   * the one worth waiting for.
+   */
+  const fetchNewsNow = async () => {
+    if (isFetchingNews) return;
+    setIsFetchingNews(true);
+    const requestedAt = Date.now();
+    try {
+      await riskService.runIngestion();
+      for (let attempt = 0; attempt < NEWS_POLL_LIMIT; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, NEWS_POLL_MS));
+        const status = await riskService.getIngestionStatus();
+        setIngestion(status);
+        const run = status.lastRun;
+        if (
+          run &&
+          run.status !== 'running' &&
+          new Date(run.startedAt).getTime() >= requestedAt - 60_000
+        ) {
+          break;
+        }
+      }
+    } catch (error: any) {
+      console.warn('News fetch failed:', error?.message ?? error);
+    } finally {
+      setIsFetchingNews(false);
+      refreshRiskLayer();
+    }
+  };
+
   /**
    * Move the map's clock. Dev builds only -- see the control at the bottom of render.
    *
@@ -401,9 +476,10 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   // around the centre (see RISK_FETCH_MIN_SPAN_DEGREES), so this does not need to
   // fire on every pan — and deliberately does not, because the map is driven by a
   // controlled `region` prop and adding a region-change handler to it risks the
-  // map fighting the user. D04 replaces this with explicit pull-to-refresh.
+  // map fighting the user. D04 adds the explicit refresh in the status badge; a map
+  // view has no scroll to pull, so "pull to refresh" is a button here.
   useEffect(() => {
-    fetchRiskFlags();
+    refreshRiskLayer();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region.latitude, region.longitude]);
 
@@ -775,11 +851,13 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       )}
 
-      {/* Risk layer status.
+      {/* Risk layer status, refresh, and "fetch news now" (D04).
           Small, but it is what turns "the map looks the same as yesterday" into a
-          readable answer: either a flag count, or the reason there is none. */}
+          readable answer: a flag count and when the news was last read, or the reason
+          there is none. Bottom-left since D04: at the top it sat under the search card
+          (zIndex 10) and could not be seen at all. */}
       {!routeMode && (
-        <View style={[styles.riskBadge, { top: insets.top + spacing.xs }]}>
+        <View style={[styles.riskBadge, { bottom: insets.bottom + spacing.xl }]}>
           <View
             style={[
               styles.riskDot,
@@ -793,8 +871,34 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
             ]}
           />
           <Text style={styles.riskBadgeText}>
-            {riskError ?? `${riskFlags.length} risk flags`}
+            {riskError ??
+              [`${riskFlags.length} risk flags`, newsLabel(ingestion, isFetchingNews)]
+                .filter(Boolean)
+                .join(' · ')}
           </Text>
+          <TouchableOpacity
+            onPress={refreshRiskLayer}
+            style={styles.riskBadgeButton}
+            hitSlop={8}
+            accessibilityLabel="Refresh risk flags"
+          >
+            <Ionicons name="refresh" size={16} color={colors.textSecondary} />
+          </TouchableOpacity>
+          {ingestion?.mode !== 'replay' && (
+            <TouchableOpacity
+              onPress={fetchNewsNow}
+              disabled={isFetchingNews}
+              style={styles.riskBadgeButton}
+              hitSlop={8}
+              accessibilityLabel="Fetch today's news now"
+            >
+              {isFetchingNews ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Ionicons name="newspaper-outline" size={16} color={colors.primary} />
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -972,6 +1076,11 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: fontSize.xs,
     fontWeight: '600',
+  },
+  riskBadgeButton: {
+    marginLeft: spacing.sm,
+    minWidth: 20,
+    alignItems: 'center',
   },
   sosButton: {
     position: 'absolute',

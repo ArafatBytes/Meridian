@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Linking,
   Modal,
   View,
   Text,
@@ -18,9 +19,8 @@ import type { RiskFlag } from '../types/contracts/risk';
  * severe it is **right now** versus when it was observed, its half-life, how long it
  * has left, and whether it has been confirmed.
  *
- * D04 fills in the source strip with real headlines and outlets; D05 adds the
- * confirmation time and the promotion. The shape is here now so neither sprint has to
- * build a screen as well as a pipeline.
+ * D04 filled in the source strip with real headlines and outlets; D05 adds the
+ * confirmation time and the promotion.
  *
  * Two rules this component follows, and both are load-bearing
  * -----------------------------------------------------------
@@ -110,6 +110,34 @@ function timeRemaining(expiresAt: string, from: string | null): string | null {
   const days = Math.round(minutes / (60 * 24));
   return days === 1 ? '1 day' : `${days} days`;
 }
+
+/**
+ * Publisher ids as people know them. Mirrors `SOURCES` in
+ * `backend/app/ingestion/sources/__init__.py`. An id not listed here — including every
+ * fixture `sample_*` id — is shown raw, so the fixture stays visibly a fixture.
+ */
+const OUTLET_NAMES: Record<string, string> = {
+  ekattor_tv: 'Ekattor TV',
+  independent_tv: 'Independent TV',
+  channel24: 'Channel 24',
+};
+
+const outletName = (sourceId: string) => OUTLET_NAMES[sourceId] ?? sourceId;
+
+/** "40 min ago", "3 h ago" — relative to the instant the surface was evaluated at. */
+function agoText(iso: string | null, from: string | null): string | null {
+  if (!iso) return null;
+  const minutes = Math.round(
+    ((from ? new Date(from).getTime() : Date.now()) - new Date(iso).getTime()) / 60000,
+  );
+  if (!Number.isFinite(minutes) || minutes < 0) return null;
+  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 60 * 48) return `${Math.round(minutes / 60)} h ago`;
+  return `${Math.round(minutes / (60 * 24))} days ago`;
+}
+
+/** Only real web links open. Fixture sources use a `sample:` scheme and go nowhere. */
+const isWebLink = (url: string) => /^https?:\/\//.test(url);
 
 /** "14:31" in the device's own timezone, which for this demo is Dhaka. */
 function clockTime(iso: string): string {
@@ -227,24 +255,43 @@ const RiskFlagSheet: React.FC<RiskFlagSheetProps> = ({ flag, asOf, onClose }) =>
               }
             />
 
-            {/* Source strip. D04 replaces these with real headlines and outlets; today
-                every entry is marked `sample_` on purpose, so that nobody — including
-                us, at midnight on the 23rd — can mistake the fixture for live data. */}
+            {/* Source strip — outlet, headline, when (D04). Live flags carry the real
+                article; tap it to open. The headline is the publisher's, quoted as
+                provenance and shown exactly as published: it is attribution, not the
+                product's claim, which is only ever the framed statement at the top.
+                Fixture flags keep their raw `sample_*` ids and `sample:` links, so
+                nobody — including us, at midnight on the 23rd — can mistake the
+                fixture for live data. */}
             {flag.sources.length > 0 && (
               <View style={styles.sources}>
                 <Text style={styles.sourcesHeading}>
                   {flag.sources.length === 1 ? 'Source' : 'Sources'}
                 </Text>
-                {flag.sources.map((source, index) => (
-                  <View key={`${source.sourceId}-${index}`} style={styles.source}>
-                    <Text style={styles.sourceId}>{source.sourceId}</Text>
-                    {source.title ? (
-                      <Text style={styles.sourceTitle} numberOfLines={2}>
-                        {source.title}
+                {flag.sources.map((source, index) => {
+                  const ago = agoText(source.publishedAt, asOf);
+                  const linked = isWebLink(source.url);
+                  return (
+                    <TouchableOpacity
+                      key={`${source.sourceId}-${index}`}
+                      style={styles.source}
+                      disabled={!linked}
+                      onPress={() => Linking.openURL(source.url)}
+                    >
+                      <Text style={styles.sourceId}>
+                        {outletName(source.sourceId)}
+                        {ago ? <Text style={styles.sourceAgo}>{`  ·  ${ago}`}</Text> : null}
                       </Text>
-                    ) : null}
-                  </View>
-                ))}
+                      {source.title ? (
+                        <Text
+                          style={[styles.sourceTitle, linked && styles.sourceTitleLink]}
+                          numberOfLines={2}
+                        >
+                          {source.title}
+                        </Text>
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             )}
 
@@ -354,6 +401,13 @@ const styles = StyleSheet.create({
   },
   sourceTitle: {
     fontSize: fontSize.xs,
+    color: colors.textSecondary,
+  },
+  sourceTitleLink: {
+    color: colors.primary,
+  },
+  sourceAgo: {
+    fontWeight: '400',
     color: colors.textSecondary,
   },
   footnote: {

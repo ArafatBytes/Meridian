@@ -69,17 +69,37 @@ Full write-up, indicators of compromise and the remediation checklist:
 
 ## 📍 CURRENT STATE
 
-*Last updated: 2026-10-08 · by: Nakib · after: D03*
+*Last updated: 2026-10-08 · by: Farhan Ishraq (Claude Code) · after: D04 (built; device walkthrough pending)*
 
 | | |
 |---|---|
-| **Last sprint completed** | **D03 — ✅ closed.** [`docs/walkthroughs/D03.md`](docs/walkthroughs/D03.md) run end to end on an iPhone in Expo Go, all 14 steps passed. All 12 checkboxes ticked in [DEMO_PLAN.md](DEMO_PLAN.md). **D03 was scheduled Oct 11–12 and closed Oct 8** |
-| **NEXT SPRINT** | **D04 — Today's news, on the map** (Oct 13–14) → [DEMO_PLAN.md](DEMO_PLAN.md) §D04. Source sprints S09, S14, S04 in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), which is where the task text lives |
-| **Baton holder** | **free** |
-| **Trunk** | `develop` · D01, D02 and D03 committed and pushed. **Not merged to `main`** — owner does that by hand |
-| **Build status** | 🟡 **121 invariant tests passing (35 new in D03), `mypy --strict` clean on `app` (67 files), `ruff` clean on every D03 file, `tsc` clean, 45 jest tests, 0 ESLint errors.** Two **pre-existing** problems, neither D03's and both present before it: `./scripts/check.sh` reports ~320 `ruff` findings in old code, and `tests/test_crime_vision.py` has 2 failures (PIL cannot decode the seed fixtures — D07 inherits them). Cleanup is Track B (B3, B5) |
-| **Slack** | **5 days.** D02 closed 2 days early, D03 another 3. `DEMO_PLAN.md` §8 names schedule slip as the likeliest failure and said there was none. **Spend it on §9, not on scope** — the OSRM graph is now the long pole and D06 assumes it is done |
+| **Last sprint completed** | **D03 — ✅ closed.** **D04 — 🟡 built and verified on the backend; [`docs/walkthroughs/D04.md`](docs/walkthroughs/D04.md) not yet run on a device**, which is the one gate left. All 14 D04 checkboxes ticked in [DEMO_PLAN.md](DEMO_PLAN.md) |
+| **NEXT SPRINT** | **Finish D04's gate**: run `docs/walkthroughs/D04.md` on the phone in Dhaka daytime, capture the replay (step O1), commit it. **Then D05 — Verification you can see** (Oct 15) → [DEMO_PLAN.md](DEMO_PLAN.md) §D05, source S15 |
+| **Baton holder** | **Farhan Ishraq** |
+| **Trunk** | Work branch **`ishraq-dev`** (cut from `main` @ `99922ec`). By agreement, commits go only to `ishraq-dev`; nothing is pushed to or merged into `main` from this side |
+| **Build status** | 🟡 **193 backend tests passing in `tests/invariants` + `tests/test_ingestion_sources.py` (185 invariants, 64 new; 1 skipped until a replay is captured), `mypy --strict` clean on `app` (80 files), `ruff` clean on every D04 file, `tsc` clean, 45 jest, ESLint 0 errors / 106 warnings (budget 106, none added).** Pre-existing and unchanged: ~320 `ruff` findings in old code, 2 failures in `tests/test_crime_vision.py`. **Fixed in D04:** the `migrate.py` "drift" that was only line endings — `up` works again |
+| **Slack** | D04 was scheduled Oct 13–14 and built Oct 8. **Spend the slack on §9** — the OSRM graph (D06) is still the long pole and still not started |
 | **Phase** | 0 — Foundation & Contracts |
+
+### 🟡 D04 BUILT — today's news reaches the map; the phone run is the last gate
+
+**2026-10-08, Farhan Ishraq with Claude Code, on `ishraq-dev`.** Full entry in the Handoff Log. In one
+paragraph: a `worker` container (Celery + beat) runs the **Live Risk Agent** every 15 minutes. It
+lists three outlets' sitemaps (Ekattor TV, Independent TV, Channel 24 — chosen by checking all ten
+channels in `top_10_bangladesh_news_channels.md`), filters headlines for incident vocabulary, reads the
+survivors politely (robots.txt, 3 s per host, Playwright only for Channel 24), asks Gemini on the new
+**EXTRACT** key for Dhaka mobility incidents, resolves places **gazetteer-only**, and writes
+`unconfirmed` single-source flags with framed statements. The map's status pill (now visible,
+bottom-left) shows "news N min ago" with refresh and **fetch news now**; the flag sheet shows outlet,
+headline, age and a link to the article. The offline demo serves a captured replay
+(`live_replay.json`) through the seeded surface.
+
+**Verified without a device:** a real run against the live sites, Gemini and Supabase (367 listed, 4
+relevant, 4 read, 0 Dhaka road events at 04:25 Dhaka time — correct); the publish path against the real
+schema in a rolled-back transaction (`রাজধানীর মিরপুর ১০ নম্বর গোলচত্বর এলাকায়` → *Road blocked near
+Mirpur-10 Circle.*, served by `DbRiskSurface`; a fabricated place → `unresolved_location`, no flag).
+**Not yet done:** the walkthrough on the phone, and the replay capture — which needs live flags, so it
+needs Dhaka daytime.
 
 ### ⚠️ One decision is open and it is a one-line change
 
@@ -102,6 +122,9 @@ owner's call.** Full numbers in `docs/walkthroughs/D03.md` § *Model selection*.
 **This project has no Anthropic key.** `ANTHROPIC_API_KEY` is in `.env.example` and absent from
 `.env`, so `DEMO_PLAN.md` §7.1's claim that *"the key is already configured"* was wrong — that matters
 because **D04, D07 and D08 all assume an LLM is available.**
+
+**D04 update:** ingestion has its own key now, `GEMINI_KEY_EXTRACT_ONE`, from a separate Google
+project (Gemini's free quota is per project, not per key), on `LLM_CHAIN_EXTRACT` (Gemini only).
 
 What exists instead, and it works: `GEMINI_KEY_GEO_ONE` and `GROQ_KEY_GEO_ONE`. Both Gemini and Groq serve the
 OpenAI Chat Completions wire format, so `app/llm/client.py` uses the `openai` SDK and reaches either
@@ -574,56 +597,38 @@ deferred** until Arafat and Nakib have discussed it.
 
 ### ▶️ RESUME HERE
 
-**You are taking over from Nakib. D01, D02 and D03 are closed, each verified on a real phone, all
-pushed to `develop`.** The trunk is green and the baton is free. `main` is behind — the owner merges by
-hand, do not do it for them.
+**D04 is built on `ishraq-dev` and verified on the backend; the device walkthrough is the one gate
+left.** D01–D03 are closed. By agreement with the owner, work is committed to `ishraq-dev` only —
+nothing is pushed to or merged into `main` from this side.
 
-**Start by proving you received something that runs**, before changing anything:
-
-```powershell
-.\scripts\run.ps1            # starts Docker + Expo, sets the phone's API URL
-```
-
-If the API never becomes healthy and the log ends in `ModuleNotFoundError`, you need
-`.\scripts\run.ps1 -Rebuild` once — the image caches its dependency layer and D03 added `openai`.
-
-**Then re-run the three existing walkthroughs on the phone. About 30 minutes, and it is a gate, not a
-courtesy.** `DEMO_PLAN.md` §3 makes "every previous walkthrough still passes" a handoff requirement,
-because that is the only thing that catches one sprint silently breaking an earlier one — which has
-already happened once on this project and would have surfaced on the 23rd.
-
-- [`docs/walkthroughs/D01.md`](docs/walkthroughs/D01.md) — risk pins, and an SOS that leaves a record
-- [`docs/walkthroughs/D02.md`](docs/walkthroughs/D02.md) — decay. Steps 7 and 9–12 catch a broken decay path
-- [`docs/walkthroughs/D03.md`](docs/walkthroughs/D03.md) — Bangla search. Steps 8 and 10 are the subtle ones
-
-**Next is D04 — *Today's news, on the map*, Oct 13–14.** [DEMO_PLAN.md](DEMO_PLAN.md) §D04 tells you
-which sprint and in what order; **[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) S09, S14 and S04 are
-the specification.** Read the cited sprint, not just the checklist.
+**1. Bring the stack up — `-Rebuild` once, because D04 added Chromium and a `worker` container:**
 
 ```powershell
-git checkout develop ; git pull
-git checkout -b sprint/D04-live-news
+.\scripts\run.ps1 -Rebuild
+docker ps        # meridian-api, meridian-worker, meridian-redis
 ```
 
-**Five things D03 built that D04 should use rather than rebuild:**
+**2. Close D04: run [`docs/walkthroughs/D04.md`](docs/walkthroughs/D04.md) on the phone, in Dhaka
+daytime.** At night the outlets publish almost nothing about Dhaka's roads and an empty map is the
+correct result, not a bug. While live news flags exist, do step O1 — `python -m app.agents
+export-replay` — and **commit `backend/data/fixtures/live_replay.json`**: it is the offline demo's beat
+1. Re-run D01–D03 in the same session (§3: every previous walkthrough still passes). Then fill in the
+walkthrough's "Ran on" line and flip the 🟡 above to ✅.
 
-1. **The LLM seam.** `await complete(system, user, SomeModel, feature=FEATURE_EXTRACT)` from
-   `app/llm/client.py` returns a validated Pydantic model or raises `LLMUnavailable`. Add your output
-   shape to `app/llm/models.py`. **Do not import an SDK anywhere else** — an invariant test fails, and
-   it checks for whichever SDK is in use, not for the word `anthropic`.
-2. **Config is per feature, and D04 must declare its own.** Add `LLM_CHAIN_EXTRACT` to
-   `app/core/config.py`, add `EXTRACT` to `app.llm.client.KNOWN_FEATURES`, and put
-   `GEMINI_KEY_EXTRACT_ONE` in `.env`. An unknown feature name raises rather than silently finding no
-   keys. **Give it its own keys** — that is the whole point of the split: an ingestion loop on a
-   10–15 minute cadence can burn a 500/day quota, and sharing D03's would kill the search box on stage.
-3. **Resolve places through `app/geo/agent.py::resolve_place`, with `allow_llm=False` for bulk work.**
-   Ingestion resolving 50 locations would otherwise spend 50 requests on names the gazetteer already
-   knows. The gazetteer-only path scores 93.3% and costs nothing.
-4. **Per-kind defaults live in `app/scoring/kinds.py`.** When you build a flag from an extracted
-   incident and have no severity, radius or half-life, read them from there. Every value is reviewed
-   and carries its reasoning; do not invent numbers at the call site.
-5. **Every flag D04 produces is `unconfirmed`.** Rumour Guard is D05, and an invariant test already
-   forbids one source producing a `confirmed` flag. Writing `confirmed` will trip it, correctly.
+**3. Then D05 — *Verification you can see*, Oct 15.** [DEMO_PLAN.md](DEMO_PLAN.md) §D05, source S15
+in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). Four things D04 built that D05 should use:
+
+1. **`extracted_incidents` is the input.** Every incident the agent read is a row, published or not,
+   with its `doc_id`, `location_text`, `kind` and the flag it produced (`flag_id`). Corroboration is
+   "several rows from *different* `source_id`s describing one event".
+2. **Live flags have `event_key = live-<doc_id[:16]>-<n>`** — one per incident, no dedup yet. Rumour
+   Guard's job is to give corroborating flags a shared `event_key`, raise `source_count`, merge
+   `sources`, and only then set `confirmed`. The database's CHECK still refuses `confirmed` below two
+   sources; do not weaken it.
+3. **Two of the three outlets run on one CMS** (Ekattor TV, Independent TV) but are separate newsrooms.
+   Syndicated identical copy is already collapsed by `raw_documents.content_hash`; the D05 independence
+   check (cut-first per §1) is about ownership, not CMS.
+4. **`sentence-transformers` is already in `requirements/agents.txt`** and therefore in the image.
 
 **Two traps that have each cost a session on this project:**
 
@@ -689,6 +694,152 @@ git push   # then PR, squash-merge to main, tell your partner
 ---
 
 # 📜 Handoff Log
+
+---
+
+## D04 — Today's news, on the map
+
+**Owner:** Farhan Ishraq (with Claude Code) · **Dates:** 2026-10-08 · **Branch:** `ishraq-dev` ·
+**Source sprints:** S09, S14, S04 · **Plan:** [DEMO_PLAN.md](DEMO_PLAN.md) D04
+
+All 14 checkboxes done. **The walkthrough has not been run on a device**, so the sprint is not closed —
+see CURRENT STATE. Everything below was verified against the live publishers, Gemini and Supabase.
+
+### Shipped
+
+You can now open the map, see when the news was last read, tap **fetch news now**, and get flags
+extracted from today's Bangla news; tap one and see the outlet, the headline as published, how long ago
+— and open the article.
+
+| | |
+|---|---|
+| Ingestion | `app/ingestion/` — `fetcher.py` (the only thing that touches a publisher: honest User-Agent, robots.txt, 3 s/host or Crawl-delay, bounded retries, Playwright lazily), `store.py` (`raw_documents`, dedup on URL hash and content hash, the retry queue), `sources/` (one parser for the Ekattor/Independent TV CMS, one for Channel 24) |
+| Sources | **Ekattor TV, Independent TV** — Google News sitemaps, server-rendered bodies (`div.jw_article_body`). **Channel 24** — daily sitemap (headline in the URL), body rendered by JavaScript, read with Playwright (`div.details-content-items`), falling back to the static headline + lead. Selection evidence in `sources/__init__.py` |
+| Agent | `app/agents/live_risk.py` — list → relevance filter → read → extract (Gemini, `NewsExtraction`) → gazetteer → `unconfirmed` flag + an `extracted_incidents` row for every incident, published or discarded |
+| Registry | `app/agents/registry.py` — discovers `AGENT` in every `app/agents/*.py`, builds the beat table from each `cron`, and `run_agent()` owns the session, the `agent_runs` row and an overlap guard. `python -m app.agents run <name> [--dry-run]` |
+| Schedule | `worker` container: `celery … worker -B --concurrency 1`. Live Risk every 15 min, expiry sweep (`app/agents/expiry_sweep.py`, D02's script on a schedule) every 30. The two phantom beat entries are deleted |
+| API | `GET /api/v1/ingestion/status` (last run; `mode: replay` when seeded), `POST /api/v1/ingestion/run` (signed in; 202; runs in-process, the guard makes a double tap a no-op) |
+| Offline | `python -m app.agents export-replay` writes live flags to `data/fixtures/live_replay.json` in fixture form; `SeededRiskSurface` serves it, re-anchored to process start |
+| App | Status pill moved bottom-left (it had been hidden under the search card since D03) with "news N min ago", refresh, fetch-news-now; flag sheet shows outlet name, `N min ago`, the headline as a link |
+| Tests | `tests/invariants/test_live_flags_are_unconfirmed.py` (64, most of them one parametrised test over every kind × impact), `tests/test_ingestion_sources.py` (9) |
+
+### Decisions
+
+1. **The sources, from the owner's list of ten.** Only Ekattor and Independent TV serve article text
+   in HTML; Channel 24 needs a browser but has the most Dhaka (`capital`) coverage. Jamuna answers
+   robots.txt itself with 403 — read as "no crawlers", and respected. Evidence per site in
+   `app/ingestion/sources/__init__.py`.
+2. **Headline filter before fetch.** Incident vocabulary in the headline, a non-excluded desk
+   (`international`, `country`, `sports` …) and published in the last 12 h. It decides what is worth a
+   request, never what is true. At 04:25 Dhaka it passed 4 of 367.
+3. **Places are resolved gazetteer-only**, as D03's handoff advised: free, deterministic, 0
+   fabrications. News phrasing broke exact matches (`রাজধানীর মিরপুর ১০ নম্বর গোলচত্বর এলাকায়`), so
+   the prompt asks for the bare name and `place_candidates()` removes a fixed list of filler words —
+   it may remove words, never substitute a name; a test pins that.
+4. **No model-extracted time.** Free-tier models turn "গতকাল সন্ধ্যায়" into instants badly; the
+   article's publication time anchors decay.
+5. **Discard reasons are explicit:** `low_confidence` (< 0.5), `unresolved_location`, and `rejected`
+   for an event with `mobility_impact = none`. Every discard is a row in `extracted_incidents`.
+6. **`severity_hint` nudges, it does not decide** — `kinds.SEVERITY_HINT_FACTOR` (0.6 / 1.0 / 1.3 on
+   the reviewed baseline), with its reasoning, rather than numbers at the call site.
+7. **The flag's radius is the wider of the kind's reach and the place's own radius.** A fire resolved
+   only to "Mirpur" is claimed over Mirpur, not over 400 m of it — honest about where we are unsure.
+8. **Offline replay is a captured fixture, not the document cache.** `raw_documents` lives in Supabase,
+   so "replay from the cache with the network off" cannot work; and replaying extraction would need the
+   model. The capture is real flags in fixture form — no prose, `seed-live-` keys, re-anchored on load
+   — through the exact loader and checks D02 built. The seeder never loads it (the live originals are
+   already in the database).
+9. **"Pull to refresh" is a button.** A map has no scroll to pull. "Fetch news now" exists because
+   waiting up to 15 minutes on stage is not a plan; it runs in the API process (always up when the app
+   is), and the registry's guard skips a run while another is in flight.
+10. **Headlines are shown exactly as published**, as quoted provenance. The product's own claim is
+    only the framed statement; the framing guard covers that and not the outlet's words.
+11. **Gemini only on EXTRACT, no Groq fallback.** gpt-oss-120b scored 15.6% on Dhaka places in D03,
+    and a rate-limited run loses nothing: documents stay queued (`extracted_at is null`).
+
+### CONTRACT CHANGE
+
+- **Changed:** `app/contracts/agents.py` — `AgentContext.db: AsyncSession | None = None`.
+- **Breaks:** nothing; no `BaseAgent` existed before D04.
+- **Updated in this sprint:** both agents and the registry, which is the only constructor.
+- **TS mirror updated:** not applicable — agent contracts are not mirrored.
+
+### Migrations
+
+- `20261008120000__raw_documents_extracted_at.sql` — `raw_documents.extracted_at` and a partial index.
+  "Has the model read this?" cannot be answered from `extracted_incidents`, because most articles yield
+  no rows. **Applied to the owner's Supabase** (via `migrate.py sql --version`, before the line-ending
+  fix below made `up` usable again); `status` now shows all three applied, 0 pending.
+
+### Env vars added
+
+- `LLM_CHAIN_EXTRACT=gemini:gemini-3.5-flash-lite` and `GEMINI_KEY_EXTRACT_ONE=` — in `.env.example`.
+  The owner's key arrived as `IQ_GEMINI` and was renamed in `backend/.env`; the client only discovers
+  `<PROVIDER>_KEY_<FEATURE>_*`.
+
+### Measurements
+
+| | |
+|---|---|
+| Live run, 04:25 Dhaka | 367 listed · 4 relevant · 4 read (Channel 24 via Playwright) · 0 incidents — correct for the hour |
+| Run time | ~40 s, almost all of it politeness delays and one render |
+| Publish path (rolled back) | news phrasing → `Mirpur-10 Circle`, `unconfirmed`, trigger-derived expiry, served by `DbRiskSurface`; fabricated place → `unresolved_location` |
+| Tests | invariants + ingestion: **193 passed, 1 skipped** (replay not captured) — invariants 121 → 185 · `mypy --strict` 80 files clean |
+| Frontend | `tsc` clean · ESLint 0 errors / 106 warnings, none added (MapScreen 6 before, 6 after) · jest 45/45 |
+
+### Found while building, not planned
+
+- **Independent TV's "headlines" were photo captions.** Its sitemap lists `image:title` before
+  `news:title`; the parser took the first `title`. Image and video extensions are now skipped, with a
+  regression test. Found by printing what the filter saw, not by a test.
+- **The risk status pill was invisible.** It shared `top` with the search card (`zIndex: 10`). Moved.
+- **Migration "drift" that was line endings — fixed in `scripts/migrate.py`.** `status` reported
+  `20261007120100` as CHANGED and `up` refused to run for everyone. The ledger holds the **CRLF** hash
+  of `20261007120000` (`8575ba…`) and the **LF** hash of `20261007120100` (`45302f…`) — each is exactly
+  the committed content, checksummed in checkouts with different line endings (`core.autocrlf=true`
+  on Windows; LF in a container or a freshly written file). D04's own migration would have hit the
+  same trap on its next checkout. `Migration.matches()` now accepts either form while new rows record
+  the LF form; an edited statement is still drift (`tests/test_migrate_checksum.py`, 3 tests). No
+  ledger row was touched. The live schema had also been compared column by column and CHECK by CHECK
+  against the file before the cause was found — it matches.
+
+### Deliberately NOT done
+
+- **No device run** — the gate. And no replay captured: at the hour of building there were no live
+  flags to capture.
+- **No Groq fallback on EXTRACT, no LLM tier for places** — Decisions 3 and 11.
+- **No per-flag `time_profile`.** Kind defaults apply, as before.
+- **No `prompts/live_risk_v1.md` file.** The prompt is a constant in `live_risk.py`, like D03's, and
+  `PROMPT_VERSION` names it. A file adds indirection without adding a diff the constant does not have.
+- **No extraction eval (S14 asks for one).** There is no annotated corpus yet; the corpus is background
+  work. The first live days' `extracted_incidents` rows are the natural start of one.
+- **`run.ps1` was not changed** — its `docker compose up -d` already starts `worker`.
+- **The two pre-existing `ruff format` diffs** in `app/llm/models.py` and `app/scoring/fixture.py`
+  are not D04's lines and were left.
+
+### Gotchas for the next agent
+
+1. **Rebuild once (`run.ps1 -Rebuild`)** — the image gained Chromium in its own layer.
+2. **`.env` edits need `docker compose up -d --force-recreate api worker`.** Both read `env_file` at
+   create time.
+3. **An empty news map at night is correct.** Check `python -m app.agents run live_risk --dry-run`'s
+   metrics before suspecting the code.
+4. **`DEBUG=true` makes logs enormous** (SQLAlchemy echo, including article bodies). Filter on
+   `app.agents`.
+5. **Git Bash rewrites `/tmp/...` arguments to `docker exec`** into Windows paths. Prefix commands with
+   `MSYS_NO_PATHCONV=1`, or use PowerShell.
+6. **`backend/.env` stays committed** — the owner confirmed it for this private repo. The B0 rotation
+   note at the top still applies, now including the EXTRACT key.
+
+### Prototype Gate
+
+- [x] It runs — backend end to end against live sources; app `tsc`/ESLint/jest clean
+- [x] `mypy --strict` clean on `app`; `ruff` clean on every D04 file
+- [x] Invariant tests: 64 new (121 → 185), all passing
+- [x] `docs/walkthroughs/D04.md` written, with expected results and fallbacks
+- [ ] **`docs/walkthroughs/D04.md` run on a real device, live and offline** ⏳
+- [ ] **D01–D03 walkthroughs re-run** ⏳ (owner said they were checked before D04 began)
+- [ ] **Replay captured and committed** ⏳ needs Dhaka daytime
 
 ---
 

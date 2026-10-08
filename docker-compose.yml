@@ -16,12 +16,8 @@
 #   targets Supabase's auth.users and storage schemas, which a bare postgres
 #   image does not have.
 #
-# * celery worker / beat — app/core/celery_app.py schedules two tasks whose
-#   modules do not exist (`crime_service.update_crime_scores`,
-#   `storage_service.cleanup_old_videos`) and there are no @task definitions
-#   anywhere, so beat crashes on boot. Added in S04 with the agent registry.
-#
-# * flower — monitors a worker that does not run yet.
+# * flower — the worker below logs every run, and `agent_runs` records them.
+#   A dashboard can wait for more than two agents.
 # =============================================================================
 
 services:
@@ -74,7 +70,41 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   # ===========================================================================
-  # redis — cache + future Celery broker
+  # worker — the agent schedule (D04)
+  # ===========================================================================
+  # Celery worker with beat embedded (-B): one container, one process tree, and
+  # concurrency 1 so two agents never compete for the same free-tier quota. The
+  # schedule comes from each agent's `cron` (app/agents/registry.py): the Live
+  # Risk Agent every 15 minutes, the expiry sweep every 30.
+  #
+  # Same image as `api`. It never imports the vision stack, so it starts in
+  # seconds. `.env` changes need `up -d --force-recreate worker`, like `api`.
+  worker:
+    image: meridian-api:dev
+    container_name: meridian-worker
+    env_file:
+      - ./backend/.env
+    environment:
+      REDIS_HOST: redis
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      PYTHONPATH: /app
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+    command: celery -A app.core.celery_app worker -B --concurrency 1 --loglevel info
+
+  # ===========================================================================
+  # redis — cache + Celery broker
   # ===========================================================================
   # Unused by application code until the geo-proxy cache lands in S05, but
   # app/core/redis.py builds a client at import and config requires a URL, so

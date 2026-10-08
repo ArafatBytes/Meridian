@@ -335,27 +335,32 @@ and tapping one shows the headline and the outlet it came from.
 **Gate:** `docs/walkthroughs/D04.md` passes on a device, **and passes again with the network off**,
 replaying from the document cache. D01–D03 still pass.
 
-- [ ] Ingestion framework behind a **source-agnostic interface** — the concept document's own
+- [x] Ingestion framework behind a **source-agnostic interface** — the concept document's own
       mitigation for social-media access restrictions *(S09)*
-- [ ] Three Bangla news sources: `BeautifulSoup` where static, `Playwright` where not *(S09)*
-- [ ] `raw_documents` persistence, deduplicated on URL and content hash *(S09)*
-- [ ] Polite collection: `User-Agent`, rate limits, robots respected. Being blocked mid-rehearsal is
+- [x] Three Bangla news sources: `BeautifulSoup` where static, `Playwright` where not *(S09)* —
+      Ekattor TV and Independent TV (one CMS, static), Channel 24 (Playwright)
+- [x] `raw_documents` persistence, deduplicated on URL and content hash *(S09)*
+- [x] Polite collection: `User-Agent`, rate limits, robots respected. Being blocked mid-rehearsal is
       a self-inflicted wound *(S09)*
-- [ ] LLM extraction into `extracted_incidents`: kind, location reference, time, severity hint,
-      source. A validated model out of `app/llm/client.py`, never raw text *(S14)*
-- [ ] `LiveRiskAgent` — extraction, then `GeolocationAgent`, then `risk_flags`, on a 10–15 minute
-      cadence *(S14)*
-- [ ] ⚠️ **Every flag this sprint produces is `unconfirmed`.** Rumour Guard is D05, and D01's
+- [x] LLM extraction into `extracted_incidents`: kind, location reference, time, severity hint,
+      source. A validated model out of `app/llm/client.py`, never raw text *(S14)* — no
+      model-extracted time: the article's publication time is the anchor
+- [x] `LiveRiskAgent` — extraction, then `GeolocationAgent`, then `risk_flags`, on a 10–15 minute
+      cadence *(S14)* — every 15 minutes; gazetteer-only place resolution
+- [x] ⚠️ **Every flag this sprint produces is `unconfirmed`.** Rumour Guard is D05, and D01's
       invariant test already forbids one source producing a `confirmed` flag. Writing `confirmed`
       here would trip it — correctly
-- [ ] Celery schedule registry; delete the two phantom beat entries *(S04)*
-- [ ] `agent_runs` populated: started, finished, documents seen, flags produced, errors *(S14)*
-- [ ] **Cache every fetched document, and make the cache replayable.** The demo must be able to run a
-      known-good ingestion offline. Do not let a hotel network decide whether beat 1 works
-- [ ] 📱 **Source strip in the flag detail sheet** — headline, outlet, time. Beat 2, half of it
-- [ ] 📱 **A "last updated" indicator and pull-to-refresh** on the map, so ingestion is visible as an
-      event rather than inferred from pins changing
-- [ ] 📄 `docs/walkthroughs/D04.md`
+- [x] Celery schedule registry; delete the two phantom beat entries *(S04)*
+- [x] `agent_runs` populated: started, finished, documents seen, flags produced, errors *(S14)*
+- [x] **Cache every fetched document, and make the cache replayable.** The demo must be able to run a
+      known-good ingestion offline. Do not let a hotel network decide whether beat 1 works —
+      documents cached in `raw_documents`; the offline replay is a captured flag fixture
+      (`live_replay.json`), because `raw_documents` lives in Supabase, which is offline too
+- [x] 📱 **Source strip in the flag detail sheet** — headline, outlet, time. Beat 2, half of it
+- [x] 📱 **A "last updated" indicator and pull-to-refresh** on the map, so ingestion is visible as an
+      event rather than inferred from pins changing — a refresh button, since a map has no scroll to
+      pull, plus "fetch news now"
+- [x] 📄 `docs/walkthroughs/D04.md` — written; **not yet run on a device** (the remaining gate)
 
 ---
 
