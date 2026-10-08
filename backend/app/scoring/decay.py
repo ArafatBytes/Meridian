@@ -296,6 +296,27 @@ def severity_at(
     return min(100.0, max(0.0, base * hour_multiplier(profile, at)))
 
 
+def effective_severity(*, severity_now: float, confidence: float) -> float:
+    """
+    What a flag is worth to a *decision*: its decayed severity, times its confidence.
+
+    The split matters. `severity_now` answers "how bad is this event right now",
+    which is the decay story the flag sheet narrates and the map colours by.
+    `confidence` answers "how sure are we that it happened", which is D05's
+    verification tier. Multiplying them inside `severity_at()` would collapse two
+    different questions into one number and make the sheet's arithmetic
+    ("74 when observed, 31 now, 42% remaining") wrong.
+
+    **D06's route scoring must use this, not `severity_now`.** An unconfirmed flag
+    should bend a route less than a corroborated one; that is the whole point of
+    publishing at reduced weight rather than suppressing.
+
+    `confidence` comes from `app.policy.independence.confidence(status)` and is
+    carried on `RiskFlag.confidence`, so callers do not re-derive it.
+    """
+    return min(100.0, max(0.0, severity_now * confidence))
+
+
 def expires_at_for(
     *,
     severity_0: float,

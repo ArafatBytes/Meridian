@@ -56,7 +56,7 @@ to do on the device that evening.
 | **D02** | Oct 9–10 | 200 flags across Dhaka. Tap one: severity, half-life, time left. Watch one decay and vanish. | S04, S19, S20 |
 | **D03** | Oct 11–12 | Type **"Mirpur 10 golchattar"**. The map flies there and tells you how it resolved it. | S10, S11, S04 |
 | **D04** | Oct 13–14 | Pull to refresh: flags from **today's real news**, each with its headline and outlet. — **✅ closed Oct 8** | S09, S14, S04 |
-| **D05** | Oct 15 | Unconfirmed flags look different. Tap one: the sources listed. Watch a promotion happen. | S15 |
+| **D05** | Oct 15 | Unconfirmed flags look different. Tap one: the sources listed. Watch a promotion happen. — **✅ closed Oct 8** | S15 |
 | **D06** | Oct 16–17 | Ask for a route through a flagged corridor. Get alternatives, each with a plain-English reason. | S12, S13, S05, S07 |
 | **D07** | Oct 18–19 | Photograph a two-person scene. Get a real interaction read. See the evidence photo stored. | S06 |
 | **D08** | Oct 20–21 | Turn a report into a **Bangla General Diary** draft. Correct thana. Cannot submit unapproved. | S27, S28 |
@@ -424,16 +424,68 @@ worked example's 14:26 → 14:31 transition. D01–D04 still pass.
 > **One day, and it is the tightest sprint in the track.** Embedding thresholds are fiddly to tune.
 > The cut is pre-declared below rather than improvised at midnight.
 
-- [ ] `sentence-transformers` semantic deduplication across sources, so four outlets reporting one
-      fire collapse into one event rather than four corroborations *(S15)*
-- [ ] Multi-source threshold promotes to `confirmed`; below it, `unconfirmed` at reduced weight *(S15)*
-- [ ] **The invariant test from D01 now runs against real data**, not a stub *(S15)*
-- [ ] Promotion path: `unconfirmed` → `confirmed` on a second independent source *(S15)*
-- [ ] 📱 **Confirmed vs unconfirmed rendered differently on the map** — not just a field in a sheet.
-      The tiering is an ethical commitment; it should be legible at a glance
-- [ ] 📱 **Source count badge** on the pin, source list and confirmation time in the sheet *(S15)*
-- [ ] 📱 A **scripted replay** that performs the promotion on demand, for the stage
-- [ ] 📄 `docs/walkthroughs/D05.md`
+- [x] `sentence-transformers` semantic deduplication across sources, so four outlets reporting one
+      fire collapse into one event rather than four corroborations *(S15)* — `app/agents/rumour_guard.py`.
+      Four gates, all required: same `kind`, overlapping radii (capped at 3 km), `observed_at` within
+      `DEDUP_WINDOW_HOURS`, then cosine similarity. The first three are SQL and nearly free, so the
+      embedding only ever runs on the handful of rows they let through. **No pgvector and no embedding
+      column** — candidate summaries are re-embedded at comparison time, which is affordable precisely
+      because the cheap gates run first
+- [x] Multi-source threshold promotes to `confirmed`; below it, `unconfirmed` at reduced weight *(S15)* —
+      `app/policy/independence.py`. Weight is **0.6**, exposed as `RiskFlag.confidence` and derived by
+      the surfaces exactly as `severity_now` is. ⚠️ **`severity_now` is deliberately not damped by it:**
+      that value is the decay story the sheet narrates ("74 when observed, 31 now, 42% remaining") and
+      multiplying it would make that arithmetic wrong. Decisions want
+      `decay.effective_severity(severity_now, confidence)` — **D06 must use it, or the tier is decoration**
+- [x] **The invariant test from D01 now runs against real data**, not a stub *(S15)* — a fourth layer in
+      `test_single_source_never_confirmed.py`: the promotion arithmetic, a check that `status` and
+      `source_count` are written in one statement (the CHECK compares them), an AST-ish scan asserting
+      **only** `rumour_guard.py` may write `status='confirmed'`, and an `integration` test that counts
+      *distinct publishers* in every confirmed row in the live database rather than trusting
+      `source_count` to agree with itself
+- [x] Promotion path: `unconfirmed` → `confirmed` on a second independent source *(S15)* — one
+      `SourceRef` per publisher, so `source_count == len(sources) == independent publishers` and all
+      three `risk_flags` constraints stay true of live data for the same reason they are true of the
+      fixture. **A same-outlet follow-up does not inflate corroboration**; it is still kept in full in
+      `extracted_incidents`. `confirmed_at` is stamped once, on the transition
+- [x] 📱 **Confirmed vs unconfirmed rendered differently on the map** — not just a field in a sheet.
+      The tiering is an ethical commitment; it should be legible at a glance — new
+      `components/RiskFlagMarker.tsx`: **solid filled dot with the source count** vs **hollow dashed
+      ring with a `?`**, and the radius circle carries the same split (solid/stronger vs dashed/fainter).
+      Two channels for one distinction, because colour is already spent on severity
+- [x] 📱 **Source count badge** on the pin, source list and confirmation time in the sheet *(S15)* —
+      the count is *on* the pin. The sheet gained a **Confirmed** row (rendering `time not recorded`
+      rather than substituting `observed_at`) and a footnote stating the consequence: shown and counted
+      at 60%, never hidden. The badge no longer hard-codes "1 source" — D05 makes
+      *unconfirmed with 2 sources* a real state
+- [x] 📱 A **scripted replay** that performs the promotion on demand, for the stage —
+      `python -m app.agents promote-demo`, with `--dry-run` and `--reset` so it is rehearsable. It runs
+      **through `rumour_guard.merge_into()`**, the production path; the injected source is
+      `demo_second_source` at `meridian.invalid`, labelled so it cannot be mistaken for an outlet
+- [x] 📄 `docs/walkthroughs/D05.md` — **all 11 steps passed on a real device, first run, no issues
+      found (Arafat, 2026-10-08), including the promotion and the reset. D05 is closed.** Notably the
+      device run found nothing the backend verification had missed — worth recording, because D04's
+      run found three defects and the contrast is the useful signal
+- [x] **Previous walkthroughs re-checked for breakage (§3's second gate).** D05 replaced the map
+      marker, which falsified a statement in `D01.md`'s *Rough edges* — it listed "no distinction
+      between confirmed and unconfirmed" as a rough edge **scheduled for D05**, so D05 delivering it
+      made that text wrong. `D01.md` steps 6 and 8 and that bullet are corrected, and `D04.md`'s
+      *Finding the news flag* now notes that shape narrows the search without solving it
+- [x] **Deviation from this plan's own §9, and it is the finding of the sprint:**
+      `DEDUP_SIMILARITY_THRESHOLD=0.82` was declared before anything measured it. Measured on
+      `all-MiniLM-L6-v2` against the text this system actually embeds — the extraction model's one-line
+      English summaries — **0.82 merges 1 of 18 known duplicate pairs.** D05 would have shipped as a
+      no-op that looked implemented: four outlets would still have produced four unconfirmed pins, and
+      nothing in a green test suite would have said so. Now **0.72**, the highest threshold with zero
+      false merges on the labelled set. `scripts/eval_dedup.py` + `data/eval/dedup/clusters.json` are
+      the harness S15 asked for, so the number is reproducible and re-tunable
+- [x] **Also found, and it constrains what can be claimed:** the classes are **not separable**. Lowest
+      true duplicate 0.503, highest false pair 0.718 — and the second account of the real Mohakhali fire
+      scores **0.718**, identical to the worst false pair. No threshold divides them, because "two
+      reports of one fire in Bangshal" and "two fires in Bangshal hours apart" read the same in one
+      line. **Recall is ~56% by choice**, precision 100% on the labelled set, and that asymmetry is why
+      the scripted replay exists rather than hoping two outlets phrase a fire alike mid-demo. A test
+      asserts the near-miss so a future improvement gets recorded instead of silently absorbed
 
 **Cut this first if the day runs out → Track B, after B6a:**
 
@@ -625,7 +677,7 @@ inconvenience.
 | S06 | AI vision: multi-person pose & evidence | **D07**, in full |
 | S07 | Frontend defects | Defect 3 → **D01**. Defect 11 → **D06**. Evidence photos → **D07**. **Defect 14 → D09**. Defect 16, `HomeScreen` cleanup, shake threshold → **B5** |
 | S08 | Frontend refactor | **B6** |
-| S09 | Ingestion framework | **D04** |
+| S09 | Ingestion framework | Framework, politeness, `raw_documents`, three Bangla **newspaper** sources → **D04**. **Social media, official feeds and the rest of the concept document's live source categories → B11a** — these were never built, and until 2026-10-08 this row claimed D04 covered S09 in full, which was the kind of error §5 exists to catch |
 | S10 | Bangla gazetteer | **D03** (one zone). National density → **B7** |
 | S11 | Geolocation Agent | **D03** |
 | S12 | Risk-aware routing | **D06** |
@@ -685,6 +737,7 @@ has been lifted out of it.
 | **B9** | Admin observability — fleet health at a glance | S21 | Once eight agents run on schedules, you cannot operate them without this. |
 | **B10** | **Journey Guardian** — anomaly detection, then graded escalation | S22, S23 | Deferred by the concept document itself. **Its two-week self-trial should start as a background activity as soon as B8 lands** — no sprint can contain it. |
 | **B11** | Chronic Risk Agent — newspaper archive mining at scale | S24 | The chronic *layer* already exists from D02's police-statistics model; this is what makes it real. |
+| **B11a** | **Widen the Live Risk Agent's sources beyond newspapers — the concept document's `social media` and `early signal` half.** Candidate categories, in the order worth trying: public **RSS/Atom** feeds; public **Telegram** channels (a real API, no ToS problem); **official feeds** — DMP traffic, Fire Service, City Corporation; and **user reports**, which the concept document names in the same breath as social media and which S29/B13 already covers. Facebook and Instagram page scraping is **last**, not first — see *Why here*. Each new source is one file under `app/ingestion/sources/` plus one line in `SOURCES`. ⚠️ **Two constraints that are not optional:** social and user-generated content is lower-reliability than an edited article, so it must feed the **Rumour Guard tiering (D05)** and must never on its own produce a `confirmed` flag — D01's invariant test already forbids it and would catch an attempt; and scraping public posts about named individuals is a **different privacy surface** from quoting a newspaper headline, so it is governed by concept document §9 and the B14 retention registry, not waved through on "it was public". | Concept doc §§ *Read*, *Live Risk Agent*, *Data sources*; S09, S14 | **Deferred, not dropped — and it was never built.** The concept document promises social media in five places, including the Live Risk Agent's own definition (*"monitors news sites **and public social media pages***"). Both plans narrowed it to three newspaper sites, and `DEMO_PLAN.md` §D04's first checkbox took the concept document's own *mitigation* for social-media access restrictions — the source-agnostic interface — **as the deliverable instead of the thing it was mitigating**. That reading is defensible and it is also how a commitment becomes an abstraction. It sits here rather than earlier because the blocker is **access, not effort**: Facebook and Instagram public-page scraping breaks their terms and is brittle, and X's API is paid — which is precisely why the concept document wrote that risk row. The cheap wins (RSS, Telegram, official feeds) are worth pulling forward the moment anyone has a free afternoon. **Until it lands, do not say the system reads social media.** The honest and demonstrable claim is that ingestion is source-agnostic and a new source is one file. |
 | **B12** | Legacy surface retirement and the ৳/day cost model | S25 | Needs a full agent fleet to measure. |
 | **B13** | Crowd verification — asynchronous, rate-limited | S29 | An abuse surface. The async version is the defensible one; do not rush it. |
 | **B14** | Privacy and retention enforcement — expired data verifiably gone | S30 | The concept document commits to data minimisation. This is where the commitment becomes testable. |

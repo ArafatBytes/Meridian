@@ -75,6 +75,8 @@ interface RiskFlagWire {
   time_profile: TimeProfile | null;
   valid_from: string | null;
   valid_to: string | null;
+  confirmed_at: string | null;
+  confidence: number;
 }
 
 interface RiskFlagsResponseWire {
@@ -118,6 +120,11 @@ function toRiskFlag(wire: RiskFlagWire): RiskFlag {
     sources: (wire.sources ?? []).map(toSourceRef),
     mobilityStatement: wire.mobility_statement,
     timeProfile: wire.time_profile,
+    confirmedAt: wire.confirmed_at ?? null,
+    // Defaulted rather than asserted: a backend that predates D05 omits it, and a
+    // flag that counts for nothing because a field was missing is a worse failure
+    // than one that counts for too much. `status` still drives what the map draws.
+    confidence: wire.confidence ?? 1,
     validFrom: wire.valid_from,
     validTo: wire.valid_to,
   };

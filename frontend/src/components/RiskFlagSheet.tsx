@@ -210,9 +210,19 @@ const RiskFlagSheet: React.FC<RiskFlagSheetProps> = ({ flag, asOf, onClose }) =>
                   { color: isConfirmed ? colors.success : colors.textSecondary },
                 ]}
               >
+                {/* The count is read from the flag, not assumed. D05 made
+                    "unconfirmed with 2 sources" a real state: Rumour Guard merges a
+                    second account whenever it is confident the event is the same, but
+                    promotes only when the publishers are independent. Hard-coding
+                    "1 source" here would have mislabelled exactly the flag whose
+                    provenance is most interesting. */}
                 {isConfirmed
-                  ? `Confirmed · ${flag.sourceCount} sources`
-                  : 'Unconfirmed · 1 source'}
+                  ? `Confirmed · ${flag.sourceCount} ${
+                      flag.sourceCount === 1 ? 'source' : 'sources'
+                    }`
+                  : `Unconfirmed · ${flag.sourceCount} ${
+                      flag.sourceCount === 1 ? 'source' : 'sources'
+                    }`}
               </Text>
             </View>
 
@@ -227,6 +237,18 @@ const RiskFlagSheet: React.FC<RiskFlagSheetProps> = ({ flag, asOf, onClose }) =>
           <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
             <Row label="Category" value={kindLabel(flag.kind)} />
             <Row label="Observed" value={clockTime(flag.observedAt)} />
+
+            {/* D05, and demo beat 2's "confirmed 14:31". Two different questions:
+                `observed` is when the city had the event, `confirmed` is when we were
+                willing to say so. Rendered only when we actually know -- a fixture
+                flag authored confirmed has no moment of promotion, and substituting
+                `observedAt` would claim we corroborated it the instant it happened. */}
+            {isConfirmed && flag.confirmedAt && (
+              <Row label="Confirmed" value={clockTime(flag.confirmedAt)} />
+            )}
+            {isConfirmed && !flag.confirmedAt && (
+              <Row label="Confirmed" value="time not recorded" />
+            )}
 
             {/* The decay story, in three lines. "74 when observed, 31 now, 42%
                 remaining" is what makes beat 5 legible without narration. */}
@@ -294,6 +316,19 @@ const RiskFlagSheet: React.FC<RiskFlagSheetProps> = ({ flag, asOf, onClose }) =>
                 })}
               </View>
             )}
+
+            {/* The tier in words, because the hollow dashed pin on the map is a
+                shorthand a first-time viewer has not learnt yet. It also states the
+                consequence -- that an unconfirmed flag is discounted rather than
+                suppressed -- which is the half of the commitment a badge cannot carry.
+                `confidence` is the server's number; this does not re-derive it. */}
+            <Text style={styles.footnote}>
+              {isConfirmed
+                ? `Reported independently by ${flag.sourceCount} publishers, so this counts at full weight in routing.`
+                : `A single publisher's account, not yet corroborated. It is shown — hollow and dashed on the map — and counted at ${Math.round(
+                    flag.confidence * 100,
+                  )}% weight, never hidden. One source never confirms anything.`}
+            </Text>
 
             <Text style={styles.footnote}>
               Severity decays on its own. Nothing here is a judgement about a place or

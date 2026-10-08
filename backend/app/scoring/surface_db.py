@@ -27,6 +27,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.contracts.risk import IncidentKind, RiskFlag, SourceRef, TimeProfile
+from app.policy.independence import confidence
 from app.scoring.decay import severity_at
 
 POSTGIS_SCHEMA: Final[str] = "extensions"
@@ -67,6 +68,7 @@ _FLAG_COLUMNS: Final[str] = f"""
     source_count,
     sources::text  AS sources_json,
     mobility_statement,
+    confirmed_at,
     time_profile::text AS time_profile_json
 """
 
@@ -141,6 +143,11 @@ def _row_to_flag(row: Any, at: datetime) -> RiskFlag:
         sources=[SourceRef(**s) for s in raw_sources],
         mobility_statement=row.mobility_statement,
         time_profile=time_profile,
+        confirmed_at=row.confirmed_at,
+        # D05. Derived here rather than stored, for the same reason `severity_now` is:
+        # the weight an unconfirmed flag carries is a policy decision, and a surface is
+        # the only place allowed to turn policy into a field.
+        confidence=confidence(row.status),
     )
 
 

@@ -40,6 +40,7 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.rumour_guard import find_duplicate, merge_into
 from app.contracts.agents import AgentContext, AgentResult, AgentStatus, BaseAgent
 from app.contracts.risk import GeoResolution, IncidentKind, MobilityImpact, RawDocument
 from app.geo.agent import resolve_place
@@ -410,20 +411,49 @@ async def _publish(
     if dry_run:
         return reason is None, reason
 
-    flag_id: UUID | None = None
-    if reason is None:
-        row = flag_row(doc=doc, index=index, incident=incident, place=place)
-        result = await db.execute(
-            _INSERT_FLAG, {**row, "sources": json.dumps(row["sources"], ensure_ascii=False)}
-        )
-        flag_id = result.scalar_one()
-
     source = {
         "source_id": doc.source_id,
         "url": doc.url,
         "title": doc.title,
         "published_at": doc.published_at.isoformat() if doc.published_at else None,
     }
+
+    flag_id: UUID | None = None
+    if reason is None:
+        row = flag_row(doc=doc, index=index, incident=incident, place=place)
+
+        # D05. Before this existed every incident became its own flag, so four
+        # outlets reporting one fire produced four unconfirmed flags -- reading more
+        # news made the surface *less* certain, which is backwards. Rumour Guard
+        # decides whether this is another account of something already on the map.
+        #
+        # It declines whenever it cannot judge confidently (no usable summary, no
+        # embedding model, nothing similar enough), and declining falls through to the
+        # insert below, which is exactly the pre-D05 behaviour. That asymmetry is
+        # deliberate: a duplicate pin is a cosmetic cost, a wrongly merged flag is a
+        # false `confirmed` claim.
+        match = await find_duplicate(
+            db,
+            kind=IncidentKind(incident.kind),
+            lat=row["lat"],
+            lon=row["lon"],
+            radius_m=row["radius_m"],
+            observed_at=row["observed_at"],
+            summary_en=incident.summary_en,
+            now=datetime.now(UTC),
+        )
+        if match is None:
+            result = await db.execute(
+                _INSERT_FLAG, {**row, "sources": json.dumps(row["sources"], ensure_ascii=False)}
+            )
+            flag_id = result.scalar_one()
+        else:
+            # Corroboration, not a new event. The incident row below still points at
+            # the flag, so `extracted_incidents` keeps every article while the flag
+            # keeps every *publisher* -- which is what lets the audit trail answer
+            # "why is this confirmed?" rather than just asserting it.
+            outcome = await merge_into(db, match, source=source, now=datetime.now(UTC))
+            flag_id = outcome.flag_id
     await db.execute(
         _INSERT_INCIDENT,
         {

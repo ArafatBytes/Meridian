@@ -43,6 +43,7 @@ from typing import Any, Final
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from app.contracts.risk import IncidentKind, RiskFlag, SourceRef, TimeProfile
+from app.policy.independence import confidence
 from app.scoring.decay import expires_at_for, is_live, severity_at
 from app.scoring.fixture import fixture_rows
 
@@ -106,6 +107,7 @@ class _SeededFlag:
         "sources",
         "mobility_statement",
         "time_profile",
+        "confirmed_at",
     )
 
     def __init__(self, row: dict[str, Any]) -> None:
@@ -124,6 +126,10 @@ class _SeededFlag:
         self.source_count: int = row["source_count"]
         self.sources = [SourceRef(**source) for source in row["sources"]]
         self.mobility_statement: str = row["mobility_statement"]
+        # D05. Optional in the fixture and absent from almost all of it: a flag
+        # *authored* confirmed was never promoted, so there is no moment to record.
+        # The sheet renders the absence rather than inventing a time.
+        self.confirmed_at: datetime | None = row.get("confirmed_at")
         # The fixture never sets a per-flag profile; the kind default is applied by
         # `decay.severity_at` when this is None, which is every flag today.
         self.time_profile: TimeProfile | None = None
@@ -163,6 +169,10 @@ class _SeededFlag:
             sources=self.sources,
             mobility_statement=self.mobility_statement,
             time_profile=self.time_profile,
+            confirmed_at=self.confirmed_at,
+            # Same derivation as `DbRiskSurface`. `tests/invariants/test_surfaces_agree`
+            # is what keeps the two from drifting apart on this.
+            confidence=confidence(self.status),
         )
 
 

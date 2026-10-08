@@ -1443,7 +1443,14 @@ SCHEDULED_RISK_CRON=0 5 * * *
 INGESTION_USER_AGENT=Meridian/1.0 (+https://meridian.app/bot)
 
 # --- Rumour Guard (S15) ---
-DEDUP_SIMILARITY_THRESHOLD=0.82
+# 0.82 was declared here before anything measured it. MEASURED in D05 against
+# all-MiniLM-L6-v2 on the extraction model's English summaries, 0.82 merges 1 of 18
+# known duplicate pairs -- the guard would be a no-op. 0.72 is the highest threshold
+# with zero false merges on data/eval/dedup/clusters.json. Re-run
+# `scripts/eval_dedup.py` after any change to DEDUP_MODEL or to what is embedded.
+DEDUP_SIMILARITY_THRESHOLD=0.72
+DEDUP_WINDOW_HOURS=6
+DEDUP_MODEL=sentence-transformers/all-MiniLM-L6-v2
 MIN_SOURCES_FOR_CONFIRMED=2
 
 # --- Routing (S05+) ---
