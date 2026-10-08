@@ -205,29 +205,35 @@ class AuthService {
     }
   }
 
+  /**
+   * The current Supabase access token, or null.
+   *
+   * **Always ask Supabase. Never cache this.** It used to read a SecureStore copy
+   * first and return it without checking expiry, and Supabase access tokens last
+   * one hour -- so every authenticated backend call started failing an hour after
+   * sign-in while the app still believed it was signed in. The symptom on
+   * 2026-10-08 was `POST /ingestion/run` returning 401 with "No refresh token" in
+   * the app log; SOS was failing the same way and nobody had noticed, because the
+   * walkthrough is normally run just after signing in.
+   *
+   * `getSession()` is the right call: the client is created with
+   * `autoRefreshToken: true` (see lib/supabase.ts), so it refreshes a token that
+   * is expired or close to it and hands back a valid one. That is the whole fix --
+   * the valid token was always there, we were reading a dead copy of it.
+   */
   async getAuthToken(): Promise<string | null> {
     try {
-      // Get from SecureStore cache
-      const cachedToken = await SecureStore.getItemAsync(
-        STORAGE_KEYS.AUTH_TOKEN,
-      );
-      if (cachedToken) {
-        return cachedToken;
-      }
-
-      // Get fresh session from Supabase
       const {
         data: { session },
+        error,
       } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        await SecureStore.setItemAsync(
-          STORAGE_KEYS.AUTH_TOKEN,
-          session.access_token,
-        );
-        return session.access_token;
+
+      if (error) {
+        console.warn('getAuthToken: session lookup failed:', error.message);
+        return null;
       }
 
-      return null;
+      return session?.access_token ?? null;
     } catch (error) {
       console.error('Error getting auth token:', error);
       return null;
@@ -259,6 +265,11 @@ class AuthService {
     }
   }
 
+  // NOTE: the two token entries written here are **not** authoritative any more
+  // and nothing reads them for authorization -- `getAuthToken()` asks Supabase,
+  // which owns the session and refreshes it. They are kept only so that
+  // `clearAuthData()` still has something to clear on older installs. Do not
+  // reintroduce a read path against them; that was the 2026-10-08 401 bug.
   private async saveAuthData(authResponse: AuthResponse): Promise<void> {
     const { user, tokens } = authResponse;
 

@@ -13,7 +13,11 @@ that reason.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+from app.contracts.risk import MobilityImpact
 
 
 class GeoGuess(BaseModel):
@@ -42,3 +46,57 @@ class GeoGuess(BaseModel):
     lat: float | None = Field(default=None, description="Latitude, or null when resolved is false.")
     lon: float | None = Field(default=None, description="Longitude, or null when resolved is false.")
     confidence: float = Field(ge=0.0, le=1.0, description="0 when resolved is false.")
+
+
+NewsKind = Literal[
+    "road_accident",
+    "fire",
+    "clash",
+    "blockade",
+    "procession",
+    "waterlogging",
+    "construction",
+    "utility_outage",
+    "other",
+]
+"""
+`IncidentKind` minus `chronic`, which is a property of a place over months and not
+something one news article can report. Offering it would invite the model to file
+"this road is often bad" as an incident.
+"""
+
+
+class NewsIncident(BaseModel):
+    """
+    One mobility-affecting event the Live Risk Agent read out of an article. D04.
+
+    Deliberately smaller than `ExtractedIncident`: the agent adds the source, the
+    document and the timestamps itself rather than asking a model to copy them.
+    There is no `occurred_at` — free-tier models are poor at turning "গতকাল
+    সন্ধ্যায়" into an instant, and the article's own publication time is a better
+    anchor than a guessed one.
+    """
+
+    kind: NewsKind
+    location_text: str = Field(
+        description=(
+            "The most specific place name, copied from the article in its own "
+            "script, without surrounding words such as রাজধানীর or এলাকায়."
+        )
+    )
+    mobility_impact: MobilityImpact
+    severity_hint: Literal["low", "medium", "high"] | None = None
+    summary_en: str = Field(description="One short English sentence, for the audit trail.")
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class NewsExtraction(BaseModel):
+    """
+    Everything one article reports that affects movement in Dhaka. Usually empty.
+
+    An empty list is the expected answer for most articles, and the prompt says so:
+    a model told that silence is normal is far less likely to invent an incident to
+    have something to return.
+    """
+
+    incidents: list[NewsIncident] = Field(default_factory=list, max_length=3)

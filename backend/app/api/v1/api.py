@@ -3,7 +3,19 @@ API v1 router aggregation
 """
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import ai, auth, crimes, geo, risk, routes, sos, tracking, users, voice
+from app.api.v1.endpoints import (
+    ai,
+    auth,
+    crimes,
+    geo,
+    ingestion,
+    risk,
+    routes,
+    sos,
+    tracking,
+    users,
+    voice,
+)
 
 api_router = APIRouter()
 
@@ -14,6 +26,7 @@ api_router.include_router(crimes.router, prefix="/crimes", tags=["Crime Reports"
 api_router.include_router(routes.router, prefix="/routes", tags=["Routing"])
 api_router.include_router(risk.router, prefix="/risk", tags=["Risk Surface"])
 api_router.include_router(geo.router, prefix="/geo", tags=["Place Resolution"])
+api_router.include_router(ingestion.router, prefix="/ingestion", tags=["Live News Ingestion"])
 api_router.include_router(tracking.router, prefix="/tracking", tags=["Location Tracking"])
 api_router.include_router(sos.router, prefix="/sos", tags=["SOS Emergency"])
 api_router.include_router(voice.router, prefix="/voice", tags=["Voice Analysis"])

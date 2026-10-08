@@ -177,7 +177,7 @@ def loaded_flags() -> list[_SeededFlag]:
     global _CACHE, _LOADED_AT
     if _CACHE is None:
         _LOADED_AT = datetime.now(UTC)
-        _CACHE = [_SeededFlag(row) for row in fixture_rows(_LOADED_AT)]
+        _CACHE = [_SeededFlag(row) for row in fixture_rows(_LOADED_AT, include_replay=True)]
     return _CACHE
 
 

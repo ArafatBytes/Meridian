@@ -99,11 +99,26 @@ class Migration:
     name: str
     path: Path
     sql: str
-    checksum: str
+    checksum: str  # sha256 of the LF form; what a new ledger row records
+    accepted: frozenset[str]  # LF and CRLF forms; either matches an applied row
 
     @property
     def label(self) -> str:
         return f"{self.version}__{self.name}"
+
+    def matches(self, recorded: str) -> bool:
+        """
+        Whether a ledger checksum describes this file, whatever its line endings.
+
+        Both of us develop on Windows with `core.autocrlf=true`, so the same commit
+        is CRLF in one checkout and LF in another (a container, a fresh write). The
+        raw-bytes checksum this runner used until D04 called that an edit: the ledger
+        holds the CRLF hash for `20261007120000` and the LF hash for
+        `20261007120100`, both of the exact committed content, and `up` refused to run
+        for everyone. A line ending is not a schema change; an edited statement still
+        is, and still fails here.
+        """
+        return recorded in self.accepted
 
 
 def load_migrations() -> list[Migration]:
@@ -121,13 +136,18 @@ def load_migrations() -> list[Migration]:
                 "e.g. 20261007120000__risk_flags.sql"
             )
         raw = path.read_bytes()
+        lf = raw.replace(b"\r\n", b"\n")
+        lf_sum = hashlib.sha256(lf).hexdigest()
         found.append(
             Migration(
                 version=match.group("version"),
                 name=match.group("slug"),
                 path=path,
                 sql=raw.decode("utf-8"),
-                checksum=hashlib.sha256(raw).hexdigest(),
+                checksum=lf_sum,
+                accepted=frozenset(
+                    {lf_sum, hashlib.sha256(lf.replace(b"\n", b"\r\n")).hexdigest()}
+                ),
             )
         )
 
@@ -282,7 +302,7 @@ def report_drift(migrations: list[Migration], applied: dict[str, str]) -> list[s
         migration = by_version.get(version)
         if migration is None:
             drifted.append(f"{version}: applied, but no file on disk")
-        elif migration.checksum != checksum:
+        elif not migration.matches(checksum):
             drifted.append(f"{migration.label}: file changed since it was applied")
     return drifted
 
@@ -304,7 +324,7 @@ async def cmd_status(_: argparse.Namespace) -> int:
     for migration in migrations:
         if migration.version in applied:
             mark = "applied "
-            if applied[migration.version] != migration.checksum:
+            if not migration.matches(applied[migration.version]):
                 mark = "CHANGED "
         else:
             mark = "pending "

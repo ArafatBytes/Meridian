@@ -5,6 +5,7 @@ import axios, {
   AxiosError,
 } from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import { supabase } from '../lib/supabase';
 import { API_BASE_URL, API_TIMEOUT, STORAGE_KEYS } from '../constants';
 import { ApiResponse, ApiError } from '../types';
 
@@ -32,7 +33,15 @@ class ApiService {
     // Request Interceptor
     this.axiosInstance.interceptors.request.use(
       async config => {
-        const token = await SecureStore.getItemAsync(STORAGE_KEYS.AUTH_TOKEN);
+        // Supabase owns the session and refreshes it (`autoRefreshToken: true`),
+        // so ask it every time. This used to read a SecureStore copy that was
+        // written once at sign-in and never updated -- and since Supabase access
+        // tokens last an hour, every authenticated call 401'd after that while the
+        // app still looked signed in.
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const token = session?.access_token;
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
@@ -72,23 +81,22 @@ class ApiService {
           this.isRefreshing = true;
 
           try {
-            const refreshToken = await SecureStore.getItemAsync(
-              STORAGE_KEYS.REFRESH_TOKEN,
-            );
+            // Refresh through Supabase, which issued the token.
+            //
+            // This used to POST to the backend's `/auth/refresh`, which is a
+            // `# TODO: Implement token refresh logic` stub -- and which takes
+            // `refresh_token` as a query parameter while this sent a JSON body, so
+            // it would have 422'd even if it were implemented. The refresh token it
+            // looked for in SecureStore was never written either, so the whole path
+            // ended at `Error: No refresh token` and signed the user out.
+            const { data, error } = await supabase.auth.refreshSession();
+            const accessToken = data.session?.access_token;
 
-            if (!refreshToken) {
-              throw new Error('No refresh token');
+            if (error || !accessToken) {
+              throw new Error(
+                error?.message ?? 'Supabase could not refresh the session',
+              );
             }
-
-            const response = await this.axiosInstance.post('/auth/refresh', {
-              refreshToken,
-            });
-
-            const { accessToken } = response.data.data;
-            await SecureStore.setItemAsync(
-              STORAGE_KEYS.AUTH_TOKEN,
-              accessToken,
-            );
 
             this.processQueue(null, accessToken);
             this.failedQueue = [];

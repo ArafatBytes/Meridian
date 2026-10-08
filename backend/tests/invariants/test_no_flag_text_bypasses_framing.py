@@ -207,6 +207,7 @@ ALLOWED_WRITERS: dict[str, str] = {
     "app/scoring/surface_seeded.py": "rehydrates a fixture row; reading, not writing",
     "app/scoring/fixture.py": "calls to_mobility_statement() for every fixture row",
     "app/scoring/chronic.py": "calls to_mobility_statement() for every chronic row",
+    "app/agents/live_risk.py": "calls to_mobility_statement() for every published news flag",
 }
 
 

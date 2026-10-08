@@ -96,3 +96,26 @@ assert set(KIND_DEFAULTS) == set(IncidentKind), (
 def defaults_for(kind: IncidentKind) -> KindDefaults:
     """The reviewed defaults for one kind. Total over `IncidentKind` by the assert above."""
     return KIND_DEFAULTS[kind]
+
+
+SEVERITY_HINT_FACTOR: Final[dict[str, float]] = {
+    "low": 0.6,
+    "medium": 1.0,
+    "high": 1.3,
+}
+"""
+How an extracted `severity_hint` moves a kind's baseline severity (D04).
+
+Mild on purpose. The hint is a free-tier model's reading of one article, and the
+baseline is the reviewed value — so the hint nudges rather than decides. 0.6 keeps a
+"low" fire (70 → 42) above a "medium" road accident's 45 less often than not, which
+matches the intuition that a minor fire still closes more road than a minor
+collision. 1.3 caps out at 97.5 for the most severe baseline (clash, 75), inside the
+0-100 scale with no clamping needed for any kind.
+"""
+
+
+def severity_for(kind: IncidentKind, hint: str | None) -> float:
+    """A kind's baseline severity, nudged by an extracted hint. No hint means baseline."""
+    factor = SEVERITY_HINT_FACTOR.get(hint, 1.0) if hint else 1.0
+    return min(100.0, defaults_for(kind).severity_0 * factor)

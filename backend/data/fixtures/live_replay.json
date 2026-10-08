@@ -1,0 +1,27 @@
+{
+ "_README": "Captured live news flags, replayed by SeededRiskSurface when RISK_SURFACE_IMPL=seeded. Written by `python -m app.agents export-replay`; do not edit by hand. Times are hours relative to `exported_at` and are re-anchored to the moment the backend starts. No mobility_statement: framing.py derives it at load, as for every fixture.",
+ "exported_at": "2026-10-08T13:36:25.127352+00:00",
+ "flags": [
+  {
+   "event_key": "seed-live-d063f13d045da3d6-0",
+   "kind": "fire",
+   "lat": 23.779468,
+   "lon": 90.404631,
+   "radius_m": 1200,
+   "severity_0": 70.0,
+   "half_life_hours": 3.5,
+   "mobility_impact": "road_blocked",
+   "place": "Mohakhali",
+   "observed_offset_hours": -4.1,
+   "source_count": 1,
+   "sources": [
+    {
+     "source_id": "channel24",
+     "url": "https://www.channel24bd.tv/capital/article/351810/%E0%A6%B0%E0%A6%BE%E0%A6%9C%E0%A6%A7%E0%A6%BE%E0%A6%A8%E0%A7%80%E0%A6%A4%E0%A7%87-%E0%A6%8F%E0%A6%B8%E0%A6%BF-%E0%A6%AC%E0%A6%BE%E0%A6%B8%E0%A7%87-%E0%A6%85%E0%A6%97%E0%A7%8D%E0%A6%A8%E0%A6%BF%E0%A6%95%E0%A6%BE%E0%A6%A3%E0%A7%8D%E0%A6%A1",
+     "title": "রাজধানীতে এসি বাসে অগ্নিকাণ্ড",
+     "published_offset_hours": -4.1
+    }
+   ]
+  }
+ ]
+}

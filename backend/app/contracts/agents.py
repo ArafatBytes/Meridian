@@ -7,7 +7,8 @@ whole of its relationship with the rest of the system. The payoff is that a run
 is reproducible (pass a different `now`), testable (pass `dry_run=True`) and
 observable (`AgentResult` is exactly what goes into the `agent_runs` table).
 
-No agent exists yet. The first is the Geolocation Agent in D03.
+The Geolocation Agent (D03, `app/geo/agent.py`) is a function, not a scheduled
+agent. The first `BaseAgent` is the Live Risk Agent in D04.
 """
 
 from abc import ABC, abstractmethod
@@ -16,6 +17,7 @@ from typing import ClassVar, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 AgentStatus = Literal["ok", "partial", "failed"]
 """
@@ -46,6 +48,12 @@ class AgentContext(BaseModel):
     `now` is passed in rather than read, so a run can be replayed against a past
     instant. `dry_run` must reach every write path in the agent; an agent that
     ignores it is a bug, not a style choice.
+
+    `db` arrived in D04 with the first agent that writes (CONTRACT CHANGE, logged in
+    PROGRESS.md). The runner opens the session and owns its lifetime; an agent
+    that needs the database and gets `None` must fail its run rather than open its
+    own connection, because a connection the runner did not open is one it cannot
+    close when the run is cancelled.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -53,6 +61,7 @@ class AgentContext(BaseModel):
     run_id: UUID
     now: datetime
     dry_run: bool = False
+    db: AsyncSession | None = None
 
 
 class BaseAgent(ABC):
