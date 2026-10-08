@@ -19,6 +19,7 @@ parameterised; no caller value is interpolated.
 """
 
 import json
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any, Final
 from uuid import UUID
@@ -29,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.contracts.risk import IncidentKind, RiskFlag, SourceRef, TimeProfile
 from app.policy.independence import confidence
 from app.scoring.decay import severity_at
+from app.scoring.geometry import simplify_for_corridor
 
 POSTGIS_SCHEMA: Final[str] = "extensions"
 """
@@ -209,6 +211,81 @@ class DbRiskSurface:
             },
         )
         return [_row_to_flag(row, at) for row in result]
+
+
+    async def flags_near_path(
+        self,
+        path: Sequence[tuple[float, float]],
+        radius_m: int,
+        at: datetime,
+    ) -> list[RiskFlag]:
+        """
+        Live flags within `radius_m` of the route, **highest current severity first**.
+
+        This is defect 8. What it replaces in `route_service` was
+        `select(CrimeReport)` with no spatial predicate at all -- every row in the table,
+        pulled into Python, then a nested loop over every path point. The fix is not "a
+        tighter Python loop", it is letting PostGIS and the GiST index answer the
+        question they exist for.
+
+        `ST_MakeLine` over the path, cast to `geography`, one `ST_DWithin`. On
+        `geography` that is metres on a sphere, so `radius_m` means what it says at
+        Dhaka's latitude; the same query on `geometry` would compare degrees and be wrong
+        by a factor that changes as you move north.
+
+        **Ordered by `severity_0`, not by distance** -- deliberately unlike `flags_near`.
+        A caller asking about a corridor wants to know *what is worth knowing about this
+        route*, and the worst thing on it matters more than the nearest thing. When
+        `MAX_FLAGS_PER_READ` truncates, that is the ordering that keeps an explanation
+        honest. Final ordering is by `severity_now` in Python, after decay -- see
+        `flags_in_bbox` for why decay cannot be in the SQL.
+
+        The path is thinned first (`simplify_for_corridor`): an OSRM `overview=full`
+        geometry is several hundred points for a Dhaka crossing, and a LINESTRING that
+        long makes the index work harder for no gain.
+        """
+        simplified = simplify_for_corridor(path)
+        if len(simplified) < 2:
+            # No corridor to ask about. This early return is not cosmetic: ST_MakeLine of
+            # a single point returns NULL, ST_DWithin against NULL is NULL, every flag
+            # would fail the predicate, and the route would score as perfectly safe. The
+            # difference between "no flags" and "the question was malformed" matters when
+            # the answer is used to tell someone a road is clear.
+            return []
+
+        # WKT rather than a bound array: asyncpg cannot adapt a list of tuples to a
+        # PostGIS type, and the literal is built from floats already validated as
+        # coordinates by the request schema, so there is no injection surface.
+        line_wkt = "LINESTRING(" + ", ".join(f"{lon} {lat}" for lat, lon in simplified) + ")"
+
+        statement = text(
+            f"""
+            SELECT {_FLAG_COLUMNS}
+            FROM public.risk_flags
+            WHERE {_LIVE_PREDICATE}
+              AND {POSTGIS_SCHEMA}.ST_DWithin(
+                      location,
+                      {POSTGIS_SCHEMA}.ST_SetSRID(
+                          {POSTGIS_SCHEMA}.ST_GeomFromText(:line_wkt), 4326
+                      )::{POSTGIS_SCHEMA}.geography,
+                      :radius_m
+                  )
+            ORDER BY severity_0 DESC
+            LIMIT :limit
+            """
+        )
+        result = await self._session.execute(
+            statement,
+            {
+                "at": at,
+                "line_wkt": line_wkt,
+                "radius_m": radius_m,
+                "limit": MAX_FLAGS_PER_READ,
+            },
+        )
+        flags = [_row_to_flag(row, at) for row in result]
+        flags.sort(key=lambda flag: flag.severity_now, reverse=True)
+        return flags
 
     async def flags_near(
         self, lat: float, lon: float, radius_m: int, at: datetime

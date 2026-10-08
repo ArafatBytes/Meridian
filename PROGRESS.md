@@ -69,111 +69,118 @@ Full write-up, indicators of compromise and the remediation checklist:
 
 ## 📍 CURRENT STATE
 
-*Last updated: 2026-10-08 · by: Arafat · after: D05 (closed on a device)*
+*Last updated: 2026-10-09 · by: Arafat · after: D06 (closed on a device)*
 
 | | |
 |---|---|
-| **Last sprint completed** | **D05 — ✅ CLOSED.** All 11 steps of [`docs/walkthroughs/D05.md`](docs/walkthroughs/D05.md) passed on a real device, first run, no issues — including the promotion and the reset. D01–D04 all closed |
-| **NEXT SPRINT** | **D06 — Routing, explanations, and the reason why** (scheduled Oct 16–17) → [DEMO_PLAN.md](DEMO_PLAN.md) §D06. ⚠️ **It assumes the OSRM graph exists and it does not** — see Background activities |
+| **Last sprint completed** | **D06 — ✅ CLOSED.** [`docs/walkthroughs/D06.md`](docs/walkthroughs/D06.md) steps 1–11 passed on a device; the run found **three** things, all fixed, and the walkthrough now has 13 steps. D01–D05 all closed |
+| **NEXT SPRINT** | **D07 — Crime detection from an image** (scheduled Oct 18–19) → [DEMO_PLAN.md](DEMO_PLAN.md) §D07. ⚠️ **Blocked on §7.1, which was due 17 October and is still open** |
 | **Baton holder** | **free** |
-| **Trunk** | `develop` · D05 committed and pushed |
-| **Build status** | 🟢 **GREEN.** 250 backend tests pass (23 new), `mypy --strict` clean on 83 files, `tsc` clean, ESLint 0 errors. Pre-existing and untouched: 2 failures in `tests/test_crime_vision.py` (D07's) |
-| **Slack** | D05 was scheduled Oct 15 and built Oct 8 — **seven days ahead.** The OSRM graph (§9 item 2) is **still not started** and D06 assumes it is built. It is now the only thing standing between the slack and D06 |
-| **Phase** | 0 — Foundation & Contracts |
+| **Trunk** | `develop` @ `3e35774` · **working tree uncommitted** — D06's 9 new files + 11 changed |
+| **Build status** | 🟢 **GREEN.** 286 backend tests (34 new), `mypy --strict` clean on 90 files, `tsc` clean, 45 jest, `check.sh` all green with the ESLint budget **held at 106**. Pre-existing and untouched: 2 failures in `tests/test_crime_vision.py` (D07's) |
+| **Slack** | D06 was scheduled Oct 16–17 and built Oct 9 — **seven days ahead**, and the OSRM long pole is now behind us |
+| **Phase** | 1 — Live surface and routing |
 
-### ✅ Verification is now visible, not just stored
+### ✅ Beat 4 works, and the routing stack is no longer borrowed
 
-- **The map carries the tier.** Hollow + dashed + `?` for a single-source claim; solid +
-  filled + source count for a corroborated one. The radius circle splits the same way.
-- **The sheet carries the provenance.** Which publishers, a **Confirmed** time (or
-  `time not recorded`, never a substituted `observed_at`), and the consequence stated:
-  shown and counted at **60% weight**, never hidden.
-- **The promotion is repeatable on demand** — `python -m app.agents promote-demo`,
-  through the production merge path, `--reset` to rehearse again.
+- **Ranked alternatives**, coloured by safety, each with a framed one-sentence reason and a
+  trade-off clause — *"Fastest, and avoids 4 flagged corridors."*
+- **Flagged corridors drawn on the map**, solid on the route you are viewing and dashed on the
+  one you are not, so the comparison reads without narration.
+- **Our own OSRM graph.** `engine` on every response says `local`, and a fallback to the public
+  demo server is loud rather than silent.
+- **OSRM's durations.** Bangshal → Mirpur-10 reads **14 min**; the deleted flat-30 km/h
+  assumption said 25.
+- **One scale.** `safety_score` 0–100, higher is safer. `71/100`, not `70.6% Safe`.
 
-### 🔴 The finding of the sprint: a planned constant was wrong
+Five defects closed: **6** (filters honoured), **7** (local OSRM, real durations, walking),
+**8** (PostGIS corridor query), **10** (Nominatim proxy + cache), **11** (one scale).
 
-`DEMO_PLAN.md` §9 declared `DEDUP_SIMILARITY_THRESHOLD=0.82`. Measured on
-`all-MiniLM-L6-v2` against the text the system actually embeds, **0.82 merges 1 of 18
-known duplicate pairs** — D05 would have shipped as a **no-op that looked implemented**:
-four outlets would still have produced four unconfirmed pins, and nothing in a green
-test suite would have said so. Now **0.72**, the highest threshold with zero false
-merges. `scripts/eval_dedup.py` + `data/eval/dedup/clusters.json` make it reproducible.
+### 🔴 The finding of the sprint: the chronic layer had to be down-weighted
 
-**And the classes are not separable.** Lowest true duplicate 0.503, highest false pair
-0.718 — and the second account of the real Mohakhali fire scores **0.718**, identical to
-the worst false pair. Recall is **~56% by choice**, precision 100% on the labelled set.
-That asymmetry is deliberate: a missed merge costs a duplicate pin, a false merge puts a
-`confirmed` badge on an event that did not happen. It is also exactly why the scripted
-replay exists rather than hoping two outlets phrase a fire alike mid-demo.
+Scored at full weight, a 12.6 km Dhaka crossing passing three chronic flags scored
+**16.7/100**. Every route in the city scored about the same, so `max_crime_score` rejected all
+of them — defect 6's filter was meaningless — and the ranking reflected **historical coverage
+rather than today's events**.
 
-### ⚠️ One thing D06 must not miss
+That is precisely the **"stale red zones"** failure demo beat 5 exists to disclaim, and
+concept document §9's commitment not to label areas permanently. `ROUTE_CHRONIC_WEIGHT=0.35`
+brings the same route to **68.6** and lets a live event move the number.
 
-**`RiskFlag.confidence` is carried but not yet consumed by routing.** D06 has to score
-with `app.scoring.decay.effective_severity(severity_now, confidence)`, not with
-`severity_now` — otherwise an unconfirmed rumour bends a route exactly as hard as a
-corroborated fact and the whole tier is decoration. There is a test pinning the ordering
-it should produce. This is the easiest thing in D06 to get wrong and the failure is
-invisible.
+**It is tuned to one measurement on one corridor. Raise it only with another.**
+
+### 🔴 Three bugs the new tests caught, all of which read as working code
+
+1. **`SeededRiskSurface.flags_near_path` raised on every call.** `zip(x, x[1:], strict=True)`
+   — offset slices always differ by one. The same pattern was in `alternatives._clears`.
+   **That is the offline demo path**, so D10's failure drill would have died on it.
+2. **The detour generator could not handle a flag *on* the route** — the commonest case there
+   is. It pushed away from the flag towards the nearest path vertex, so a flag on a vertex gave
+   zero distance and no waypoint. Now perpendicular to the route's heading.
+3. **An alternative claimed to avoid flags while being strictly worse.** Option 2 of the
+   Dhanmondi→Gulshan pair is slower *and* passes more flags, and it does avoid two — so the
+   literal count was 2. True and misleading. "Avoids N" now requires actually being safer.
 
 ### System state
 
 | Subsystem | State |
 |---|---|
-| Rumour Guard | ✅ **Live.** Semantic dedup, promotion, independence policy, measured threshold |
-| Verification tier on device | ✅ Map markers, radius circles, sheet rows, weight stated in words |
-| Live ingestion | ✅ Reads 3 outlets every 15 min; **only Channel 24 has ever yielded a document** |
-| Risk surface | ✅ `db` (and `seeded` for the offline path); both satisfy the protocol, test asserts it |
-| Migrations | ✅ 4 applied, forward-only, through `scripts/migrate.py` |
+| Routing | ✅ **Local OSRM**, real durations, risk-scored through the protocol, explanations on screen |
+| Rumour Guard | ✅ Live (D05). Semantic dedup, promotion, measured threshold |
+| Live ingestion | ✅ 3 outlets every 15 min; **only Channel 24 has ever yielded a document** |
+| Risk surface | ✅ `db` and `seeded`; both satisfy the protocol including `flags_near_path` |
+| Geocoding | ✅ Gazetteer (guarded) + Nominatim proxy (general), kept separate on purpose |
 | Agents live | **3 of 8** — Live Risk, Expiry Sweep, Rumour Guard |
-| Routing | ⚠️ Public OSRM demo server, flat 30 km/h, ignores `confidence` — **all D06** |
-| Vision | ⚠️ `pose_analysis: null` always; 3 of 6 crime classes unreachable — **D07** |
-| Known defects | **18 open of 44** — see [plan §1](IMPLEMENTATION_PLAN.md) |
+| Walking routes | ⚠️ Car graph geometry, corrected durations, caveat on screen. A `foot.lua` graph is the fix |
+| Vision | ⚠️ `pose_analysis: null` always; 3 of 6 crime classes unreachable — **D07, and it is next** |
+| Known defects | **13 open of 44** — 6, 7, 8, 10, 11 closed this sprint |
+
+### ⚠️ D07 is next and it is blocked on a decision
+
+**§7.1 — the image-analysis reasoning layer — was due 17 October and is still open.** D07
+cannot close defect 30 without it, because the vocabulary gap *is* the decision.
+
+And §7.1's recommendation needs rewording before it can be taken: it says *"local detection
+plus Claude vision… and the key is already configured"*, but **this project has no Anthropic
+key**. The LLM tier runs on free Gemini and Groq endpoints. Gemini's flash-lite models are
+multimodal and free, which is the obvious substitute — but that is a decision, not a fait
+accompli.
 
 ### ⏳ Still open, unchanged by this sprint
 
 - **B0: credential rotation and the git-history rewrite** from the 7 October incident.
-- **§7.1, the image-analysis reasoning layer, blocks D07, due 17 October.** There is no
-  Anthropic key, so §7.1's "local detection plus Claude vision" needs rewording to a
-  provider that exists.
-- **`LLM_CHAIN_GEO`'s Groq fallback** — 95.6% with 1 fabrication, or 93.3% with none and
-  no network. Recommendation is to drop it. Owner's call.
+- **`LLM_CHAIN_GEO`'s Groq fallback** — 95.6% with 1 fabrication, or 93.3% with none and no
+  network. Recommendation is to drop it. Owner's call.
 - **Beat 1 rests on one source.** Ekattor and Independent have never produced a document.
-- **Social media / official feeds** — now backlogged as **B11a**, deliberately.
+- **Social media / official feeds** — backlogged as **B11a**, deliberately.
 
 ### 🧵 Background activities (off-baton, §9)
 
 | Activity | Owner | Status |
 |---|---|---|
-| **OSRM graph (D06)** | — | ❌ **not started. Now the critical path** — D06 is next and assumes it exists |
-| Eval set (D07) | Arafat | 2 of 30–40 images |
+| **OSRM graph (D06)** | Arafat | ✅ **built and serving** — no longer the long pole |
+| **Eval set (D07)** | Arafat | ❌ **2 of 30–40 images. Now the critical path** — D07 is next and its gate needs this |
+| Native Bangla reader (D08) | — | ❌ not arranged. Gate on D08, depends on someone else's calendar |
 | Dedup clusters (D05) | Arafat | 8 clusters hand-written; replace with real `summary_en` as the corpus grows |
-| Native Bangla reader (D08) | — | not arranged |
 | Credential rotation (B0) | Arafat | in progress |
 
 ### ▶️ RESUME HERE
 
-**1. Build the OSRM graph. This is now the critical path and nothing else is.** D06 is
-next, it assumes `osrm-data/bangladesh-latest.osrm` exists, and the multi-gigabyte
-download plus `osrm-extract` / `osrm-partition` / `osrm-customize` is hours of
-wall-clock that **no coding agent can compress**. Seven days of slack evaporate the
-moment D06 starts without it. Commands are in `docker-compose.yml`'s `osrm` service
-comment and in §9 item 2. Whoever is not holding the baton should start this today.
+**1. Calibrate `ROUTE_CONGESTION_FACTOR` against a journey you know.** It is `0.35`, scaled
+from one measurement on one corridor, and it decides what the app tells someone about their
+journey. Pick a trip whose real duration you can vouch for, compare, and adjust — the number
+and its full derivation are in `config.py`. **This is the only outstanding item from D06 that
+affects what a user is told.**
 
-**2. Re-run D01–D04 on the device before D06 hands over.** §3's second gate, and it was
-**not** done for D05 — D05's own 11 steps passed, but the earlier walkthroughs were only
-*read* for breakage, not re-run. One real breakage was found that way (`D01.md`'s rough
-edges claimed D05's work was still outstanding) and corrected. Two notes if you do re-run
-them: **sign in at least an hour beforehand** so D01's SOS exercises a stale session
-(that is how D04 found beat 9 was dead), and expect circles where D01 and D02 say
-"pins".
+**2. Commit.** 10 new files and 13 changed, including a contract change to `RiskSurface`.
 
-**3. Then D06** ([DEMO_PLAN.md](DEMO_PLAN.md) §D06). **Read the `confidence` warning
-above before writing any route scoring** — it is the easiest thing in D06 to get wrong
-and the failure is invisible.
+**3. Take the §7.1 decision — it is overdue and D07 is next.** Reword it for a provider that
+exists before choosing.
 
-**Then D06** ([DEMO_PLAN.md](DEMO_PLAN.md) §D06). Read the `confidence` warning above
-before writing any route scoring.
+**4. Grow the D07 eval set, off the baton.** It holds 2 images; D07's gate wants 30–40 and
+nobody can compress that work later.
+
+Then **D07** ([DEMO_PLAN.md](DEMO_PLAN.md) §D07).
 
 ---
 
@@ -202,6 +209,225 @@ git push   # then PR, squash-merge to main, tell your partner
 # 📜 Handoff Log
 
 *Newest first. Append-only.*
+
+---
+
+## D06 — Routing, explanations, and the reason why
+
+**Owner:** Arafat · **Date:** 2026-10-09 · **Branch:** working tree on `develop` · **Merge:** _pending_
+
+### Shipped
+
+**Ask for a route and you get ranked alternatives, each with one sentence of plain English
+saying what is on it and what choosing it costs** — and the flagged corridors drawn on the
+map so the comparison reads without narration. Demo beat 4.
+
+Underneath, five defects closed and a new `app/routing/` package:
+
+```
+app/routing/osrm.py          OSRM_BASE_URL honoured, OSRM's own durations, foot profile,
+                             loud fallback. Defect 7.
+app/routing/scorer.py        path scoring over RiskSurface. One scale. Defects 6, 11.
+app/routing/explain.py       the sentence, from framed statements. No LLM. S13.
+app/routing/alternatives.py  flag-avoiding detour generation, because OSRM will not.
+app/routing/CLAUDE.md        the five rules, and the decisions already taken.
+app/geo/nominatim.py         the proxy. Defect 10.
+app/scoring/geometry.py      corridor maths both surfaces share. Defect 8.
+```
+
+### Found by running it on a device — three things, all fixed
+
+**(a) The walking profile had no UI control.** The walkthrough's own step 12 read *"switch
+the profile to walking, **if the UI exposes it**"* — and it did not. D06 shipped the backend
+profile and no screen for it, which is §3's *"cut depth, never the screen"* failure committed
+by the sprint that quotes the rule. A **Driving / Walking** toggle is now in the plan card and
+re-requests on tap.
+
+**(b) `14 min` for `12.6 km` was not believable.** That is **54.8 km/h across central
+Dhaka** — median segment speed 56 km/h, max 106. **OSRM is not wrong**: it answers *how long
+on an empty road*, which is the only question the graph can answer, and an OSM extract holds
+no traffic data at all. **So this cannot be fixed "from the road graph", however it is
+rebuilt.** The proper fix is `osrm-customize --segment-speed-file`, which needs a traffic
+source this project does not have — Track B. D06 ships `ROUTE_CONGESTION_FACTOR = 0.35`:
+**39 min, ~19 km/h** on that route, labelled `in traffic (est.)`, preserving relative
+differences between roads so the ranking stays meaningful. A test asserts it cannot reorder
+routes. ⚠️ **A calibration from one reading, not a measurement.**
+
+**(c) A single route rendered as one tab with no comment**, which reads like the alternatives
+failed to load. The card now says there is nothing to compare, and why.
+
+`route_service.py` is now orchestration only — ask OSRM, ask the surface, ask the scorer,
+ask `explain`, rank, filter, return. Every decision moved into `app/routing/`, which is what
+lets all of it run unchanged on `RISK_SURFACE_IMPL=seeded`.
+
+### Files
+
+- **Added:** `app/routing/{__init__,osrm,scorer,explain,alternatives}.py`,
+  `app/routing/CLAUDE.md`, `app/geo/nominatim.py`, `app/scoring/geometry.py`,
+  `tests/invariants/test_route_scoring.py`,
+  `frontend/src/components/RouteComparisonCard.tsx`, `docs/walkthroughs/D06.md`
+- **Changed:** `app/contracts/surface.py` (**contract change**, below),
+  `app/scoring/{surface_db,surface_seeded}.py`, `app/services/route_service.py` (rewritten),
+  `app/schemas/route.py`, `app/api/v1/endpoints/geo.py`, `app/core/config.py`,
+  `tests/invariants/test_no_flag_text_bypasses_framing.py`,
+  `frontend/src/services/{route,geo}.service.ts`,
+  `frontend/src/screens/Map/MapScreen.tsx`,
+  `frontend/src/screens/Reports/AddReportScreen.tsx`, `DEMO_PLAN.md`
+
+### CONTRACT CHANGE
+
+- **Changed:** `app/contracts/surface.py` — `RiskSurface` gains
+  `flags_near_path(path, radius_m, at)`.
+- **Breaks:** any implementation of the protocol. There are two and both are updated.
+- **Updated in this sprint:** `DbRiskSurface` (one `ST_DWithin` against `ST_MakeLine`),
+  `SeededRiskSurface` (point-to-segment in Python). `test_surfaces_agree` covers both.
+- **TS mirror updated:** n/a — `RiskSurface` is server-side. `RouteResponse` changed too and
+  its mirror in `frontend/src/services/route.service.ts` is updated: `RouteSegment.crime_score`
+  removed, `flags` / `explanation` / `engine` / `filter_relaxed` / `notes` added.
+
+**S12 pre-authorised this**: *"verify `seeded` and `legacy` both work with zero changes in
+`routing/` — if either needs one, fix the contract now."* It needed one.
+
+### Migrations
+
+None.
+
+### Decisions
+
+1. **`flags_near_path` went on the protocol, not inside `DbRiskSurface`.** Scoring against
+   `flags_in_bbox` would have worked and been quietly wrong: a 12 km route's bounding box
+   covers most of Dhaka, so a route would score against flags kilometres from any road on it.
+   The corridor is the question, so the corridor is the query. What did *not* go on the
+   protocol is `score_path` — scoring is policy, and policy belongs where it can be read in
+   one place. A surface answers *what is near this path*; it gets no opinion about what that
+   is worth.
+2. **`severity_now` is not damped by `confidence`; `effective_severity` combines them.**
+   D05's warning, honoured. There is a test asserting an unconfirmed flag costs a route less
+   than an identical confirmed one, because the failure is invisible — routes still look
+   plausible.
+3. **Penalties combine with geometric falloff, not by summing or averaging.** Summing makes
+   every long route score zero (ten minor flags over 12 km exceed any threshold, and the
+   ranking then carries no information); averaging lets one severe flag be diluted by a dozen
+   trivial ones, which is the case most worth warning about. Worst counts in full, each
+   subsequent one halves.
+4. **The duration axis is relative to the fastest candidate, not absolute.** "A long journey"
+   has no fixed meaning — 40 minutes is ordinary across Dhaka and absurd for three streets.
+   This is also why `composite_score` cannot be computed inside `score_path`: a route does not
+   know whether it is the fastest until the alternatives exist.
+5. **A filter that would reject every route is relaxed, not applied.** Everything comes back
+   best-first with `filter_relaxed: true`, and the card says so. A routing app that answers
+   "no acceptable route" when every road to your destination passes something flagged has
+   stopped being a routing app; silently dropping the preference would be worse.
+6. **`max_crime_score` keeps its name** even though it reads on the inverse scale. It is a
+   public request field; renaming it to match defect 11 would break any client already sending
+   it. Documented as a ceiling on `100 - safety_score`, honoured, and tested.
+7. **The walking profile ships with a corrected duration and a visible caveat**, rather than
+   being withheld or shipped wrong. OSRM answers `/foot/` from whatever graph it has and ours
+   is `car.lua`, so it returned 7.03 km in 9 minutes. 47 km/h presented as a walk is a false
+   statement on a screen, not an imprecision.
+8. **`explain.py` has its own guard and its own length cap.** It shares `find_banned_terms`
+   with `framing.py` — that is the invariant — but `MAX_STATEMENT_LENGTH` is documented there
+   as "one line on a map pin", and enforcing a pin's layout budget on a route card rejected a
+   correct explanation for being 26 characters too long. Two surfaces, two budgets, one
+   vocabulary rule.
+9. **The Nominatim proxy is kept separate from `/geo/resolve`.** D03 found that a tier which
+   answers everything will overturn a deliberate ambiguity refusal if they share a code path.
+   `method="nominatim"` was already reserved in the contract and is produced only here.
+
+### Measurements
+
+**Defect 7, the duration fix.** Bangshal → Mirpur-10, 12.61 km:
+`14 min` from the road graph against **25 min** under the deleted flat-30 km/h assumption.
+
+**Defect 10, the cache.** `GET /geo/search?q=Shahbagh Dhaka`:
+**471 ms cold → 52 ms warm**, TTL 86400 s. Two keys in Redis after the walkthrough's calls.
+
+**The chronic weighting — the finding of the sprint.** Bangshal → Mirpur-10, four flags, three
+of them chronic:
+
+| `ROUTE_CHRONIC_WEIGHT` | safety_score | `filter_relaxed` at the default ceiling |
+|---|---|---|
+| 1.0 (full weight) | **16.7** | **true** — every route in Dhaka rejected |
+| 0.35 | **68.6** | false |
+
+**OSRM alternatives are unreliable.** Five Dhaka pairs: three returned two routes, two
+returned one. Beat 4 cannot depend on the audience's origin and destination.
+
+**Ranked output** (Dhanmondi → Gulshan, the pair to use on stage):
+
+```
+[0] safety 70.6  comp 79.4   9min  7.03km  3 flags
+    "Passes Delay likely near Badda... (three sources); and 2 other flagged
+     locations. Fastest, and avoids 4 flagged corridors."
+[1] safety 58.4  comp 64.7  11min  8.10km  5 flags
+    "Passes Heavy crowd near Farmgate... (four sources); and 4 other flagged
+     locations. 2 minutes longer."
+```
+
+**Gates:** 286 backend tests pass (34 new), `mypy --strict` clean on **90 files**, `tsc`
+clean, 45 jest, `check.sh` all green with the **ESLint warning budget held at 106, not
+raised** — a dead `getRouteColor` was deleted rather than the budget moved. 2 pre-existing
+`test_crime_vision.py` failures untouched.
+
+### Deliberately NOT done
+
+- **Nothing committed.** Working tree.
+- **The device run.** D06's gate, and §0 is explicit that a walkthrough not run on a phone has
+  not closed a sprint.
+- **A `foot.lua` OSRM graph.** Walking geometry still comes from the car graph; durations are
+  corrected and the caveat is on screen. Background work, not demo-critical.
+- **`/routes/safest` was not renamed.** It returns `routes[0]`, the composite winner, not the
+  highest `safety_score`. The name predates the composite and it is a public endpoint.
+- **No end-to-end test through OSRM.** The ranking test covers S12's bullet without a network;
+  a regression in route *generation* still needs the device run.
+
+### Known broken / rough edges
+
+- **`ROUTE_CORRIDOR_RADIUS_M` (150 m) is a judgement, not a measurement.** Nobody has checked
+  it against real road geometry.
+- **The detour generator fires only on live flags above severity 20**, so an arbitrary pair may
+  still yield one route. Use Dhanmondi → Gulshan on stage, where OSRM supplies alternatives.
+- **`ROUTE_CHRONIC_WEIGHT` is tuned to one measurement** on one corridor. Raise it only with
+  another.
+- Two `test_crime_vision.py` failures remain, untouched — D07's territory.
+
+### Gotchas for the next agent
+
+- **`zip(x, x[1:], strict=True)` is always a `ValueError`.** Offset slices differ by one by
+  design. This shipped in two places and made `SeededRiskSurface.flags_near_path` raise on
+  every call — the **offline demo path**, so D10's failure drill would have died on it. Caught
+  only because a test exercised the method.
+- **Score with `effective_severity(severity_now, confidence)`, never `severity_now`.** Stated
+  in `app/routing/CLAUDE.md` as rule 3 and enforced by a test. The failure is invisible.
+- **Do not reuse `RISK_SEVERITY_BANDS` for route colours.** That table is *severity* (higher is
+  worse); `safety_score` is *safety* (higher is better). One table for both inverts every
+  colour. `safetyColour` in `RouteComparisonCard.tsx` is the route one.
+- **`asyncpg` cannot adapt a list of tuples to a PostGIS type.** `flags_near_path` builds the
+  LINESTRING as WKT from floats the request schema already validated as coordinates.
+- **`ST_MakeLine` of a single point returns NULL**, which makes `ST_DWithin` NULL, which makes
+  every flag fail the predicate — so a one-point path would have scored as *perfectly safe*.
+  Both surfaces return `[]` for a path shorter than two points, deliberately.
+- **A flag sitting exactly on the route has no flag-to-vertex direction.** Detour waypoints are
+  perpendicular to the route's heading for that reason; the first version returned nothing for
+  the commonest case there is.
+- **The ESLint budget is 106 and only moves with a note.** If you add a warning, delete
+  something dead instead.
+
+### RESUME HERE
+
+See `CURRENT STATE` at the top of this file.
+
+### Prototype Gate
+
+- [x] 1 · `check.sh` all green, ESLint budget held
+- [x] 2 · No migration; schema untouched
+- [x] 3 · **App builds and launches — `D06.md` steps 1–11 passed on a real device.** Step 12
+      failed (no UI control existed) and two more findings came out of the run; all three are
+      fixed and the walkthrough is now 13 steps
+- [x] 4 · `smoke.sh` unchanged and passing; no `demo_D06` (relaxed, §3)
+- [x] 5 · This entry + `CURRENT STATE` overwritten
+- [x] 6 · New settings documented in `config.py`
+- [x] 7 · Nothing half-migrated — protocol, both surfaces, schema and the TS mirror moved together
 
 ---
 

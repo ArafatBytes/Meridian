@@ -239,26 +239,88 @@ docker compose exec api bash       # shell inside the container
 
 ---
 
-## 6. Optional: local routing engine
+## 6. The local routing engine
 
-`route_service` currently calls the **public OSRM demo server**, which is
-rate-limited and not something to depend on. For real use, run OSRM locally —
-a one-time ~1 GB download plus 10–30 minutes of preprocessing:
+**Required since D06, not optional.** Routing honours `OSRM_BASE_URL` and reads the local
+graph; without it the app falls back to the public OSRM demo server, which is rate-limited,
+belongs to someone else, and **says so loudly on every request and on the route card**
+(`engine: "public-demo"`). That fallback exists for D10's failure drills, not for daily use.
 
-```bash
-mkdir -p osrm-data && cd osrm-data
-curl -O https://download.geofabrik.de/asia/bangladesh-latest.osm.pbf
-docker run -t -v "${PWD}:/data" osrm/osrm-backend osrm-extract   -p /opt/car.lua /data/bangladesh-latest.osm.pbf
-docker run -t -v "${PWD}:/data" osrm/osrm-backend osrm-partition /data/bangladesh-latest.osrm
-docker run -t -v "${PWD}:/data" osrm/osrm-backend osrm-customize /data/bangladesh-latest.osrm
+One-time setup: a few hundred MB of download plus 10–30 minutes of preprocessing.
+
+### PowerShell (Windows)
+
+**Not bash.** `mkdir -p` is not a PowerShell flag, `curl` is an alias for
+`Invoke-WebRequest` (so `-O` is read as `-OutFile` and your URL becomes the *filename*), and
+a backslash path plus a drive-letter colon makes Docker's `-v` parsing unreliable. All three
+of these have actually bitten someone on this project.
+
+```powershell
+cd D:\Meridian
+New-Item -ItemType Directory -Force -Path osrm-data | Out-Null
+cd osrm-data
+
+# curl.exe, not curl. -L because Geofabrik redirects to a mirror.
+curl.exe -L -O https://download.geofabrik.de/asia/bangladesh-latest.osm.pbf
+
+# Sanity-check: hundreds of MB. A few KB means you downloaded an HTML error page,
+# and osrm-extract will fail later with a confusing parse error instead of saying so.
+Get-Item bangladesh-latest.osm.pbf | Select-Object Name, @{n='MB';e={[math]::Round($_.Length/1MB,1)}}
+
+# Forward slashes for Docker.
+$data = (Get-Location).Path -replace '\\','/'
+
+docker run -t --rm -v "${data}:/data" osrm/osrm-backend osrm-extract   -p /opt/car.lua /data/bangladesh-latest.osm.pbf
+docker run -t --rm -v "${data}:/data" osrm/osrm-backend osrm-partition /data/bangladesh-latest.osrm
+docker run -t --rm -v "${data}:/data" osrm/osrm-backend osrm-customize /data/bangladesh-latest.osrm
+
+# Roughly 20 files if all three steps finished.
+Get-ChildItem bangladesh-latest.osrm* | Measure-Object -Property Length -Sum |
+  Select-Object Count, @{n='TotalMB';e={[math]::Round($_.Sum/1MB,1)}}
 ```
 
-Then add `OSRM_BASE_URL=http://osrm:5000` to `backend/.env` and start with
-`-Osrm`.
+If `osrm-extract` dies without a clear message it is almost always memory — it is the step
+that loads the whole graph. Raise the limit in Docker Desktop → Settings → Resources and
+re-run just that step.
 
-> Note that `route_service.py` **hardcodes the demo URL and ignores
-> `OSRM_BASE_URL`** today. Wiring it up, adding the `foot` profile, and using
-> OSRM's own durations instead of a flat 30 km/h are all **S05**.
+### Then start it and prove it routes
+
+```powershell
+cd D:\Meridian
+docker compose --profile osrm up -d osrm
+docker compose logs --tail 20 osrm          # look for "running and waiting for requests"
+
+# OSRM takes lon,lat — reversed coordinates return NoSegment and look like a broken install.
+curl.exe -s "http://localhost:5000/route/v1/driving/90.4074,23.7104;90.3687,23.8069?overview=false"
+```
+
+Expect `"code":"Ok"`. Then in `backend/.env`:
+
+```
+OSRM_BASE_URL=http://osrm:5000
+```
+
+`osrm`, not `localhost` — that hostname resolves on the compose network, where `api` runs.
+Then `docker compose up -d --force-recreate api`, because **compose reads `.env` at create
+time, not on restart**.
+
+`osrm-data/` is gitignored; the graph is multi-gigabyte and is rebuilt from these commands.
+
+> ### ⚠️ Two honest limits, both D06 findings
+>
+> **Durations are free-flow, scaled.** Measured on the Bangshal → Mirpur-10 route: OSRM
+> says 12.61 km in 13.8 min — **54.8 km/h across central Dhaka**, with a median segment
+> speed of 56 km/h. OSRM is not wrong; `car.lua` speeds come from `maxspeed` tags and
+> road-class defaults, and **an OSM extract contains no traffic data at all**, so no rebuild
+> of the graph can produce a realistic number. `ROUTE_CONGESTION_FACTOR` (0.35) scales it to
+> ~19 km/h and the card labels it `in traffic (est.)`. The proper fix is
+> `osrm-customize --segment-speed-file`, which needs a traffic source — Track B.
+> **The factor is a calibration from one reading. Check it against a journey you know.**
+>
+> **Walking answers from the car graph.** OSRM will serve a `/foot/` request from whatever
+> graph it has, so a walking route obeys car turn restrictions and may use a flyover. The
+> duration is recomputed at 4.8 km/h — it returned 7.03 km in *9 minutes* otherwise — and
+> the caveat is shown on the card. A second graph built with `foot.lua` is the fix.
 
 ---
 

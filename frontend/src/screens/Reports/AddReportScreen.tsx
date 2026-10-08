@@ -26,6 +26,7 @@ import { colors, spacing, borderRadius, fontSize } from '../../theme';
 import { useLocationStore } from '../../store';
 import { DEFAULT_MAP_REGION } from '../../constants';
 import { crimeService, CrimeAnalysisResult } from '../../services';
+import { geoService } from '../../services/geo.service';
 
 interface AddReportScreenProps {
   navigation: any;
@@ -128,18 +129,11 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
 
     // Reverse geocoding to get location name
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coordinate.latitude}&lon=${coordinate.longitude}`,
-      );
-      const data = await response.json();
-      if (data.display_name) {
-        setLocationName(data.display_name);
-      } else {
-        setLocationName('Location address not available');
-      }
-    } catch (error) {
-      console.log('Error getting location name:', error);
-      setLocationName('Failed to fetch location address');
+      // D06, defect 10 — through the server proxy. This handler fires on every map tap,
+      // so it was the worst of the four offenders: one person choosing a location could
+      // issue dozens of identical uncached requests from the device.
+      const name = await geoService.reverse(coordinate.latitude, coordinate.longitude);
+      setLocationName(name ?? 'Location address not available');
     } finally {
       setIsFetchingLocationName(false); // Stop loading
     }
@@ -148,16 +142,12 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
   const fetchSuggestions = async (query: string) => {
     setIsFetchingSuggestions(true);
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`,
-      );
-      const data = await response.json();
-      setSuggestions(data);
-      setShowSuggestions(data.length > 0);
-    } catch (error) {
-      console.log('Error fetching suggestions:', error);
-      setSuggestions([]);
-      setShowSuggestions(false);
+      // D06, defect 10 — through the server proxy. `geoService.search` returns [] rather
+      // than throwing when the geocoder is unreachable, which is why there is no catch:
+      // no suggestions is a usable state.
+      const results = await geoService.search(query);
+      setSuggestions(results);
+      setShowSuggestions(results.length > 0);
     } finally {
       setIsFetchingSuggestions(false);
     }
@@ -190,21 +180,23 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
     setSuggestions([]);
 
     try {
-      // Perform a fresh search with the exact query typed by user
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`,
-      );
-      const data = await response.json();
+      // Perform a fresh search with the exact query typed by user.
+      // D06, defect 10 — through the server proxy. The proxy already parses lat/lon to
+      // numbers, so the parseFloat round-trip through strings is gone with it.
+      const data = await geoService.search(searchQuery);
 
       if (data && data.length > 0) {
         const location = data[0];
         const coordinate = {
-          latitude: parseFloat(location.lat),
-          longitude: parseFloat(location.lon),
+          latitude: location.lat,
+          longitude: location.lon,
         };
 
         setSelectedLocation(coordinate);
-        setLocationName(location.display_name);
+        // `display_name` is nullable — Nominatim does not always have a name for a
+        // result. The old untyped `fetch` made this `any`, so a null would have gone
+        // straight into a string state; typing the proxy's response surfaced it.
+        setLocationName(location.display_name ?? 'Location address not available');
         setRegion({
           latitude: coordinate.latitude,
           longitude: coordinate.longitude,
@@ -547,18 +539,12 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
         setLocationName(''); // Clear previous location name
         setIsFetchingLocationName(true); // Start loading
         try {
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${currentLocation.latitude}&lon=${currentLocation.longitude}`,
+          // D06, defect 10 — through the server proxy.
+          const name = await geoService.reverse(
+            currentLocation.latitude,
+            currentLocation.longitude,
           );
-          const data = await response.json();
-          if (data.display_name) {
-            setLocationName(data.display_name);
-          } else {
-            setLocationName('Location address not available');
-          }
-        } catch (error) {
-          console.log('Error getting location name:', error);
-          setLocationName('Failed to fetch location address');
+          setLocationName(name ?? 'Location address not available');
         } finally {
           setIsFetchingLocationName(false); // Stop loading
         }

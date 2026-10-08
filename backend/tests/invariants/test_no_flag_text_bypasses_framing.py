@@ -208,7 +208,36 @@ ALLOWED_WRITERS: dict[str, str] = {
     "app/scoring/fixture.py": "calls to_mobility_statement() for every fixture row",
     "app/scoring/chronic.py": "calls to_mobility_statement() for every chronic row",
     "app/agents/live_risk.py": "calls to_mobility_statement() for every published news flag",
+    # D06. Both forward an already-framed string from a RiskFlag onto the route response;
+    # neither composes one. `test_forwarding_writers_only_forward` below proves that
+    # mechanically rather than trusting this comment -- see its docstring for why an
+    # allowlist entry alone was not enough.
+    "app/schemas/route.py": "declares the field on RouteFlag; forwarding only",
+    "app/services/route_service.py": "forwards flag.mobility_statement; forwarding only",
 }
+
+FORWARDING_ONLY: frozenset[str] = frozenset(
+    {
+        "app/scoring/surface_db.py",
+        "app/scoring/surface_seeded.py",
+        "app/schemas/route.py",
+        "app/services/route_service.py",
+    }
+)
+"""
+Allowlisted modules that must only ever **pass the field through**.
+
+The distinction matters because `ALLOWED_WRITERS` is a single list with two very
+different kinds of entry on it. `fixture.py`, `chronic.py` and `live_risk.py` are
+allowed to *produce* a statement, and they are allowed because they call
+`to_mobility_statement()`. These four are allowed only because they move a string that
+has already been framed.
+
+Nothing stopped a forwarding module from quietly becoming a producing one: add an
+f-string to `route_service.py` tomorrow and `test_only_framing_writes_mobility_statement`
+would still pass, because the file is already on the list. That is a real hole and it is
+the kind that opens during a sprint that is adding screens quickly.
+"""
 
 
 def _assignments_to_mobility_statement(path: Path) -> bool:
@@ -264,6 +293,96 @@ def test_only_framing_writes_mobility_statement() -> None:
         "(concept document §9). If one of these genuinely only rehydrates a stored "
         "row, add it to ALLOWED_WRITERS with that reason."
     )
+
+
+def _forwarded_values_only(path: Path) -> list[str]:
+    """
+    Values assigned to `mobility_statement` in this module that are not plain forwards.
+
+    A forward reads an existing value: an attribute (`flag.mobility_statement`), a bare
+    name (`statement`), or a subscript (`row["mobility_statement"]` -- how the seeded
+    surface pulls it out of a fixture row). Anything else constructs one: a literal, an
+    f-string, a concatenation, a `.format()` call, a conditional expression.
+
+    Returns the offending expressions as source text, so a failure names what it found
+    rather than only which file it was in.
+
+    Subscript counts as a read on the first version of this check it was not, and
+    `surface_seeded.py` failed immediately -- which is the check working: it forced the
+    definition of "forward" to be stated precisely instead of assumed.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    offenders: list[str] = []
+
+    def check(value: ast.expr) -> None:
+        if not isinstance(value, ast.Attribute | ast.Name | ast.Subscript):
+            offenders.append(ast.unparse(value))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.keyword) and node.arg == "mobility_statement":
+            check(node.value)
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                if (
+                    isinstance(target, ast.Attribute) and target.attr == "mobility_statement"
+                ) or (isinstance(target, ast.Name) and target.id == "mobility_statement"):
+                    check(node.value)
+        elif isinstance(node, ast.AnnAssign):
+            target = node.target
+            if (
+                (isinstance(target, ast.Attribute) and target.attr == "mobility_statement")
+                or (isinstance(target, ast.Name) and target.id == "mobility_statement")
+            ) and node.value is not None:
+                check(node.value)
+        elif isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values, strict=True):
+                if (
+                    isinstance(key, ast.Constant)
+                    and key.value == "mobility_statement"
+                ):
+                    check(value)
+
+    return offenders
+
+
+def test_forwarding_writers_only_forward() -> None:
+    """
+    A module allowed to *forward* flag text must not quietly start *composing* it.
+
+    `ALLOWED_WRITERS` mixes two kinds of permission: produce (and they all call
+    `to_mobility_statement`) versus pass through. Once a file is on that list, adding an
+    f-string to it would go unnoticed by the test above — which is exactly the drift that
+    list exists to make visible.
+
+    So the four forwarding modules are checked for *what* they assign, not just whether
+    they assign. An attribute access or a name is a forward. A literal, an f-string, a
+    concatenation or a call is construction, and construction belongs in `framing.py`.
+    """
+    offenders: dict[str, list[str]] = {}
+    for name in sorted(FORWARDING_ONLY):
+        path = BACKEND / name
+        if not path.is_file():
+            continue  # test_allowed_writers_all_still_exist reports a missing file
+        bad = _forwarded_values_only(path)
+        if bad:
+            offenders[name] = bad
+
+    assert offenders == {}, (
+        "these modules are allowlisted for forwarding flag text, not for composing it, "
+        f"and they construct it instead: {offenders}. Flag prose comes from "
+        "app/policy/framing.py::to_mobility_statement() and nowhere else."
+    )
+
+
+def test_every_forwarding_module_is_allowlisted() -> None:
+    """
+    `FORWARDING_ONLY` must be a subset of `ALLOWED_WRITERS`.
+
+    Otherwise a typo in a path would silently exempt a module from the check above while
+    looking like it was covered.
+    """
+    stray = sorted(FORWARDING_ONLY - set(ALLOWED_WRITERS))
+    assert stray == [], f"{stray} are in FORWARDING_ONLY but not in ALLOWED_WRITERS"
 
 
 def test_allowed_writers_all_still_exist() -> None:

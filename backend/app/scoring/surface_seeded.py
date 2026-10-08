@@ -38,6 +38,7 @@ rehearsal has been going for hours.
 """
 
 import math
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any, Final
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -45,6 +46,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from app.contracts.risk import IncidentKind, RiskFlag, SourceRef, TimeProfile
 from app.policy.independence import confidence
 from app.scoring.decay import expires_at_for, is_live, severity_at
+from app.scoring.geometry import distance_to_segment_m, simplify_for_corridor
 from app.scoring.fixture import fixture_rows
 
 MAX_FLAGS_PER_READ: Final[int] = 500
@@ -264,6 +266,45 @@ class SeededRiskSurface:
             if min_lat <= flag.lat <= max_lat and min_lon <= flag.lon <= max_lon
         ]
         contracts = [flag.to_contract(at) for flag in flags]
+        contracts.sort(key=lambda flag: flag.severity_now, reverse=True)
+        return contracts[:MAX_FLAGS_PER_READ]
+
+
+    async def flags_near_path(
+        self,
+        path: Sequence[tuple[float, float]],
+        radius_m: int,
+        at: datetime,
+    ) -> list[RiskFlag]:
+        """
+        Live flags within `radius_m` of the route, highest current severity first.
+
+        The no-database half of defect 8. `DbRiskSurface` asks PostGIS; this measures
+        point-to-**segment** distance in Python, and that is what keeps the two answers
+        comparable -- `ST_DWithin` against a LINESTRING also measures to the segment, so
+        testing only the vertices here would make the surfaces disagree about every flag
+        beside a long straight run.
+
+        Same `simplify_for_corridor` as the database surface, from the same module, for
+        the same reason: `test_surfaces_agree` compares their output and two thinnings
+        would make it fail over something that is not a disagreement about risk.
+        """
+        simplified = simplify_for_corridor(path)
+        if len(simplified) < 2:
+            return []
+
+        segments = list(zip(simplified, simplified[1:]))
+        near: list[_SeededFlag] = []
+        for flag in self._live(at):
+            for (lat_a, lon_a), (lat_b, lon_b) in segments:
+                if (
+                    distance_to_segment_m(flag.lat, flag.lon, lat_a, lon_a, lat_b, lon_b)
+                    <= radius_m
+                ):
+                    near.append(flag)
+                    break  # one segment is enough; do not count a flag twice
+
+        contracts = [flag.to_contract(at) for flag in near]
         contracts.sort(key=lambda flag: flag.severity_now, reverse=True)
         return contracts[:MAX_FLAGS_PER_READ]
 
