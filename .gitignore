@@ -247,3 +247,7 @@ temp_interactive_push.bat
 # after a mirror times out. Regenerable, a few hundred KB, and not the gazetteer
 # itself — backend/data/gazetteer/*.json IS committed.
 backend/data/gazetteer/.osm-cache/
+
+# OSRM routing graph - generated, multi-GB, rebuilt with the commands in docker-compose.yml
+osrm-data/
+

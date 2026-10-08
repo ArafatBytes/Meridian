@@ -1,270 +1,362 @@
-import logging
-import math
-import httpx
-from typing import List, Tuple, Optional
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from app.models.crime import CrimeReport
-from app.schemas.route import RouteRequest, RouteResponse, RouteSegment, Location
+"""
+Route generation: OSRM for the roads, the risk surface for the danger, `routing/` for
+the judgement.
 
-import json
-import os
+D06. This module used to be ~230 lines that did all of it inline, and five defects lived
+here:
+
+| Defect | What it was |
+|---|---|
+| 7 | hardcoded public OSRM demo server; `duration = dist / 30 km/h`; driving only |
+| 8 | `select(CrimeReport)` with **no spatial predicate** — every row, then a nested Python loop |
+| 6 | `avoid_high_crime_zones` and `max_crime_score` accepted and silently ignored |
+| 11 | three scales for one quantity: 0–10 `crime_score`, 0–100 `safety_score`, `% Safe` |
+| — | `_get_regional_risk()` — the police-statistics double count D02 left a note about |
+
+What is left here is **orchestration only**: ask OSRM for candidates, ask the surface what
+is on each, ask the scorer what that is worth, ask `explain.py` to say why, rank, filter,
+return. Every decision lives in `app/routing/`, which is what lets all of it run unchanged
+on `RISK_SURFACE_IMPL=seeded`.
+
+---
+
+## `_get_regional_risk` is gone, not fixed
+
+D02 moved `scripts/crime_risk_model.json` into the risk surface as the chronic baseline
+layer, so those same police statistics now arrive through `flags_near_path` and are scored
+by the same arithmetic as everything else. Keeping the method would have counted regional
+risk **twice**, from two code paths, and the symptom is a plausible-looking safety score
+that is quietly wrong — the worst kind of bug to carry onto a stage, because nothing looks
+broken.
+
+It also had an independent bug worth recording now that the code is gone: it took `max()`
+of `normalized_risk` across every overlapping police unit, and the dataset contains both
+metropolitan units *and* the ranges that contain them. Every point in Dhaka therefore
+scored **100.0 from `Dhaka Range`** instead of 58.9 from `DMP`. `app/scoring/chronic.py`
+drops the range rows for exactly this reason and documents why.
+
+## The straight-line fallback is labelled, not disguised
+
+If OSRM is unreachable in both configurations, the service returns a single
+great-circle estimate with `engine="straight-line"`. It is still scored against the risk
+surface, so it is not useless — but it is not a route, it follows no road, and the client
+must say so. The previous code generated two *simulated* paths, one with a sine-wave
+"deviation", and returned them indistinguishably from real ones.
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import replace
+from datetime import UTC, datetime
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.contracts.risk import RiskFlag
+from app.core.config import settings
+from app.routing.alternatives import generate_detour, worst_live_flag
+from app.routing.explain import explain_route
+from app.routing.osrm import OsrmRoute, OsrmUnavailable, fetch_routes
+from app.routing.scorer import ScoredPath, apply_filters, composite, score_path
+from app.schemas.route import (
+    Location,
+    RouteFlag,
+    RouteRequest,
+    RouteResponse,
+    RouteSegment,
+)
+from app.scoring.factory import get_risk_surface
+from app.scoring.geometry import haversine_m
 
 logger = logging.getLogger(__name__)
 
+_STRAIGHT_LINE_POINTS = 24
+"""
+Points in the fallback estimate.
+
+Enough that the corridor query has a line to work with and the drawn path does not look
+like a single segment, few enough that it is obviously not a road.
+"""
+
+_ASSUMED_WALK_KMH = 4.8
+"""
+Walking speed, used in two places.
+
+The straight-line fallback, where there is no graph to ask -- and **walking routes**, whose
+durations OSRM cannot currently answer. See `_WALKING_NOTE`. 4.8 km/h is an ordinary adult
+pace on level ground; Dhaka footpaths are not level ground, so this is mildly optimistic and
+is labelled as an estimate rather than presented as OSRM's answer.
+"""
+
+_ASSUMED_DRIVE_KMH = 22.0
+"""
+Driving speed for the straight-line fallback only.
+
+22 km/h rather than the 30 the deleted code assumed: a 30 km/h average across Dhaka is
+optimistic to the point of being wrong. Any real route uses OSRM's own duration.
+"""
+
+_CONGESTION_NOTE = (
+    "Driving times are estimated for Dhaka traffic. The road map only knows free-flow "
+    "speeds, which would put this journey at roughly three times the speed anyone "
+    "actually travels."
+)
+"""
+Shown on the card, because a duration is a claim and this one is a calibration.
+
+The honest version of the sentence is the second half: OSRM is not wrong, it is answering
+"how long on an empty road". Measured free-flow on the Bangshal -> Mirpur-10 route was
+**54.8 km/h**, median segment speed 56 km/h. Scaling it is the interim fix;
+`osrm-customize --segment-speed-file` is the real one and needs traffic data this project
+does not have.
+
+The note is deliberately not shown on a `straight-line` fallback -- that route already
+carries a louder caveat saying it is not a road route at all, and stacking two would bury
+the more important one.
+"""
+
+_WALKING_NOTE = (
+    "Walking directions use the driving road map, so the route may include a flyover or "
+    "follow a one-way street. The time is an estimate at 4.8 km/h, not a measured walking "
+    "duration."
+)
+"""
+Surfaced to the user, not merely logged. Defect 7 asked for a walking profile and this is as
+much of one as the graph can honestly support.
+
+Measured 2026-10-09: a `/foot/` request against the local graph returned **7.03 km in 9
+minutes** -- identical to the driving answer, because the graph is built from `car.lua` and
+OSRM will answer a foot request from whatever graph it has. 47 km/h presented as a walk is
+not an imprecision, it is a false statement on a screen, so the duration is recomputed here
+and the path caveat is shown rather than hidden in a log line.
+
+The real fix is a second graph built with `foot.lua`. That is a background task, not
+demo-critical, and it is written down in `app/routing/osrm.py :: WALKING_GRAPH_CAVEAT`.
+"""
+
+
 class RouteService:
-    def __init__(self):
-        self.risk_model = {}
-        self._load_risk_model()
+    """
+    Orchestration. Holds no risk model, loads no JSON, runs no scoring arithmetic.
 
-    def _load_risk_model(self):
-        try:
-            # Path to backend/scripts/crime_risk_model.json
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            model_path = os.path.join(base_dir, "scripts", "crime_risk_model.json")
-            
-            if os.path.exists(model_path):
-                with open(model_path, "r") as f:
-                    self.risk_model = json.load(f)
-                logger.info("✅ Crime Risk Model loaded successfully")
-            else:
-                logger.warning(f"⚠️ Crime Risk Model not found at {model_path}")
-        except Exception as e:
-            logger.error(f"Failed to load Crime Risk Model: {e}")
+    The constructor is deliberately empty. It used to read `crime_risk_model.json` at
+    import time for `_get_regional_risk`, which meant every process importing this module
+    — including ones that never route — paid for a file read and held the model in memory.
+    """
 
-    def _haversine_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-        """Calculate distance between two points in km"""
-        R = 6371  # Earth radius in km
-        dlat = math.radians(lat2 - lat1)
-        dlon = math.radians(lon2 - lon1)
-        a = math.sin(dlat/2) * math.sin(dlat/2) + \
-            math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * \
-            math.sin(dlon/2) * math.sin(dlon/2)
-        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-        return R * c
-        
-    def _get_regional_risk(self, lat: float, lon: float) -> float:
+    @staticmethod
+    def _to_route_flag(flag: RiskFlag) -> RouteFlag:
+        return RouteFlag(
+            flag_id=str(flag.flag_id),
+            lat=flag.lat,
+            lon=flag.lon,
+            radius_m=flag.radius_m,
+            mobility_statement=flag.mobility_statement,
+            severity_now=round(flag.severity_now, 1),
+            status=flag.status,
+            source_count=flag.source_count,
+            kind=flag.kind.value,
+        )
+
+    def _straight_line(
+        self, request: RouteRequest, profile: str
+    ) -> OsrmRoute:
         """
-        Get normalized risk score based on regional model (0-100)
+        A great-circle estimate, for when OSRM is unreachable in both configurations.
 
-        DELETE THIS METHOD IN D06. It is now a double count.
-
-        D02 moved `scripts/crime_risk_model.json` into the risk surface as the chronic
-        baseline layer (`app/scoring/chronic.py`), so route scoring will read the same
-        police statistics through `RiskSurface` once D06 wires it up. Leaving this here
-        as well counts regional risk twice, and the symptom is a plausible-looking
-        safety score that is quietly wrong — the worst kind of bug to have on stage,
-        because nothing looks broken.
-
-        It also has a second bug worth knowing before deleting it: the `max` below
-        takes the highest `normalized_risk` across *every* overlapping unit, and the
-        dataset contains both metropolitan units and the ranges that contain them. Any
-        point in Dhaka therefore scores 100.0 from `Dhaka Range` rather than 58.9 from
-        `DMP`. `chronic.py` drops the range rows for exactly this reason and documents
-        why; see the "Two decisions that keep it honest" section there.
-
-        See DEMO_PLAN.md D02 and D06.
+        Labelled `straight-line` so the client can say it is not a route. Still scored
+        against the risk surface, because "we could not reach the routing engine but there
+        is a fire on the direct line" is more useful than nothing.
         """
-        max_risk = 0.0
-        
-        for unit, data in self.risk_model.items():
-            center = data.get("location", {})
-            c_lat = center.get("lat")
-            c_lon = center.get("lon")
-            radius = center.get("radius_km", 10)
-            
-            if c_lat and c_lon:
-                dist = self._haversine_distance(lat, lon, c_lat, c_lon)
-                if dist <= radius:
-                    # Point is within this high-risk zone
-                    # We take the max risk if overlapping zones
-                    risk = data.get("normalized_risk", 0.0)
-                    if risk > max_risk:
-                        max_risk = risk
-                        
-        return max_risk
-
-    def _generate_path(self, start: Location, end: Location, num_points: int = 10, curve_factor: float = 0.0) -> List[Tuple[float, float]]:
-        """
-        Generate a simulated path if OSRM fails.
-        """
-        path = []
-        for i in range(num_points + 1):
-            t = i / num_points
-            lat = start.latitude + t * (end.latitude - start.latitude)
-            lng = start.longitude + t * (end.longitude - start.longitude)
-            if curve_factor != 0:
-                deviation = math.sin(t * math.pi) * curve_factor
-                lat += deviation * 0.01
-                lng += deviation * 0.01
-            path.append((lat, lng))
-        return path
-
-    async def _fetch_osrm_routes(self, start: Location, end: Location) -> List[dict]:
-        """Fetch real routes from OSRM"""
-        # OSRM demo server (use with care, rate/reliability not guaranteed for prod)
-        url = f"http://router.project-osrm.org/route/v1/driving/{start.longitude},{start.latitude};{end.longitude},{end.latitude}"
-        params = {
-            "overview": "full",
-            "geometries": "geojson",
-            "alternatives": "true"
-        }
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(url, params=params, timeout=5.0)
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("code") == "Ok":
-                        return data.get("routes", [])
-        except Exception as e:
-            logger.error(f"OSRM Fetch Error: {e}")
-        return []
-
-    async def _calculate_path_risk(self, path: List[Tuple[float, float]], db: AsyncSession) -> Tuple[float, List[Location]]:
-        """
-        Calculate risk score for a path based on nearby crimes AND regional model.
-        Returns (risk_score, hotspots_list)
-        """
-        local_incident_risk = 0.0
-        hotspots = []
-        
-        # 1. Regional Risk Calculation (Base Level)
-        # Sample points along path to determine max regional risk
-        # We check every 10th point to save compute
-        regional_risks = []
-        sample_step = max(1, len(path) // 20)
-        for i in range(0, len(path), sample_step):
-            p = path[i]
-            regional_risks.append(self._get_regional_risk(p[0], p[1]))
-            
-        avg_regional_risk = sum(regional_risks) / len(regional_risks) if regional_risks else 0.0
-        
-        # 2. Local Incident Risk Calculation (Specific Crimes)
-        # Optimization: Query all active crimes and filter in Python for stability
-        query = select(CrimeReport).where(CrimeReport.status.in_(['verified', 'pending', 'investigating']))
-        result = await db.execute(query)
-        all_crimes = result.scalars().all()
-        
-        # Calculate bounding box for the path
-        lats = [p[0] for p in path]
-        lngs = [p[1] for p in path]
-        if not lats or not lngs:
-             return 100.0, []
-             
-        padding = 0.05
-        min_lat, max_lat = min(lats) - padding, max(lats) + padding
-        min_lng, max_lng = min(lngs) - padding, max(lngs) + padding
-        
-        # Pre-filter crimes in bounding box
-        crimes = []
-        for crime in all_crimes:
-            try:
-                c_lat = float(crime.latitude)
-                c_lng = float(crime.longitude)
-                if min_lat <= c_lat <= max_lat and min_lng <= c_lng <= max_lng:
-                    crimes.append(crime)
-            except (ValueError, TypeError):
-                continue
-        
-        processed_crimes = set()
-        
-        for lat, lng in path:
-            for crime in crimes:
-                try:
-                    c_lat = float(crime.latitude)
-                    c_lng = float(crime.longitude)
-                except: continue
-
-                # Check if crime is within 500m (0.5km)
-                if abs(c_lat - lat) < 0.0045 and abs(c_lng - lng) < 0.0045:
-                    if crime.id not in processed_crimes:
-                        weight = 10.0
-                        cat = str(crime.category).lower()
-                        if 'theft' in cat: weight = 5.0
-                        elif 'assault' in cat: weight = 20.0
-                        elif 'murder' in cat: weight = 50.0
-                        elif 'robbery' in cat: weight = 30.0
-                        
-                        local_incident_risk += weight
-                        processed_crimes.add(crime.id)
-                        hotspots.append(Location(latitude=c_lat, longitude=c_lng))
-        
-        # Combine Risks
-        # Regional Risk (0-100) contributes 30% to danger
-        # Local Incident Risk (unbounded, usually 0-200) contributes 70%
-        # We cap local risk contribution at 100 for normalization
-        
-        capped_local_risk = min(100.0, local_incident_risk)
-        
-        total_risk_score = (avg_regional_risk * 0.3) + (capped_local_risk * 0.7)
-        
-        # Safety Score is inverse of Risk
-        safety_score = max(0.0, 100.0 - total_risk_score)
-        
-        return safety_score, hotspots
-
-    async def calculate_routes(self, request: RouteRequest, db: AsyncSession) -> List[RouteResponse]:
-        """
-        Generate multiple routes and rank them by safety/distance.
-        Uses OSRM for real paths, falls back to simulation if needed.
-        """
-        routes = []
-        
-        # Helper to build RouteResponse
-        def build_response(rid, points, dist_km, safety, hotspots):
-            segments = []
-            for pt in points:
-                segments.append(RouteSegment(latitude=pt[0], longitude=pt[1], crime_score=(100-safety)/10))
-            
-            # Simple composite: safety is 70% weight, distance is 30%
-            dist_score = max(0.0, 100.0 - (dist_km * 2.0))
-            composite = (safety * 0.7) + (dist_score * 0.3)
-            
-            return RouteResponse(
-                route_id=rid,
-                path=segments,
-                distance_km=round(dist_km, 2),
-                duration_minutes=int(dist_km * 60 / 30), # default 30km/h
-                safety_score=round(safety, 1),
-                composite_score=round(composite, 1),
-                crime_hotspots=hotspots
+        start = (request.source.latitude, request.source.longitude)
+        end = (request.destination.latitude, request.destination.longitude)
+        path = [
+            (
+                start[0] + (end[0] - start[0]) * index / _STRAIGHT_LINE_POINTS,
+                start[1] + (end[1] - start[1]) * index / _STRAIGHT_LINE_POINTS,
             )
+            for index in range(_STRAIGHT_LINE_POINTS + 1)
+        ]
+        distance_m = haversine_m(*start, *end)
+        speed_kmh = _ASSUMED_WALK_KMH if profile == "foot" else _ASSUMED_DRIVE_KMH
+        return OsrmRoute(
+            path=path,
+            distance_m=distance_m,
+            duration_s=(distance_m / 1000.0) / speed_kmh * 3600.0,
+            engine="straight-line",
+        )
 
-        # 1. Try OSRM
-        osrm_routes = await self._fetch_osrm_routes(request.source, request.destination)
-        
-        if osrm_routes:
-            for i, r in enumerate(osrm_routes):
-                # Extract path (flip [lon, lat] to [lat, lon])
-                coordinates = r['geometry']['coordinates']
-                path = [(c[1], c[0]) for c in coordinates]
-                
-                # Distance
-                dist_km = r['legs'][0]['distance'] / 1000.0
-                
-                # Calculate Safety
-                safety, hotspots = await self._calculate_path_risk(path, db)
-                
-                routes.append(build_response(f"route_osrm_{i}", path, dist_km, safety, hotspots))
-        
-        # 2. Fallback if OSRM failed (empty list)
-        if not routes:
-            logger.warning("OSRM failed or returned no routes, using simulation.")
-            s_lat, s_lng = request.source.latitude, request.source.longitude
-            d_lat, d_lng = request.destination.latitude, request.destination.longitude
-            base_distance = self._haversine_distance(s_lat, s_lng, d_lat, d_lng)
-            
-            path1 = self._generate_path(request.source, request.destination, num_points=20, curve_factor=0.0)
-            safety1, hotspots1 = await self._calculate_path_risk(path1, db)
-            routes.append(build_response("route_sim_1", path1, base_distance, safety1, hotspots1))
-            
-            path2 = self._generate_path(request.source, request.destination, num_points=25, curve_factor=1.0)
-            safety2, hotspots2 = await self._calculate_path_risk(path2, db)
-            routes.append(build_response("route_sim_2", path2, base_distance * 1.2, safety2, hotspots2))
+    async def calculate_routes(
+        self,
+        request: RouteRequest,
+        db: AsyncSession,
+        *,
+        at: datetime | None = None,
+    ) -> list[RouteResponse]:
+        """
+        Candidate routes, scored against the risk surface and ranked.
 
-        # Sort by composite score descending (Safest & Shortest combined, heavy safety weight)
-        routes.sort(key=lambda x: x.composite_score, reverse=True)
-        
-        return routes
+        `at` threads the clock the same way `GET /risk/flags?as_of=` does, so a route can be
+        scored against the surface as it will be later — the seam D09's forward-looking view
+        needs. Defaults to now.
+        """
+        moment = at or datetime.now(tz=UTC)
+        profile = "foot" if request.profile == "foot" else "driving"
+
+        try:
+            candidates = await fetch_routes(
+                start=(request.source.latitude, request.source.longitude),
+                end=(request.destination.latitude, request.destination.longitude),
+                profile=profile,  # type: ignore[arg-type]  # narrowed above
+            )
+        except OsrmUnavailable as exc:
+            logger.warning(
+                "no routing engine answered (%s). Returning a straight-line estimate, "
+                "labelled as such.",
+                exc,
+            )
+            candidates = [self._straight_line(request, profile)]
+
+        surface = get_risk_surface(db)
+
+        scored: list[tuple[OsrmRoute, ScoredPath]] = []
+        for candidate in candidates:
+            scored.append((candidate, await score_path(surface, path=candidate.path, at=moment)))
+
+        # Beat 4 needs something to compare. OSRM offers its own alternatives only when a
+        # geometrically distinct road exists -- measured across five Dhaka pairs, about half
+        # the time -- and it has no idea that one route passes a fire. So when there is only
+        # one candidate and it passes a live flag worth avoiding, build the detour ourselves.
+        # `generate_detour` verifies the result actually clears that flag and returns None
+        # otherwise, so this can add an alternative but never a misleading one.
+        if len(scored) == 1 and candidates[0].engine != "straight-line":
+            primary_route, primary_score = scored[0]
+            target = worst_live_flag(primary_score.flags)
+            if target is not None:
+                detour = await generate_detour(
+                    start=(request.source.latitude, request.source.longitude),
+                    end=(request.destination.latitude, request.destination.longitude),
+                    profile=profile,  # type: ignore[arg-type]  # narrowed above
+                    flag=target,
+                    path=primary_route.path,
+                    corridor_radius_m=settings.ROUTE_CORRIDOR_RADIUS_M,
+                )
+                if detour is not None:
+                    scored.append(
+                        (detour, await score_path(surface, path=detour.path, at=moment))
+                    )
+
+        # Durations, corrected before anything ranks on them -- `composite` trades safety
+        # against time, so a wrong duration changes which route is recommended, not just
+        # what the card says.
+        #
+        # Both corrections exist because OSRM answers from a car.lua graph with no traffic
+        # data. For walking it answers the wrong question entirely (it returned 7.03 km in
+        # 9 minutes -- 47 km/h presented as a walk). For driving it answers the right
+        # question about the wrong world: 54.8 km/h average across central Dhaka, which is
+        # free-flow and physically absurd here.
+        notes: list[str] = []
+        if profile == "foot":
+            notes.append(_WALKING_NOTE)
+            scored = [
+                (
+                    replace(
+                        route,
+                        duration_s=(route.distance_m / 1000.0) / _ASSUMED_WALK_KMH * 3600.0,
+                    ),
+                    path_score,
+                )
+                for route, path_score in scored
+            ]
+        else:
+            factor = settings.ROUTE_CONGESTION_FACTOR
+            if factor > 0 and factor != 1.0 and any(
+                route.engine != "straight-line" for route, _ in scored
+            ):
+                notes.append(_CONGESTION_NOTE)
+                scored = [
+                    (
+                        route
+                        if route.engine == "straight-line"
+                        else replace(route, duration_s=route.duration_s / factor),
+                        path_score,
+                    )
+                    for route, path_score in scored
+                ]
+
+        fastest_s = min(candidate.duration_s for candidate, _ in scored)
+
+        # Rank before filtering, so a relaxed filter still returns the best option first.
+        ranked = sorted(
+            scored,
+            key=lambda pair: composite(pair[1].safety_score, pair[0].duration_s, fastest_s),
+            reverse=True,
+        )
+
+        keep, filter_relaxed = apply_filters(
+            [path_score for _, path_score in ranked],
+            avoid_high_crime_zones=request.avoid_high_crime_zones,
+            max_crime_score=request.max_crime_score,
+        )
+        surviving = [pair for pair, keeping in zip(ranked, keep, strict=True) if keeping]
+        if not surviving:
+            return []
+
+        # What each route avoids, for the trade-off sentence.
+        #
+        # The comparison a traveller is making is against the option they would otherwise
+        # take, so:
+        #   * the recommended route is compared with everything else — "avoids 2 flagged
+        #     corridors" means two flags that some alternative passes and it does not;
+        #   * an alternative is compared with the recommended route — "4 minutes longer,
+        #     avoids two flagged corridors" means two the recommended one passes and it
+        #     does not.
+        #
+        # Getting this backwards would produce a sentence claiming a route avoids the flags
+        # it is in fact the only one to pass, which reads perfectly and is a lie.
+        flag_ids = [{flag.flag_id for flag in path_score.flags} for _, path_score in surviving]
+        best_ids = flag_ids[0]
+        others_union: set[object] = set().union(*flag_ids[1:]) if len(flag_ids) > 1 else set()
+
+        # An alternative may claim "avoids N" only if it is actually safer. Route 1 of the
+        # Dhanmondi->Gulshan pair is 2 minutes slower AND passes five flags against the
+        # recommended route's three -- and it still avoids two the recommended one passes,
+        # so the literal count is 2. Printing that alone would be true and misleading: it
+        # sells a strictly worse route on the half of the comparison that flatters it.
+        # A slower, less safe route gets the time difference and nothing else.
+        best_safety = surviving[0][1].safety_score
+        avoided_counts = [len(others_union - best_ids)] + [
+            len(best_ids - ids) if path_score.safety_score > best_safety else 0
+            for _, path_score in surviving[1:]
+        ]
+
+        responses: list[RouteResponse] = []
+        for index, (route, path_score) in enumerate(surviving):
+            responses.append(
+                RouteResponse(
+                    route_id=f"route_{route.engine}_{index}",
+                    path=[
+                        RouteSegment(latitude=lat, longitude=lon) for lat, lon in route.path
+                    ],
+                    distance_km=round(route.distance_m / 1000.0, 2),
+                    duration_minutes=max(1, round(route.duration_s / 60.0)),
+                    safety_score=path_score.safety_score,
+                    composite_score=round(
+                        composite(path_score.safety_score, route.duration_s, fastest_s), 1
+                    ),
+                    flags=[self._to_route_flag(flag) for flag in path_score.flags],
+                    explanation=explain_route(
+                        path_score.flags,
+                        duration_s=route.duration_s,
+                        fastest_duration_s=fastest_s,
+                        avoided_count=avoided_counts[index],
+                    ),
+                    engine=route.engine,
+                    filter_relaxed=filter_relaxed,
+                    notes=notes,
+                )
+            )
+        return responses
+
 
 route_service = RouteService()

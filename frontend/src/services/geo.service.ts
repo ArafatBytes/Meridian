@@ -26,6 +26,26 @@ interface ResolveResponseWire {
   resolution: GeoResolutionWire;
 }
 
+/** One candidate from the Nominatim proxy. Carries no judgement — see `search()`. */
+export interface NominatimPlace {
+  display_name: string | null;
+  lat: number;
+  lon: number;
+  type?: string | null;
+}
+
+interface GeoSearchWire {
+  query: string;
+  results: NominatimPlace[];
+}
+
+interface GeoReverseWire {
+  lat: number;
+  lon: number;
+  display_name: string | null;
+  address: Record<string, unknown>;
+}
+
 export interface ResolveResult {
   /**
    * The query this answer belongs to.
@@ -102,6 +122,56 @@ class GeoService {
       };
     } catch {
       return unresolved(query);
+    }
+  }
+
+  /**
+   * Forward geocode through **our** proxy, not Nominatim directly. Defect 10.
+   *
+   * Four screens used to call `nominatim.openstreetmap.org` straight from the device with
+   * React Native's default `User-Agent` and no caching. That breaks Nominatim's usage
+   * policy (it requires a genuine identifying agent and at most one request per second),
+   * spends the per-IP rate limit separately on every phone, and is invisible to the
+   * server. The proxy gives it one agent we own and one shared Redis cache.
+   *
+   * Returns `[]` rather than throwing when the geocoder is unreachable: the caller's job
+   * is to offer suggestions, and no suggestions is a usable state while an exception is
+   * not.
+   *
+   * ⚠️ **Not a replacement for `resolve()`.** That is the guarded path — the Dhaka
+   * gazetteer, with the "discarded, never guessed" invariant. This answers *everything*,
+   * which is why D03's lesson applies: a tier that always answers must not be able to
+   * overturn a deliberate refusal. Use `resolve()` for the map's search box; use this for
+   * address lookup and reverse geocoding.
+   */
+  async search(query: string): Promise<NominatimPlace[]> {
+    if (!query.trim()) return [];
+    try {
+      const body = (await apiService.get<GeoSearchWire>(
+        `/geo/search?q=${encodeURIComponent(query)}`,
+      )) as unknown as GeoSearchWire | { data?: GeoSearchWire };
+      const payload = body && 'results' in body ? body : body?.data;
+      return payload?.results ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Reverse geocode through the proxy. Returns null when there is no address for the point.
+   *
+   * A missing address is a state the reporting screen can render ("drop a pin here
+   * anyway"), so it is not an error.
+   */
+  async reverse(lat: number, lon: number): Promise<string | null> {
+    try {
+      const body = (await apiService.get<GeoReverseWire>(
+        `/geo/reverse?lat=${lat}&lon=${lon}`,
+      )) as unknown as GeoReverseWire | { data?: GeoReverseWire };
+      const payload = body && 'display_name' in body ? body : body?.data;
+      return payload?.display_name ?? null;
+    } catch {
+      return null;
     }
   }
 }

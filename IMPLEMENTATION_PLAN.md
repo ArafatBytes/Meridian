@@ -49,12 +49,12 @@ A full audit of the existing codebase produced this summary. It is the baseline 
 | 3 | High | `MapScreen` `CRIME_COLORS` keys are capitalised; DB values are lowercase → every marker colour resolves `undefined` | S07 |
 | 4 | High | `HomeScreen` voice SOS records 1 s of audio every 2 s forever, reads `status.isRecording` *after* unload (always false), and the trigger in the reachable branch is commented out. Continuous recording, zero detection. | **S01 ✅** — the whole block was deleted with the `expo-av` removal (defect 37); real hot-word detection is still S07 |
 | 5 | High | MediaPipe `Pose` is single-person, so `analyze_interaction` always short-circuits — all multi-person interaction logic and the harassment profile are unreachable. **Re-scoped:** pose analysis never ran at all (defect 29), so this was never the binding constraint; the `PoseLandmarker` port fixes both at once via its `num_poses` option. | S06 |
-| 6 | Medium | `avoid_high_crime_zones` / `max_crime_score` accepted by `RouteRequest` and never read | S05 |
-| 7 | Medium | `route_service` hardcodes the public OSRM demo server, ignores `OSRM_BASE_URL`, uses the `driving` profile, and discards OSRM's own durations for a flat 30 km/h | S05 |
-| 8 | Medium | `_calculate_path_risk` loads all crimes then loops path-points × crimes in Python | S05 |
+| 6 | Medium | `avoid_high_crime_zones` / `max_crime_score` accepted by `RouteRequest` and never read. Both honoured now, with one decision attached: **a filter that would reject every route is relaxed, not applied** — everything comes back best-first with `filter_relaxed: true`, because answering "no acceptable route" to someone asking how to get home is the worst available answer. | **D06 ✅** |
+| 7 | Medium | `route_service` hardcodes the public OSRM demo server, ignores `OSRM_BASE_URL`, uses the `driving` profile, and discards OSRM's own durations for a flat 30 km/h. All four fixed in `app/routing/osrm.py`, and the fallback to the demo server is now **loud** — `RouteResponse.engine` carries it. ⚠️ **Two honest limits remain:** walking answers from a `car.lua` graph (durations recomputed, caveat on screen; a `foot.lua` graph is the fix), and OSRM's own duration turned out to be **free-flow** — 54.8 km/h across central Dhaka — because an OSM extract holds no traffic data, so it is scaled by `ROUTE_CONGESTION_FACTOR`. The real fix is `osrm-customize --segment-speed-file`, which needs a traffic source → **Track B**. | **D06 ✅** |
+| 8 | Medium | `_calculate_path_risk` loads all crimes then loops path-points × crimes in Python — `select(CrimeReport)` with **no spatial predicate at all**. Now one `ST_DWithin` against an `ST_MakeLine` of the route, through a new `RiskSurface.flags_near_path` so both surfaces answer it and `routing/` works unchanged on the offline fixture (S12's own check). | **D06 ✅** |
 | 9 | Medium | Three user tables: `auth.users`, `public.profiles` (app), `public.users` (backend). `create_users_table.sql` and `models/user.py` define incompatible shapes. | S02 / S05 |
-| 10 | Medium | Nominatim called from the device with no `User-Agent`, against their usage policy | S05 / S07 |
-| 11 | Medium | Three crime-score scales coexist: 0–100, 0–10, and percent | S07 |
+| 10 | Medium | Nominatim called from the device with no `User-Agent`, against their usage policy — and from **five** call sites with no caching, so the per-IP limit was spent separately by every phone. Now `app/geo/nominatim.py` behind `GET /geo/search` and `GET /geo/reverse`: one identifying agent, one shared Redis cache (**471 ms cold → 52 ms warm**, 24 h TTL). Kept separate from `/geo/resolve`, which is allowed to refuse. | **D06 ✅** |
+| 11 | Medium | Three crime-score scales coexist: 0–100, 0–10, and percent. One scale now — **`safety_score`, 0–100, higher is safer.** `RouteSegment.crime_score` deleted, the card renders `71/100` rather than `70.6% Safe`, and a test asserts the response carries exactly one risk scale so a second cannot return quietly. | **D06 ✅** |
 | 12 | Low | `EmergencyContact` declared twice in `types/index.ts` with different shapes | **S01b ✅** — re-point at the contract type in S03 |
 | 13 | Low | Report photos are analysed then discarded — evidence is never persisted | S06 |
 | 14 | Low | `MapScreen` SOS button is still a `// TODO` alert while `HomeScreen`'s is real | S07 |
@@ -1453,8 +1453,30 @@ DEDUP_WINDOW_HOURS=6
 DEDUP_MODEL=sentence-transformers/all-MiniLM-L6-v2
 MIN_SOURCES_FOR_CONFIRMED=2
 
-# --- Routing (S05+) ---
-OSRM_BASE_URL=http://localhost:5000
+# --- Routing (D06) ---
+# http://osrm:5000 inside the compose network. An unset or empty value falls back to
+# the public demo server and warns on every request -- that is defect 7, and it is
+# loud rather than silent.
+OSRM_BASE_URL=http://osrm:5000
+
+# Route scoring. S12 asks for a composite "documented and tunable in settings, not a
+# magic constant"; the reasoning for each of these is in app/core/config.py and the
+# arithmetic in app/routing/scorer.py.
+ROUTE_CORRIDOR_RADIUS_M=150     # how far from the road a flag still counts
+ROUTE_SAFETY_WEIGHT=0.7         # share of the ranking that is safety, rest is duration
+ROUTE_PENALTY_FALLOFF=0.5       # geometric falloff per additional flag, worst first
+ROUTE_DETOUR_TOLERANCE=1.0      # 1.0 = a route twice as long scores 0 on duration
+ROUTE_CHRONIC_WEIGHT=0.35       # MEASURED. At 1.0 every Dhaka route scored 16.7/100
+ROUTE_CONGESTION_FACTOR=0.35    # CALIBRATION, not a measurement. Check it against a
+                                # journey you know: OSRM gives free-flow (54.8 km/h
+                                # measured across central Dhaka) because an OSM extract
+                                # has no traffic data at all.
+
+# Nominatim proxy (D06, defect 10). A genuine identifying agent is a policy
+# requirement, not a nicety.
+NOMINATIM_BASE_URL=https://nominatim.openstreetmap.org
+NOMINATIM_USER_AGENT=Meridian/1.0 (+https://github.com/ArafatBytes/Meridian)
+NOMINATIM_CACHE_TTL_SECONDS=86400
 OSRM_PROFILE=driving
 ROUTE_SAFETY_WEIGHT=0.7
 

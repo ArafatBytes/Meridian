@@ -169,7 +169,104 @@ class Settings(BaseSettings):
     DEDUP_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
 
     # OSRM
+    #
+    # `http://osrm:5000` inside the compose network, which is where `api` runs. The
+    # localhost default is for a backend started natively against a port-mapped
+    # container. **An unset or empty value falls back to the public demo server and
+    # logs a warning on every request** -- that is defect 7, and it is loud rather
+    # than silent because a rate-limited third party answering routes mid-demo is
+    # exactly the failure that looks like "the app is slow".
     OSRM_BASE_URL: str = "http://localhost:5000"
+
+    # Route scoring (D06) -- S12 asks for a composite that is "documented and tunable
+    # in settings, not a magic constant". The reasoning for each lives in
+    # app/routing/scorer.py; these are the knobs.
+
+    # How far from the road a flag still counts as "on this route", in metres. 150 m is
+    # about the width of a Dhaka intersection plus its approaches: wide enough that a
+    # flag beside the carriageway counts, narrow enough that one on a parallel street
+    # two blocks over does not.
+    ROUTE_CORRIDOR_RADIUS_M: int = 150
+
+    # Share of the ranking that is safety; the rest is duration. 0.7 so safety
+    # dominates without winning outright -- a route marginally safer and twice as long
+    # is not the one to recommend, and an app that always returns the longest route
+    # stops being used.
+    ROUTE_SAFETY_WEIGHT: float = 0.7
+
+    # Geometric falloff applied to each additional flag's penalty, worst first. Summing
+    # penalties makes every long route score zero (ten minor flags over 12 km exceed any
+    # threshold, and the ranking then carries no information); averaging lets one severe
+    # flag be diluted by a dozen trivial ones. 0.5 means the worst counts in full, the
+    # second half, the third a quarter.
+    ROUTE_PENALTY_FALLOFF: float = 0.5
+
+    # How much slower than the fastest option a route may be before it scores zero on
+    # the duration axis. 1.0 = twice as long. Relative rather than absolute because
+    # "a long journey" has no fixed meaning: 40 minutes is ordinary across Dhaka and
+    # absurd for three streets.
+    ROUTE_DETOUR_TOLERANCE: float = 1.0
+
+    # OSRM's duration multiplied by this, for driving only. **A calibration, not a
+    # measurement**, and the number that decides what the app tells someone about their
+    # journey -- so the reasoning is here in full.
+    #
+    # THE PROBLEM. OSRM answers "how long on an empty road", because that is the only
+    # question the graph can answer: `car.lua` speeds come from `maxspeed` tags and road
+    # class defaults. Measured on the Bangshal -> Mirpur-10 route, 2026-10-09:
+    #
+    #     12.61 km in 13.8 min  =>  54.8 km/h average
+    #     segment speeds: min 10, median 56, max 106 km/h   (n=324)
+    #
+    # 54.8 km/h across central Dhaka is not a slightly optimistic estimate, it is
+    # physically absurd. The graph is not wrong -- it has no traffic data, and nothing in
+    # it ever will. **This cannot be fixed "from the road graph".**
+    #
+    # THE PROPER FIX is OSRM's own mechanism for exactly this:
+    # `osrm-customize --segment-speed-file`, fed per-segment observed speeds. That needs
+    # a traffic data source this project does not have, and it is Track B work.
+    #
+    # THE INTERIM FIX is this multiplier. Crude, but it has two properties worth having:
+    # it preserves the *relative* differences between roads (a flyover segment still beats
+    # an alley, which is what makes the ranking meaningful), and it is one number in one
+    # place with its derivation attached.
+    #
+    # 0.35 puts that route at roughly 19 km/h and ~40 minutes. ⚠️ **Calibrate this against
+    # a journey you actually know** before quoting any duration on stage -- it is a guess
+    # scaled from one measurement, and nobody has checked it against a real trip. Walking
+    # is unaffected: pedestrians do not sit in traffic, and walking durations are computed
+    # from distance at _ASSUMED_WALK_KMH instead.
+    ROUTE_CONGESTION_FACTOR: float = 0.35
+
+    # What a CHRONIC flag's penalty is multiplied by. Measured, not guessed -- see
+    # app/routing/scorer.py :: _penalty_for.
+    #
+    # The chronic layer is D02's police-statistics baseline: historical averages with
+    # 2 km radii, covering most of Dhaka. At full weight a 12.6 km crossing passing
+    # three of them scored 16.7/100, every route in the city scored similarly, and
+    # `max_crime_score` therefore rejected all of them -- so defect 6's filter was
+    # meaningless and the ranking was dominated by historical coverage rather than by
+    # what is happening today.
+    #
+    # Worse than useless: that is the "stale red zones" failure demo beat 5 exists to
+    # say this product does not have, and concept document section 9 commits to not
+    # labelling areas permanently. A historical average must nudge a tie-break, not
+    # decide the route.
+    #
+    # At 0.35 the same crossing scores 68.6, and a live fire on it moves the number
+    # visibly. Raise it only with a measurement; a chronic blackspot outranking a fire
+    # is the thing to watch for.
+    ROUTE_CHRONIC_WEIGHT: float = 0.35
+
+    # Nominatim proxy (D06, defect 10)
+    #
+    # Nominatim's usage policy requires a genuine identifying User-Agent and no more
+    # than one request per second. The app was calling it directly from four screens
+    # with React Native's default agent, which is both a policy violation and an
+    # invitation to be blocked mid-demo.
+    NOMINATIM_BASE_URL: str = "https://nominatim.openstreetmap.org"
+    NOMINATIM_USER_AGENT: str = "Meridian/1.0 (+https://github.com/ArafatBytes/Meridian)"
+    NOMINATIM_CACHE_TTL_SECONDS: int = 86_400
     
     # Crime Score Settings
     CRIME_SCORE_UPDATE_INTERVAL: int = 1800

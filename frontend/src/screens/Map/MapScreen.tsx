@@ -33,8 +33,10 @@ import { crimeCategoryLabel } from '../../types/contracts/crime';
 import type { RiskFlag } from '../../types/contracts/risk';
 import { routeService, RouteResponse, Location } from '../../services/route.service';
 import { riskService, type IngestionStatus } from '../../services/risk.service';
+import { geoService } from '../../services/geo.service';
 import RiskFlagSheet, { riskBand } from '../../components/RiskFlagSheet';
 import { RiskFlagMarker, isConfirmedFlag } from '../../components/RiskFlagMarker';
+import RouteComparisonCard, { safetyColour } from '../../components/RouteComparisonCard';
 import PlaceSearch from '../../components/PlaceSearch';
 import type { GeoResolution } from '../../types/contracts/geo';
 
@@ -148,12 +150,9 @@ const NEWS_POLL_LIMIT = 36;
  */
 const withAlpha = (hex: string, alpha: string) => `${hex}${alpha}`;
 
-// Colors for routes based on safety score
-const getRouteColor = (safetyScore: number) => {
-  if (safetyScore >= 80) return colors.success; // Green (Safe)
-  if (safetyScore >= 50) return colors.warning; // Yellow (Moderate)
-  return colors.error; // Red (Unsafe)
-};
+// `getRouteColor` lived here until D06. It is now `safetyColour`, exported from
+// components/RouteComparisonCard.tsx, so the polyline and the card cannot disagree about
+// what a safety score looks like -- they read one table. Thresholds moved 80 -> 75 with it.
 
 type MapScreenNavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'Map'>,
@@ -193,6 +192,16 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   const [routeMode, setRouteMode] = useState(false);
   const [destination, setDestination] = useState<Location | null>(null);
   const [calculatedRoutes, setCalculatedRoutes] = useState<RouteResponse[]>([]);
+  /**
+   * Driving or walking. D06 shipped the backend profile and no control for it, so the
+   * walkthrough's own step 12 read "switch the profile to walking, **if the UI exposes
+   * it**" — which it did not. That is the §3 failure mode the plan names: ship the crude
+   * screen, cut the backend depth, never the other way round.
+   *
+   * Walking is not a cosmetic option here. In a city where the safest way home is often on
+   * foot, offering only car directions answers a question the user did not ask.
+   */
+  const [routeProfile, setRouteProfile] = useState<'driving' | 'foot'>('driving');
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
   const [isRouting, setIsRouting] = useState(false);
 
@@ -223,13 +232,11 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     }
     setIsSearching(true);
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`,
-      );
-      const data = await response.json();
-      setSuggestions(data);
-    } catch (error) {
-      console.log('Error fetching suggestions:', error);
+      // D06, defect 10: through our own proxy, not nominatim.openstreetmap.org direct.
+      // One identifying User-Agent, one shared Redis cache, and traffic the server can
+      // see — rather than every phone spending the per-IP rate limit separately with
+      // React Native's default agent.
+      setSuggestions(await geoService.search(query));
     } finally {
       setIsSearching(false);
     }
@@ -284,7 +291,11 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     Keyboard.dismiss();
   };
 
-  const calculateRouteTo = async (start: Location | null, end: Location) => {
+  const calculateRouteTo = async (
+    start: Location | null,
+    end: Location,
+    profileOverride?: 'driving' | 'foot',
+  ) => {
     const fromLoc = start || currentLocation;
     if (!fromLoc) {
       Alert.alert("Location Missing", "Please select a source location.");
@@ -296,7 +307,8 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       const routes = await routeService.calculateRoutes({
         source: fromLoc,
         destination: end,
-        avoid_high_crime_zones: true
+        avoid_high_crime_zones: true,
+        profile: profileOverride ?? routeProfile,
       });
 
       setCalculatedRoutes(routes);
@@ -566,15 +578,19 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           />
         )}
 
-        {/* Routes */}
+{/* Routes.
+            D06: the line is coloured by `safety_score`, through the same `safetyColour`
+            the card uses. It used to be coloured by rank — blue, amber, grey by index —
+            which encoded *position in the list* and told you nothing about the route. Two
+            routes could look identically "second" while one was safe and one was not. */}
         {calculatedRoutes.map((route, index) => {
           const isSelected = index === selectedRouteIndex;
           return (
             <Polyline
               key={route.route_id}
               coordinates={route.path.map(p => ({ latitude: p.latitude, longitude: p.longitude }))}
-              strokeColor={index === 0 ? '#2196F3' : index === 1 ? '#FFC107' : '#B0BEC5'}
-              strokeWidth={isSelected ? 5 : 3}
+              strokeColor={safetyColour(route.safety_score)}
+              strokeWidth={isSelected ? 6 : 3}
               onPress={() => setSelectedRouteIndex(index)}
               tappable={true}
               lineDashPattern={isSelected ? undefined : [10, 5]}
@@ -582,6 +598,43 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
             />
           );
         })}
+
+        {/* Flagged corridors along each candidate. D06: *"flagged corridors visibly
+            highlighted along the rejected route, so the comparison reads without
+            narration."*
+
+            Two styles, and the distinction is the whole point. A flag on the route you are
+            looking at is drawn solid — this is what you would pass. A flag that only
+            appears on a route you are NOT looking at is drawn dashed and faint — this is
+            what the recommended option is avoiding. Seeing both at once is what makes
+            "4 minutes longer, avoids two flagged corridors" legible on the map rather
+            than only in a sentence. */}
+        {routeMode &&
+          (() => {
+            const selectedIds = new Set(
+              (calculatedRoutes[selectedRouteIndex]?.flags ?? []).map(f => f.flag_id),
+            );
+            // Deduplicate across routes: a flag on three candidates is one circle.
+            const byId = new Map<string, (typeof calculatedRoutes)[number]['flags'][number]>();
+            calculatedRoutes.forEach(route =>
+              route.flags.forEach(flag => byId.set(flag.flag_id, flag)),
+            );
+            return Array.from(byId.values()).map(flag => {
+              const onSelected = selectedIds.has(flag.flag_id);
+              return (
+                <Circle
+                  key={`route-flag-${flag.flag_id}-${onSelected ? 'on' : 'off'}`}
+                  center={{ latitude: flag.lat, longitude: flag.lon }}
+                  radius={flag.radius_m}
+                  strokeWidth={onSelected ? 2 : 1}
+                  strokeColor={withAlpha(colors.error, onSelected ? 'CC' : '55')}
+                  fillColor={withAlpha(colors.error, onSelected ? '26' : '0D')}
+                  lineDashPattern={onSelected ? undefined : [8, 6]}
+                  zIndex={onSelected ? 5 : 2}
+                />
+              );
+            });
+          })()}
 
         {/* Risk flag radius circles.
             Drawn before the markers so the pins sit on top of them. A flag is a
@@ -730,6 +783,43 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
               />
               {activeSearch === 'destination' && isSearching && <ActivityIndicator size="small" color={colors.primary} />}
             </View>
+
+            {/* Driving / walking. Re-requests immediately when a route is already shown,
+                because a mode switch that needs a second tap to take effect reads as
+                broken — and the two profiles give genuinely different answers. */}
+            <View style={styles.profileRow}>
+              {(['driving', 'foot'] as const).map(mode => {
+                const active = routeProfile === mode;
+                return (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[styles.profileChip, active && styles.profileChipActive]}
+                    onPress={() => {
+                      if (active) return;
+                      setRouteProfile(mode);
+                      if (destination) {
+                        // `calculateRouteTo` reads `routeProfile` from the closure, so pass
+                        // the new value explicitly rather than relying on a state update
+                        // that has not landed yet.
+                        calculateRouteTo(sourceLocation, destination, mode);
+                      }
+                    }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={mode === 'driving' ? 'Driving directions' : 'Walking directions'}
+                  >
+                    <Ionicons
+                      name={mode === 'driving' ? 'car-outline' : 'walk-outline'}
+                      size={15}
+                      color={active ? colors.primaryDark : colors.textSecondary}
+                    />
+                    <Text style={[styles.profileChipText, active && styles.profileChipTextActive]}>
+                      {mode === 'driving' ? 'Driving' : 'Walking'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
 
           {/* Suggestions List */}
@@ -806,51 +896,19 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         </TouchableOpacity>
       )}
 
-      {/* Route Info Card */}
+      {/* Route comparison card — D06, beat 4.
+          Replaced ~45 lines of inline JSX that rendered `safety_score` as `58.3% Safe`
+          (defect 11's third scale) and whose "description" was a three-way ternary on the
+          index, not a reason. The card now shows the server's framed explanation, the
+          trade-off sentence, the flags behind the score, and any caveat about how the
+          answer was produced. */}
       {routeMode && calculatedRoutes.length > 0 && (
-        <View style={[styles.routeInfoCard, { bottom: insets.bottom + spacing.md }]}>
-          <Text style={styles.routeTitle}>
-            Route {selectedRouteIndex + 1} of {calculatedRoutes.length}
-          </Text>
-
-          <View style={styles.routeStatsRow}>
-            <View style={styles.routeStat}>
-              <Ionicons name="shield-checkmark" size={20} color={getRouteColor(calculatedRoutes[selectedRouteIndex].safety_score)} />
-              <Text style={[styles.statValue, { color: getRouteColor(calculatedRoutes[selectedRouteIndex].safety_score) }]}>
-                {calculatedRoutes[selectedRouteIndex].safety_score.toFixed(1)}% Safe
-              </Text>
-            </View>
-
-            <View style={styles.routeStat}>
-              <Ionicons name="time-outline" size={20} color={colors.text} />
-              <Text style={styles.statValue}>
-                {calculatedRoutes[selectedRouteIndex].duration_minutes} min
-              </Text>
-            </View>
-
-            <View style={styles.routeStat}>
-              <MaterialCommunityIcons name="map-marker-distance" size={20} color={colors.text} />
-              <Text style={styles.statValue}>
-                {calculatedRoutes[selectedRouteIndex].distance_km.toFixed(1)} km
-              </Text>
-            </View>
-          </View>
-
-          <Text style={styles.routeDescription}>
-            {selectedRouteIndex === 0 ? "Recommended: Best balance of safety and distance." :
-              calculatedRoutes[selectedRouteIndex].safety_score > calculatedRoutes[0].safety_score ? "Safest option available." : "Alternative route."}
-          </Text>
-
-          <View style={styles.routeSelectionDots}>
-            {calculatedRoutes.map((_, i) => (
-              <TouchableOpacity
-                key={i}
-                style={[styles.dot, i === selectedRouteIndex && styles.activeDot]}
-                onPress={() => setSelectedRouteIndex(i)}
-              />
-            ))}
-          </View>
-        </View>
+        <RouteComparisonCard
+          routes={calculatedRoutes}
+          selectedIndex={selectedRouteIndex}
+          onSelect={setSelectedRouteIndex}
+          bottomInset={insets.bottom}
+        />
       )}
 
       {/* Risk layer status, refresh, and "fetch news now" (D04).
@@ -1157,62 +1215,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
-  routeInfoCard: {
-    position: 'absolute',
-    left: spacing.lg,
-    right: spacing.lg,
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    elevation: 8,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-  },
-  routeTitle: {
-    fontSize: fontSize.md,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
-  },
-  routeStatsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: spacing.sm,
-  },
-  routeStat: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statValue: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  routeDescription: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  routeSelectionDots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.border,
-  },
-  activeDot: {
-    backgroundColor: colors.primary,
-    width: 20,
-  },
   loadingOverlay: {
     ...StyleSheet.absoluteFill,  // RN 0.86 removed absoluteFillObject; absoluteFill is now the plain object
     backgroundColor: 'rgba(255, 255, 255, 0.7)',
@@ -1387,6 +1389,26 @@ const styles = StyleSheet.create({
   destDot: {
     backgroundColor: colors.error,
   },
+  profileRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+    marginTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  profileChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surfaceVariant,
+  },
+  profileChipActive: { backgroundColor: colors.primaryLight },
+  profileChipText: { fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600' },
+  profileChipTextActive: { color: colors.primaryDark },
   connectorLine: {
     width: 2,
     height: 20,

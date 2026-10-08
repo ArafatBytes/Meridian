@@ -1,8 +1,13 @@
 """
-Route calculation schemas
+Route calculation schemas.
+
+**One scale: `safety_score`, 0–100, higher is safer.** D06 deleted the other two.
+`RouteSegment.crime_score` was 0–10, `safety_score` was 0–100, and the app rendered the
+latter as `58.3% Safe` — three readings of one quantity, none of which agreed, which is
+defect 11. If you need the inverse, write `100 - safety_score` where you use it.
 """
+
 from pydantic import BaseModel, Field
-from typing import List, Optional
 
 
 class Location(BaseModel):
@@ -13,24 +18,157 @@ class Location(BaseModel):
 class RouteRequest(BaseModel):
     source: Location
     destination: Location
+
     avoid_high_crime_zones: bool = True
-    max_crime_score: Optional[int] = 75  # Don't route through zones above this score
+    """
+    Whether to reject routes above `max_crime_score`.
+
+    Honoured since D06 — defect 6 was that this and `max_crime_score` were accepted and
+    silently ignored. When false, no filtering happens and every route comes back scored
+    and ranked.
+    """
+
+    max_crime_score: int | None = Field(default=75, ge=0, le=100)
+    """
+    Ceiling on `100 - safety_score`. The default 75 rejects routes scoring below 25.
+
+    The name predates D06's single-scale rule and is kept because it is a public request
+    field that clients may already send; it is the same scale read backwards, not a second
+    one. **A filter that would reject every route is relaxed rather than applied** — see
+    `RouteResponse.filter_relaxed`.
+    """
+
+    profile: str = "driving"
+    """
+    `driving` or `foot`. D06 added the walking profile — defect 7.
+
+    ⚠️ Walking routes are currently answered from a `car.lua` graph, so they obey car turn
+    restrictions and may use a flyover. `app/routing/osrm.py :: WALKING_GRAPH_CAVEAT` says
+    so and logs it on every request.
+    """
 
 
 class RouteSegment(BaseModel):
+    """
+    One point on a route's drawn path.
+
+    Carries no score. It used to have a 0–10 `crime_score` per point, which was defect 11:
+    a per-point risk number that was really `(100 - route_safety) / 10` repeated for every
+    point, so it conveyed nothing the route-level score did not and did it on a third
+    scale. Risk is a property of the corridor, and the flags that justify it are in
+    `RouteResponse.flags`.
+    """
+
     latitude: float
     longitude: float
-    crime_score: float
+
+
+class RouteFlag(BaseModel):
+    """
+    A flag on this route, as the client needs to draw and explain it.
+
+    A deliberate subset of `RiskFlag` rather than the whole contract: the route card needs
+    the statement, where it is, how corroborated it is and how bad it is now. Returning the
+    full flag would ship `event_key`, `time_profile` and `expires_at` to a card that cannot
+    use them, and would couple the route response to every future change in the risk
+    contract.
+    """
+
+    flag_id: str
+    lat: float
+    lon: float
+    radius_m: int
+    mobility_statement: str  # framed server-side; render as-is, never rebuild it
+    severity_now: float = Field(ge=0.0, le=100.0)
+    status: str  # "confirmed" | "unconfirmed"
+    source_count: int = Field(ge=1)
+
+    kind: str
+    """
+    The incident kind, carried so the client can separate **what is happening now** from
+    **what has always been true here**.
+
+    `chronic` is the historical police-statistics baseline, not an event: it has no
+    headline, it will still be there next month, and it is scored at
+    `ROUTE_CHRONIC_WEIGHT`. A card that presented it identically to a fire reported an
+    hour ago would be making exactly the permanent-area-label claim concept document
+    section 9 rules out.
+    """
 
 
 class RouteResponse(BaseModel):
     route_id: str
-    path: List[RouteSegment]
+    path: list[RouteSegment]
     distance_km: float
+
     duration_minutes: int
-    safety_score: float  # 0-100, higher is safer
-    composite_score: float  # Weighted score of distance and safety
-    crime_hotspots: List[Location]  # High-crime areas along the route
-    
+    """
+    **OSRM's own duration**, from the road graph.
+
+    Was `distance_km * 60 / 30` — a flat 30 km/h assumption, wrong in both directions and
+    wrong while OSRM had already answered the question. Half of defect 7.
+    """
+
+    safety_score: float = Field(ge=0.0, le=100.0)
+    """0–100, higher is safer. The only scale."""
+
+    composite_score: float = Field(ge=0.0, le=100.0)
+    """
+    The ranking number: `safety_score` traded against duration.
+
+    Weighted by `ROUTE_SAFETY_WEIGHT`, and the duration axis is **relative to the fastest
+    candidate** — which is why a single route cannot compute its own composite.
+    """
+
+    flags: list[RouteFlag]
+    """
+    The risk flags along this corridor, worst first.
+
+    The evidence behind `safety_score`, and what the client highlights on a rejected route
+    so the comparison reads without narration. A score with no attached reason is the kind
+    of number a judge should distrust.
+    """
+
+    explanation: str
+    """
+    One sentence of plain English. Demo beat 4.
+
+    Assembled by `app/routing/explain.py` from each flag's `mobility_statement` plus the
+    source count, then checked by the framing guard. Never written by an LLM, never
+    composed on the client.
+    """
+
+    engine: str
+    """
+    `local`, `public-demo` or `straight-line`.
+
+    Which engine answered. `public-demo` means the local OSRM did not respond and a
+    rate-limited third party was used instead; `straight-line` means neither did and this
+    is a crude estimate, not a route. Surfaced rather than logged so the walkthrough can
+    assert it and the demo cannot quietly degrade.
+    """
+
+    filter_relaxed: bool = False
+    """
+    True when every route exceeded `max_crime_score` and the preference was dropped.
+
+    Honest rather than silent: the alternative is answering "no acceptable route" to
+    someone asking how to get home.
+    """
+
+    notes: list[str] = Field(default_factory=list)
+    """
+    Caveats about **how this answer was produced** — for the user, in plain words.
+
+    Deliberately separate from `explanation`, and the distinction is not cosmetic.
+    `explanation` is a claim about the city and is therefore framing-guarded prose owned by
+    `app/policy/framing.py`. These are claims about *us*: which graph answered, that a
+    preference was relaxed, that a duration is an estimate. Mixing them would put system
+    chatter through a guard designed for statements about places, and would let a caveat be
+    mistaken for something we are saying about a neighbourhood.
+
+    Empty on a clean driving route, which is the common case.
+    """
+
     class Config:
         from_attributes = True

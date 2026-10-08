@@ -57,7 +57,7 @@ to do on the device that evening.
 | **D03** | Oct 11–12 | Type **"Mirpur 10 golchattar"**. The map flies there and tells you how it resolved it. | S10, S11, S04 |
 | **D04** | Oct 13–14 | Pull to refresh: flags from **today's real news**, each with its headline and outlet. — **✅ closed Oct 8** | S09, S14, S04 |
 | **D05** | Oct 15 | Unconfirmed flags look different. Tap one: the sources listed. Watch a promotion happen. — **✅ closed Oct 8** | S15 |
-| **D06** | Oct 16–17 | Ask for a route through a flagged corridor. Get alternatives, each with a plain-English reason. | S12, S13, S05, S07 |
+| **D06** | Oct 16–17 | Ask for a route through a flagged corridor. Get alternatives, each with a plain-English reason. — **✅ closed Oct 9** | S12, S13, S05, S07 |
 | **D07** | Oct 18–19 | Photograph a two-person scene. Get a real interaction read. See the evidence photo stored. | S06 |
 | **D08** | Oct 20–21 | Turn a report into a **Bangla General Diary** draft. Correct thana. Cannot submit unapproved. | S27, S28 |
 | **D09** | Oct 22 | Move the map to **tomorrow** — a procession already flagged. SOS history screen. | S26, S05, S07 |
@@ -503,32 +503,128 @@ safety score and **one sentence of plain English** saying why it is being sugges
 
 **Gate:** `docs/walkthroughs/D06.md` passes on a device, against a **local** OSRM. D01–D05 still pass.
 
-- [ ] **Local OSRM** — honour `OSRM_BASE_URL`, stop using the public demo server — **defect 7**.
-      *Today the demo depends on a stranger's rate limiter.* Highest-value reliability fix in the
-      track. **The compose service already exists** (`profiles: [osrm]`), but the
-      `osrm-data/bangladesh-latest.osrm` graph does not — **that build is §9 background work and
-      should already be done by the time this sprint starts** *(S05, S04)*
-- [ ] Use OSRM's own durations instead of a flat 30 km/h, and add the walking profile — **defect 7** *(S05)*
-- [ ] `_calculate_path_risk` becomes a **PostGIS spatial query** against `risk_flags`, instead of
-      all-rows-then-a-Python-loop — **defect 8** *(S05)*
-- [ ] Route scoring through the `RiskSurface` protocol, so seeded and live both work *(S12)*
-- [ ] ⚠️ **Delete `route_service._get_regional_risk()`.** D02 moved the police-statistics model into
-      the surface as the chronic layer. Leaving this method counts regional risk twice and the
-      symptom is a plausible-looking score that is quietly wrong
-- [ ] Honour `avoid_high_crime_zones` and `max_crime_score`, accepted and silently ignored today —
-      **defect 6** *(S05)*
-- [ ] **One score scale: 0–100, higher means safer, named `safety_score`** — the scale the D01
-      contract already fixed. Delete the 0–10 `crime_score` and the percent variants. Add a test —
-      **defect 11** *(S07)*
-- [ ] **Explanation generation through `app/policy/framing.py`** — mobility framing only, never a
-      safety or political characterisation. "Road blocked", "heavy crowd", "expect delay" *(S13)*
-- [ ] Nominatim through a backend proxy with a real `User-Agent` and a Redis cache — **defect 10** *(S05, S07)*
-- [ ] 📱 **Route comparison card** — alternatives ranked, each with `safety_score`, duration, and the
-      trade-off stated: *4 minutes longer, avoids two flagged corridors* *(S12)*
-- [ ] 📱 **The explanation on screen, attached to the route**, not in a log. Beat 4 *(S13)*
-- [ ] 📱 Flagged corridors visibly highlighted along the rejected route, so the comparison reads
-      without narration *(S13)*
-- [ ] 📄 `docs/walkthroughs/D06.md`
+- [x] **Local OSRM** — honour `OSRM_BASE_URL`, stop using the public demo server — **defect 7**
+      *(S05, S04)* — new `app/routing/osrm.py`. The graph was built in §9 and the service now
+      reads the setting. **The fallback to the demo server is deliberately loud**: it logs on
+      every request and `RouteResponse.engine` carries `local` / `public-demo` /
+      `straight-line`, so a degraded answer is visible on the card rather than only in a log.
+      D10's failure drills exercise that path
+- [x] Use OSRM's own durations instead of a flat 30 km/h, and add the walking profile —
+      **defect 7** *(S05)*. Measured: Bangshal→Mirpur-10 is **14 min** from the road graph
+      against **25 min** under the old assumption. ⚠️ **The walking profile is honest, not
+      finished** — OSRM answers `/foot/` from whatever graph it has, and ours is `car.lua`, so
+      it returned *7.03 km in 9 minutes*. 47 km/h presented as a walk is a false statement on
+      a screen, so the duration is recomputed at 4.8 km/h and the path caveat is shown to the
+      user. A second `foot.lua` graph is the real fix and is not demo-critical
+- [x] `_calculate_path_risk` becomes a **PostGIS spatial query** against `risk_flags`, instead
+      of all-rows-then-a-Python-loop — **defect 8** *(S05)*. What it replaced was
+      `select(CrimeReport)` with **no spatial predicate at all** — every row in the table, then
+      a nested loop over every path point. Now one `ST_DWithin` against an `ST_MakeLine` of the
+      route, on `geography` so the radius is metres
+- [x] Route scoring through the `RiskSurface` protocol, so seeded and live both work *(S12)* —
+      **and S12's "fix the contract now" clause was needed.** The protocol gained
+      `flags_near_path`, implemented by both surfaces. Scoring against `flags_in_bbox` would
+      have worked and been quietly wrong: a 12 km route's bounding box covers most of Dhaka, so
+      it would score against flags kilometres from any road on it. The corridor is the
+      question, so the corridor is the query. `app/scoring/geometry.py` holds the shared
+      point-to-segment maths, because the two surfaces must agree
+- [x] ⚠️ **Delete `route_service._get_regional_risk()`** — done, and the reasoning is recorded
+      in the module docstring now the code is gone. D02 moved the same police statistics into
+      the surface as chronic flags, so applying them here again was a double count; it also
+      took `max()` across overlapping units including the ranges that contain them, so every
+      point in Dhaka scored **100.0 from `Dhaka Range`** rather than 58.9 from `DMP`
+- [x] Honour `avoid_high_crime_zones` and `max_crime_score`, accepted and silently ignored
+      today — **defect 6** *(S05)*. Both honoured, with one decision written down: **a filter
+      that would reject every route is relaxed, not applied** — everything is returned
+      best-first with `filter_relaxed: true`, because answering "no acceptable route" to
+      someone asking how to get home is the worst available answer. Verified both directions
+- [x] **One score scale: 0–100, higher means safer, named `safety_score`** — **defect 11**
+      *(S07)*. `RouteSegment.crime_score` (0–10, and really just the route score repeated per
+      point) is deleted, and the card renders `71/100` rather than `70.6% Safe`. A test asserts
+      the response carries exactly one risk scale, so a second cannot come back quietly
+- [x] **Explanation generation through `app/policy/framing.py`** — mobility framing only
+      *(S13)* — new `app/routing/explain.py`. Assembles from each flag's `mobility_statement`
+      plus the source count; **no LLM in the request path** (templates, instant, reviewable);
+      and the guard runs on the **finished** string, because concatenation is where a banned
+      term could be assembled from individually safe parts. `MAX_EXPLANATION_LENGTH` is
+      separate from `framing.MAX_STATEMENT_LENGTH` and says why
+- [x] Nominatim through a backend proxy with a real `User-Agent` and a Redis cache —
+      **defect 10** *(S05, S07)* — `app/geo/nominatim.py` plus `GET /geo/search` and
+      `GET /geo/reverse`. **All five direct `nominatim.openstreetmap.org` calls are gone from
+      the app.** Cache measured at **471 ms cold → 52 ms warm**, TTL 24 h. Kept deliberately
+      separate from `/geo/resolve`: that path is allowed to refuse, and D03 found the hard way
+      that a tier which answers everything will overturn a deliberate refusal if they share a
+      code path
+- [x] 📱 **Route comparison card** — alternatives ranked, each with `safety_score`, duration,
+      and the trade-off stated *(S12)* — new `components/RouteComparisonCard.tsx`, replacing
+      ~45 lines of inline JSX whose "description" was a three-way ternary on the list index
+- [x] 📱 **The explanation on screen, attached to the route**, not in a log. Beat 4 *(S13)*
+- [x] 📱 Flagged corridors visibly highlighted along the rejected route *(S13)* — two styles:
+      solid for flags on the route you are viewing, **dashed and faint** for flags only the
+      other route passes. Switching tabs swaps them, which is what makes the comparison read
+      without narration
+- [x] 📄 `docs/walkthroughs/D06.md` — **steps 1–11 passed on a real device (Arafat,
+      2026-10-09); the run found three things, all fixed, and the walkthrough now has 13
+      steps. D06 is closed.**
+- [x] **Found by running it — (a) the walking profile had no UI control.** Step 12 read
+      *"switch the profile to walking, **if the UI exposes it**"* and it did not: D06 shipped
+      the backend profile and no screen for it. That is §3's *"cut depth, never the screen"*
+      failure, committed by the sprint that quotes the rule. A **Driving / Walking toggle** is
+      now in the plan card and re-requests on tap, because a mode switch needing a second tap
+      reads as broken
+- [x] **(b) `14 min` for `12.6 km` was not believable, and the reader was right to stop at
+      it.** That is **54.8 km/h across central Dhaka** — median segment speed 56 km/h, max
+      106. **OSRM is not wrong**: `car.lua` speeds come from `maxspeed` tags and road-class
+      defaults, and an OSM extract contains no traffic data at all, so **this cannot be fixed
+      "from the road graph"** however it is rebuilt. The proper fix is
+      `osrm-customize --segment-speed-file` and needs a traffic source this project lacks —
+      Track B. D06 ships `ROUTE_CONGESTION_FACTOR = 0.35`, which brings that route to **39
+      min, ~19 km/h**, preserves relative differences between roads so the ranking stays
+      meaningful, and is labelled `in traffic (est.)` on the card. A test asserts it cannot
+      reorder routes. ⚠️ **It is a calibration from one reading, not a measurement**
+- [x] **(c) A single route rendered as one tab with no comment**, which reads like the
+      alternatives failed to load rather than like an answer. The card now says *"Only one
+      sensible route exists between these points, so there is nothing to compare"* — true
+      when the road network offers one way through and nothing on it was worth a detour
+- [x] **Not planned, and it is the finding of the sprint: the chronic layer had to be
+      down-weighted.** Scored at full weight, a 12.6 km Dhaka crossing passing three chronic
+      flags scored **16.7/100** — every route in the city scored about the same,
+      `max_crime_score` therefore rejected all of them so defect 6's filter was meaningless,
+      and the ranking reflected *historical coverage* rather than today's events. That is
+      exactly the **"stale red zones"** failure demo beat 5 exists to disclaim and concept
+      document §9 commits against. `ROUTE_CHRONIC_WEIGHT=0.35` brings the same route to
+      **68.6** and lets a live event move the number
+- [x] **Also found: OSRM will not reliably give alternatives, so beat 4 cannot depend on it.**
+      Across five Dhaka pairs, three returned two routes and two returned one. So D06 generates
+      a flag-avoiding detour itself (`app/routing/alternatives.py`): a waypoint pushed
+      perpendicular to the route, clear of the flag's radius plus the corridor. **Chronic flags
+      are not detour targets** — they cover most of Dhaka, so "avoiding" one means avoiding the
+      city — and the candidate is **discarded unless it actually clears the flag**, because
+      OSRM snaps a waypoint to the nearest road and that is sometimes the road we were leaving
+- [x] **Three bugs the new tests caught, all of which read as working code:**
+
+      **(a) `SeededRiskSurface.flags_near_path` raised on every call.** `zip(x, x[1:],
+      strict=True)` — offset slices always differ by one, so `strict=True` is always a
+      `ValueError`. The same pattern was in `alternatives._clears`. **That is the offline demo
+      path**, so D10's failure drill would have died on it.
+
+      **(b) The detour generator could not handle a flag *on* the route** — the commonest case
+      there is. It pushed away from the flag *towards the nearest path vertex*, so a flag on a
+      vertex gave zero distance and no waypoint at all. Now perpendicular to the route's
+      heading, which always exists, with both sides tried.
+
+      **(c) An alternative was claiming to avoid flags while being strictly worse.** Option 2
+      of the Dhanmondi→Gulshan pair is 2 minutes slower and passes five flags to the
+      recommended route's three — and it does avoid two, so the literal count was 2. Printing
+      that alone is true and misleading. An alternative may now claim "avoids N" **only when
+      it is actually safer**
+- [x] **The framing invariant was strengthened rather than excluded.** `RouteFlag` and
+      `route_service` legitimately *forward* `mobility_statement`, which tripped
+      `test_only_framing_writes_mobility_statement`. Adding them to `ALLOWED_WRITERS` is the
+      designed mechanism — but an allowlist entry could silently become a *composing* one, so a
+      new check verifies every forwarding module assigns only an attribute, name or subscript.
+      Validated against four construction forms; it immediately caught that `row[...]` is a
+      read, which forced the definition of "forward" to be stated rather than assumed
 
 ---
 
