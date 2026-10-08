@@ -145,6 +145,7 @@ def test_a_located_confident_mobility_event_is_published() -> None:
         "কড়াইল বস্তি",
         "মিরপুর-১০",
         "যাত্রাবাড়ী মোড়",
+        "মহাখালী বাস টার্মিনালে",
     ],
 )
 def test_cleaning_a_place_only_removes_words_never_adds_them(written: str) -> None:
@@ -157,6 +158,42 @@ async def test_news_phrasing_resolves_to_the_place_it_names() -> None:
     resolution = await resolve_news_place("রাজধানীর মিরপুর ১০ নম্বর গোলচত্বর এলাকায়")
     assert resolution.method == "gazetteer"
     assert "Mirpur" in resolution.resolved_name and "10" in resolution.resolved_name
+
+
+async def test_a_generic_place_type_tail_does_not_hide_the_place() -> None:
+    """
+    Regression, 2026-10-08. A real bus fire at Mohakhali Bus Terminal was extracted
+    at 0.95 confidence and then discarded as `unresolved_location`: the model was
+    asked for the most specific place name, answered মহাখালী বাস টার্মিনালে, and
+    that phrase resolved to nothing while মহাখালী alone resolves at 1.00. The most
+    specific answer was the least resolvable one, so live ingestion had never once
+    published a flag.
+    """
+    resolution = await resolve_news_place("মহাখালী বাস টার্মিনালে")
+    assert resolution.method == "gazetteer"
+    assert "Mohakhali" in resolution.resolved_name
+
+
+@pytest.mark.parametrize(
+    "written,expected_name",
+    [
+        # A place the gazetteer knows in full must resolve to itself, never to its
+        # own prefix -- otherwise this fix would trade precision for recall.
+        ("মিরপুর ১০ গোলচত্বর", "Mirpur-10 Circle"),
+        ("যাত্রাবাড়ী চৌরাস্তা", "Jatrabari Mor"),
+        ("কারওয়ান বাজারে", "Karwan Bazar"),
+    ],
+)
+async def test_a_known_place_resolves_to_itself_not_its_prefix(
+    written: str, expected_name: str
+) -> None:
+    resolution = await resolve_news_place(written)
+    assert resolution.resolved_name == expected_name
+
+
+async def test_a_bare_place_type_identifies_nowhere() -> None:
+    """`বাজারে` is a category, not a place. Trimming must not leave it resolvable."""
+    assert (await resolve_news_place("বাজারে")).method == "unresolved"
 
 
 async def test_a_place_that_does_not_exist_stays_unresolved() -> None:

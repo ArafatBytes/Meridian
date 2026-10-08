@@ -69,605 +69,95 @@ Full write-up, indicators of compromise and the remediation checklist:
 
 ## 📍 CURRENT STATE
 
-*Last updated: 2026-10-08 · by: Farhan Ishraq (Claude Code) · after: D04 (built; device walkthrough pending)*
+*Last updated: 2026-10-08 · by: Arafat · after: D04 (closed on a device)*
 
 | | |
 |---|---|
-| **Last sprint completed** | **D03 — ✅ closed.** **D04 — 🟡 built and verified on the backend; [`docs/walkthroughs/D04.md`](docs/walkthroughs/D04.md) not yet run on a device**, which is the one gate left. All 14 D04 checkboxes ticked in [DEMO_PLAN.md](DEMO_PLAN.md) |
-| **NEXT SPRINT** | **Finish D04's gate**: run `docs/walkthroughs/D04.md` on the phone in Dhaka daytime, capture the replay (step O1), commit it. **Then D05 — Verification you can see** (Oct 15) → [DEMO_PLAN.md](DEMO_PLAN.md) §D05, source S15 |
-| **Baton holder** | **Farhan Ishraq** |
-| **Trunk** | Work branch **`ishraq-dev`** (cut from `main` @ `99922ec`). By agreement, commits go only to `ishraq-dev`; nothing is pushed to or merged into `main` from this side |
-| **Build status** | 🟡 **193 backend tests passing in `tests/invariants` + `tests/test_ingestion_sources.py` (185 invariants, 64 new; 1 skipped until a replay is captured), `mypy --strict` clean on `app` (80 files), `ruff` clean on every D04 file, `tsc` clean, 45 jest, ESLint 0 errors / 106 warnings (budget 106, none added).** Pre-existing and unchanged: ~320 `ruff` findings in old code, 2 failures in `tests/test_crime_vision.py`. **Fixed in D04:** the `migrate.py` "drift" that was only line endings — `up` works again |
-| **Slack** | D04 was scheduled Oct 13–14 and built Oct 8. **Spend the slack on §9** — the OSRM graph (D06) is still the long pole and still not started |
+| **Last sprint completed** | **D04 — ✅ CLOSED.** [`docs/walkthroughs/D04.md`](docs/walkthroughs/D04.md) passed on a device **live and offline** — 12 live steps and O1–O6. D01–D03 all closed |
+| **NEXT SPRINT** | **D05 — Verification you can see** (scheduled Oct 15) → [DEMO_PLAN.md](DEMO_PLAN.md) §D05, source S15 |
+| **Baton holder** | **free** |
+| **Trunk** | `develop` · **working tree uncommitted** — 7 changed files + `backend/data/fixtures/live_replay.json` |
+| **Build status** | 🟢 **GREEN.** Backend 222 passed / 1 skipped / **2 pre-existing failures** in `tests/test_crime_vision.py` (D07's, verified unrelated by stashing). `tsc` clean, jest 45/45, ESLint 0 errors on changed files |
+| **Slack** | D04 was scheduled Oct 13–14 and closed Oct 8 — **five days ahead.** The OSRM graph (§9 item 2) is still not started and is still the long pole for D06 |
 | **Phase** | 0 — Foundation & Contracts |
 
-### 🟡 D04 BUILT — today's news reaches the map; the phone run is the last gate
+### ✅ Today's news is on the map, and it survives the network going away
 
-**2026-10-08, Farhan Ishraq with Claude Code, on `ishraq-dev`.** Full entry in the Handoff Log. In one
-paragraph: a `worker` container (Celery + beat) runs the **Live Risk Agent** every 15 minutes. It
-lists three outlets' sitemaps (Ekattor TV, Independent TV, Channel 24 — chosen by checking all ten
-channels in `top_10_bangladesh_news_channels.md`), filters headlines for incident vocabulary, reads the
-survivors politely (robots.txt, 3 s per host, Playwright only for Channel 24), asks Gemini on the new
-**EXTRACT** key for Dhaka mobility incidents, resolves places **gazetteer-only**, and writes
-`unconfirmed` single-source flags with framed statements. The map's status pill (now visible,
-bottom-left) shows "news N min ago" with refresh and **fetch news now**; the flag sheet shows outlet,
-headline, age and a link to the article. The offline demo serves a captured replay
-(`live_replay.json`) through the seeded surface.
+The live pass: a fire reported in Bangla by Channel 24 at 09:30 became
+**`Road blocked near Mohakhali.` · unconfirmed · 1 source**, with the real headline and a working link
+to the article, decaying on a 3.5-hour half-life. The offline pass served the same flag from
+`live_replay.json` with `DATABASE_URL` pointed at a dead host and the extraction key removed.
 
-**Verified without a device:** a real run against the live sites, Gemini and Supabase (367 listed, 4
-relevant, 4 read, 0 Dhaka road events at 04:25 Dhaka time — correct); the publish path against the real
-schema in a rolled-back transaction (`রাজধানীর মিরপুর ১০ নম্বর গোলচত্বর এলাকায়` → *Road blocked near
-Mirpur-10 Circle.*, served by `DbRiskSurface`; a fabricated place → `unresolved_location`, no flag).
-**Not yet done:** the walkthrough on the phone, and the replay capture — which needs live flags, so it
-needs Dhaka daytime.
+### 🔴 Running it on a phone found three defects. Two were older than D04.
 
-### ⚠️ One decision is open and it is a one-line change
+Full detail in the **D04b** handoff entry and as **defects 42–44** in
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
-**Should the `GEO` LLM fallback exist at all?** `LLM_CHAIN_GEO` still ends in
-`groq:openai/gpt-oss-120b`. Measured over the 53-case set:
+1. **Live ingestion had never published a flag** (defect 42). The agent, sources, extraction and audit
+   trail all worked — D03's gazetteer was discarding the results. A real Mohakhali bus fire was
+   extracted at 0.95 confidence and dropped as `unresolved_location`, because the prompt asks for *the
+   most specific place name*, the model correctly answered `মহাখালী বাস টার্মিনালে`, and the gazetteer
+   resolves `মহাখালী` at 1.00 and that phrase at nothing. **The most specific answer was the least
+   resolvable one.** Fixed with `PLACE_GENERIC_TAIL`; the discard invariant is intact and three
+   regression tests pin it.
+2. **⚠️ Beat 9 was silently dead and had been since D01** (defect 43). Every authenticated backend call
+   401'd about an hour after sign-in, SOS included — the video uploaded and *then* failed. Nobody saw
+   it because `D01.md` is always run minutes after signing in. Fixed: `supabase.auth.getSession()` is
+   now the only token source.
+3. **The walkthrough's own offline instructions bricked the API** and its O5 claim was wrong. Both
+   corrected in `D04.md`.
 
-| | If Gemini is unavailable |
-|---|---|
-| **Keep it** | 95.6% accuracy but **1 fabrication** — the discard invariant holds only while Gemini is up |
-| **Drop it** | gazetteer only: **93.3%**, **0 fabrications**, and **no network at all** |
+### 🧠 The lesson worth carrying into every later sprint
 
-Recommendation is to **drop it** — 2.3 points is not worth a fabrication when "a wrong pin is worse
-than no pin" is the invariant a judge is most likely to test, and the degraded path then needs no
-network, which is the venue-failure story. Adding a second *Gemini* model does not help: same
-provider, same rate limit, and `gemini-3.1-flash-lite` fabricates too. **Left open deliberately —
-owner's call.** Full numbers in `docs/walkthroughs/D03.md` § *Model selection*.
+**A walkthrough re-run reproduces the steps, not the state.** Defect 43 needed a session older than an
+hour, and step 1 of every walkthrough is signing in — so §3's "every previous walkthrough still
+passes" gate could never have caught it. **When re-running an auth-sensitive walkthrough, sign in the
+day before.** Recorded as defect 44 and in `DEMO_PLAN.md` §8.
 
-### 🔑 The LLM tier runs on free endpoints, not Anthropic
+### ⚠️ Two things to decide before the 24th
 
-**This project has no Anthropic key.** `ANTHROPIC_API_KEY` is in `.env.example` and absent from
-`.env`, so `DEMO_PLAN.md` §7.1's claim that *"the key is already configured"* was wrong — that matters
-because **D04, D07 and D08 all assume an LLM is available.**
+- **The three-source claim rests on one source.** Ekattor TV and Independent TV listed 173 articles
+  today and passed **0** through the relevance filter; `raw_documents` has never held a document from
+  either. Today's headlines genuinely had no road incidents, so it is not provably a defect — but
+  beat 1 currently depends on **Channel 24 alone**, and that is the Playwright one.
+- **The newspaper button normally changes nothing.** Eight consecutive runs: `listed` 480 → 494,
+  `relevant` pinned at 3, all already consumed, `published: 0`. **D10 must choose** between narrating
+  that honestly ("it just checked 494 articles; the three about road incidents are already on the
+  map") and clearing `extracted_at` on one document beforehand so the tap produces a visible pin.
 
-**D04 update:** ingestion has its own key now, `GEMINI_KEY_EXTRACT_ONE`, from a separate Google
-project (Gemini's free quota is per project, not per key), on `LLM_CHAIN_EXTRACT` (Gemini only).
+### ⏳ Still open from earlier entries
 
-What exists instead, and it works: `GEMINI_KEY_GEO_ONE` and `GROQ_KEY_GEO_ONE`. Both Gemini and Groq serve the
-OpenAI Chat Completions wire format, so `app/llm/client.py` uses the `openai` SDK and reaches either
-by changing a base URL. Configuration is **per feature**, not global — `LLM_CHAIN_GEO` picks the
-models and `<PROVIDER>_KEY_GEO_*` the keys:
+- **`LLM_CHAIN_GEO`'s Groq fallback** — keep it for 95.6% with 1 fabrication, or drop it for 93.3%
+  with none and no network. Recommendation is to drop it. **Owner's call, unchanged.**
+- **§7.1, the image-analysis reasoning layer, blocks D07 and is due 17 October.** There is no
+  Anthropic key, so §7.1's "local detection plus Claude vision" needs rewording to a provider that
+  exists — Gemini's flash-lite models are multimodal and free.
+- **B0 is still outstanding:** credential rotation and the git-history rewrite from the 7 October
+  security incident.
 
-```
-LLM_CHAIN_GEO=gemini:gemini-3.5-flash-lite,groq:openai/gpt-oss-120b
-```
+### 🧵 Background activities (off-baton, §9)
 
-Keys are discovered from **every** variable named `GEMINI_KEY_*` / `GROQ_KEY_*`, so adding a second
-account's key widens the daily quota with no code change. Quotas: 500 requests/day on the Gemini
-model, 1,000/day on the Groq one, different providers so independent.
-
-**§7.1's D07 recommendation ("local detection plus Claude vision") needs revisiting** — there is no
-Claude key to spend. Gemini's flash-lite models are multimodal and free, which is the obvious
-substitute, but that is a decision, not a fait accompli. **Still due 17 October.**
-
-### 🗓️ PLAN RESEQUENCED — read [DEMO_PLAN.md](DEMO_PLAN.md) before IMPLEMENTATION_PLAN.md
-
-**2026-10-07, Nakib, without Arafat's sign-off.** The finale is **24 October** — 17 days — and
-`IMPLEMENTATION_PLAN.md` line 6 disclaims that deadline. Phase 0 alone would have finished four days
-*after* the demo, with 0 of 8 agents built.
-
-- **[DEMO_PLAN.md](DEMO_PLAN.md)** is now the authoritative **sequence**: ten sprints, `D01`–`D10`.
-- **[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)** remains the authoritative **specification**.
-  Every `D` sprint cites its source sprint there. **Nothing was deleted from it.**
-- Everything not demo-critical is in `DEMO_PLAN.md` §6 as **Track B**, in order. §5 is a coverage
-  table mapping all 39 original sprints, so "nothing was dropped" is checkable.
-- Rationale, consequences and alternatives: **[ADR 0005](docs/adr/0005-finale-reordering.md)**.
-- **Crime detection from image is in the demo** (`D07`), against plan §12. Owner's call.
-- Prototype Gate relaxed to gates 1 and 4 only until 24 Oct, **plus one new mandatory gate:**
-  **every `D` sprint ships `docs/walkthroughs/D<nn>.md`** — a play-script run on a real device, in
-  the same commit. No walkthrough, no handoff. Format: [`docs/walkthroughs/README.md`](docs/walkthroughs/README.md).
-  Rationale in `DEMO_PLAN.md` §0: work that is invisible on the device is indistinguishable from
-  work that does not exist.
-
-**Blocked decision:** the image-analysis reasoning layer must be settled by **16 October** or `D07`
-cannot start. See `DEMO_PLAN.md` §7.1 — recommendation is local detection + Claude vision.
-
-### ✅ D03 CLOSED — gate met on a real device, three days early
-
-**2026-10-08, Nakib.** [`docs/walkthroughs/D03.md`](docs/walkthroughs/D03.md) was run end to end on an
-iPhone in Expo Go and **all 14 steps passed**, including the three that matter most: the demo's own
-phrase "Mirpur 10 golchattar" resolving, the same phrase in Bangla script resolving to the same place,
-and three different kinds of refusal rendering as an explicit "could not find that place" rather than
-a wrong pin.
-
-**D03 was scheduled Oct 11–12 and closed Oct 8**, which with D02's two days makes **five days of
-slack**. `DEMO_PLAN.md` §8 names schedule slip as the likeliest failure and states there is none.
-Five days is not a licence to add scope — the OSRM graph (§9 item 2, D06 assumes it is built) has not
-been started and is now the long pole.
-
-**Shipped**
-
-| | |
-|---|---|
-| Gazetteer | `backend/data/gazetteer/dhaka_central.json` — **1,022 entries** harvested from OpenStreetMap by `scripts/harvest_gazetteer.py`. `aliases.json` — **100 hand-written aliases over 22 entries** |
-| Matcher | `app/geo/gazetteer.py` — exact, then token-subset, then fuzzy. Folds Bengali digits to Latin |
-| LLM client | `app/llm/client.py` + `models.py` — one `openai` SDK reaching Gemini and Groq, key rotation, **per-feature** chains and key pools (`LLM_CHAIN_GEO`, `GEMINI_KEY_GEO_*`) |
-| Agent | `app/geo/agent.py` — gazetteer → LLM → **discard** |
-| Endpoint | `POST /api/v1/geo/resolve` |
-| Frontend | `components/PlaceSearch.tsx`, `services/geo.service.ts`, `types/contracts/geo.ts`, wired into `MapScreen` |
-| Eval | `scripts/eval_geocoding.py` over a 53-case held-out set, with committed baselines |
-
-**The gazetteer did not have to be typed by hand, and that is the main finding.** §9 item 1 called it
-"pure data entry… whoever is not holding the baton should be doing this" and budgeted it as the long
-pole. It is not, because **OpenStreetMap's Dhaka coverage is Bangla-primary**: `name` holds the Bangla
-form and `name:en` the romanisation, already paired, on 98% of features in the pilot box. Both halves
-of every entry plus coordinates came for free. What could not be harvested is the **alias layer** —
-`alt_name` exists on about 40 of 782 features — and that is the part worth having.
-
-Two sources were measured and rejected first: **GeoNames** has 493 rows in the box and only **11** with
-any Bengali name, all of them large obvious things (Dhaka, the airports, the university, a river) and
-**four** road junctions in the whole city. The administrative datasets everyone links to
-(`nuhil/bangladesh-geocode` and friends) stop at union level, where **all of Dhaka city is one row**.
-
-**Measured numbers** — `scripts/eval_geocoding.py`, baselines committed:
-
-| | Gazetteer only | Gazetteer + LLM |
+| Activity | Owner | Status |
 |---|---|---|
-| Accuracy on real places | **93.3%** | **100%** |
-| Correct refusals on fakes | **100%** | **100%** |
-| **Fabrications** | **0** | **0** |
-| Median error | 6 m | 6 m |
-
-The 93.3% column is the one that matters for the venue: it needs **no network at all** beyond the local
-API. "Fabrications" — coordinates returned for a place that does not exist — is the number to quote in
-Q&A, not accuracy.
-
-**Model selection was measured twice, and the second pass overturned part of the first.** The
-six-case probe gave `gemini-3.5-flash-lite` **6/6** (primary), `openai/gpt-oss-120b` 4/6,
-`gemini-3.1-flash-lite` 5/6 but **rejected** for fabricating, `qwen/qwen3.8-27b` 1/6 disqualified.
-
-Six cases was too thin to choose a fallback on. Over the **full 53-case set**, `gpt-oss-120b` alone
-scores **15.6%** on real places with **2 fabrications** — 4/6 was flattering, and 25 of 45 real places
-came back confidently wrong. As the system's only model (gazetteer still in front of it) it reaches
-95.6% and **1 fabrication**, but that 95.6% is almost entirely the gazetteer: 42 of 53 cases never
-reach a model. It invented coordinates for **"Gulshan 97 golchattar"**, a circle number that does not
-exist.
-
-**So there is an open decision, deliberately left open:** `LLM_CHAIN_GEO` still ends in
-`groq:openai/gpt-oss-120b`. Keeping it means 95.6% with 1 fabrication if Gemini is down; dropping it
-means gazetteer-only — **93.3% with 0 fabrications and no network at all.** Recommendation in
-`docs/walkthroughs/D03.md` is to **drop it**: 2.3 points is not worth a fabrication when "a wrong pin
-is worse than no pin" is the invariant a judge is most likely to test. **Owner's call.**
-
-**Three bugs found while building, none by a pre-existing test**
-
-1. **The matcher resolved "Sector 11" to "Sector 10"** at 0.89 confidence. One character apart, two
-   places 2 km apart — the wrong-pin failure the discard invariant exists to prevent. **Numbers are
-   now identity, not spelling:** digits must match exactly, letters may be misspelt. Found by typing
-   it, not by a test.
-2. **The gazetteer refused "Farmgate" and "Motijheel".** OSM lists each in two layers ~270 m apart,
-   and the duplicate check compared names without looking at distance — so the invariant was failing
-   in the direction that *costs* a real place. Same name within 1 km now merges; only genuinely
-   distant collisions (Uttara's and Bashundhara's "Sector 11", 10 km) are refused. 123 entries are
-   flagged ambiguous and refused on purpose.
-3. **The LLM tier was overturning the gazetteer's ambiguity refusals.** The gazetteer declined
-   "Sector 11" correctly, and the model then answered Uttara's with confidence — our own guard was
-   bypassable by the weaker tier beneath it. **Found by the eval set, not by a test**, because it only
-   shows up when you score refusals as outcomes. "We have never heard of this" and "we refuse this on
-   purpose" are now different code paths, and the second does not consult the model.
-
-**A fourth, which I caused and the code caught**
-
-Three hand-written aliases (`গাবতলী`, `কাপ্তান বাজার`, `Nilkhet`) duplicated **other entries'** real
-OSM names. The effect is quietly backwards: the query becomes ambiguous and the matcher refuses, so an
-alias added to *help* a lookup silently broke it. The harvest cannot see this — it merges duplicates
-before aliases are merged — so `_warn_about_alias_collisions()` now runs at load time and an invariant
-test fails on it. It found all three the moment it was written.
-
-**A fifth, found by the 53-case benchmark rather than by any test**
-
-`gpt-oss-120b` returns `json_validate_failed` with empty output on roughly 1 in 10 calls, and
-`app/llm/client.py` **raised** on it, because a 400 is normally a bad request from us. The first
-benchmark run died on it. In production the same thing — Gemini rate limited, request falling through
-to Groq — would have turned a map search into an HTTP **500** rather than an honest "could not find
-that place". Model-side 400s (`json_validate_failed`, `tool_use_failed`) now fall through to the next
-option while genuinely bad requests from us still surface, and two invariant tests pin both halves.
-
-**Two more found only by running it on the phone — this is §0 earning its place again**
-
-1. **The container would not start: `ModuleNotFoundError: No module named 'openai'`.** The dependency
-   *was* declared correctly (`requirements.txt` includes `requirements/agents.txt`, which has it), but
-   the Dockerfile keeps requirements in their own cached layer so code edits rebuild instantly, and
-   `run.ps1` runs a plain `docker compose up -d`. The image therefore came up with D01's packages.
-   **`.\scripts\run.ps1 -Rebuild` once** fixes it, and D03's walkthrough now says so as a
-   precondition. Any sprint that adds a package needs it.
-2. **Route mode had no reachable exit.** The button that leaves route mode was positioned *inside* the
-   route-search card, which carries `zIndex: 10` / `elevation: 8` against the button's `4` — so it lost
-   every stacking contest and could not be tapped. `toggleRouteMode` is the only exit, so a reload was
-   the only escape. **This would have stranded the demo if anyone had tapped navigate on stage.** The
-   close control now lives in the card's own header as a small ✕, and the floating button only
-   *enters* route mode.
-
-   Worth noting how it was fixed, because the first attempt was wrong: raising the button's z-order
-   made it reachable but left a 56 px red circle sitting on top of a text field. Reachable and still
-   wrong. A close control belongs on the thing it closes.
-
-   `tsc`, ESLint and Jest were green throughout both. Z-order and reachability are not things they can
-   see, and neither is a missing package inside an image.
-
-**Deliberately NOT done**
-
-- **`scripts/gazetteer_review.py`** (S10's add/review/audit tool). Not a D03 checkbox. Reviewing is
-  editing `aliases.json`, which is small and readable. Track B.
-- **Nominatim.** `GeoResolution.method` allows it; D06 owns the proxy.
-- **The other ~1,000 entries are `reviewed: false`** and resolve on their own OSM names. 22 reviewed
-  is the honest number, which is why `reviewed` is a field rather than an assumption. B7 extends it.
-- **Cloudflare Workers AI**, although a token is in `.env`. It is a shared 10,000-neuron pool across
-  every model, its Bangla-capable options are weak, and it is a third wire format for no gain.
-
-**Gotchas for whoever is next**
-
-1. **`data/gazetteer/dhaka_central.json` is generated. Never hand-edit it** — `harvest_gazetteer.py`
-   overwrites it. Hand work goes in `aliases.json`, which is never generated. That split is the only
-   thing protecting the alias layer.
-2. **An entry listed in `aliases.json` counts as `reviewed: true`.** The flag cannot live in the
-   generated file, because a re-harvest would erase it.
-3. **Public Overpass mirrors are genuinely unreliable.** One query succeeded against a mirror and the
-   same query timed out against all three twenty minutes later. The harvest caches raw answers in
-   `backend/data/gazetteer/.osm-cache/` (gitignored) so a re-run resumes. **Not a demo dependency** —
-   the JSON is committed.
-4. **ODbL.** The gazetteer is OpenStreetMap data. Attribution is in the `_README` block and an
-   invariant test fails if it is removed. If this is ever published as a dataset it goes out under
-   ODbL too.
-5. **A new Python dependency means the Docker image must be rebuilt: `.\scripts\run.ps1 -Rebuild`.**
-   D03 added `openai` to `requirements/agents.txt`. The Dockerfile keeps requirements in their own
-   cached layer so code changes rebuild instantly, and `run.ps1` runs a plain `docker compose up -d` —
-   so the container came up with D01's packages and died at `import openai` with
-   `ModuleNotFoundError`. The dependency was declared correctly; the image simply predated it. **This
-   cost a failed start on the first attempt at D03's walkthrough.** Any sprint that adds a package
-   needs `-Rebuild` once.
-6. **Always start with `.\scripts\run.ps1`, never a bare `docker compose` command.** `run.ps1` also
-   sets `EXPO_PUBLIC_API_BASE_URL` to the LAN IP, which is the only reason the *phone* can reach the
-   API. D03's walkthrough originally said `docker compose up -d --force-recreate api`, copied from D02
-   without the reason D02 needed it, and that would have left the app pointing somewhere unreachable.
-7. **`.env` needs `--force-recreate`, not `restart`** — unchanged from D02, and it bites every time.
-8. **Free-tier quota resets at midnight Pacific** for Gemini. Do not run a few hundred LLM queries on
-   the 23rd.
-9. **2 pre-existing failures in `tests/test_crime_vision.py`** (PIL cannot decode the seed fixtures).
-   Not D03's, present before it, and D07 will have to deal with them.
-
-**Prototype Gate: met.** 121 invariant tests passing (35 new), `mypy --strict` clean on `app`
-(67 files), `ruff` clean on every D03 file, `tsc` clean, 45 jest tests, **0 ESLint errors** — D03's
-three new frontend files lint completely clean, and `MapScreen.tsx` had 6 warnings before D03 and has
-6 after, so none were added. **Walkthrough run on a real device, all 14 steps.**
-
-*(A note on a claim in D02's handoff: it quoted "6 pre-existing ESLint warnings", which was a
-changed-files-only count. Project-wide `eslint src` reports 105, all pre-existing. The narrower number
-read as broader than it was.)*
-
----
-
-### ✅ D02 CLOSED — gate met on a real device, two days early
-
-**2026-10-07, Nakib.** [`docs/walkthroughs/D02.md`](docs/walkthroughs/D02.md) was run end to end on an
-iPhone in Expo Go and **every step passed**, including the two that matter most: severity-now differing
-from severity-when-observed, and flags disappearing as the time control moves forward and returning
-when it goes back. The 212 flags are applied to the owner's live Supabase project.
-
-**D02 was scheduled for Oct 9–10 and closed on Oct 7.** That is the first slack this plan has had —
-`DEMO_PLAN.md` §8 names "the schedule slips" as the likeliest failure and says plainly there is none.
-Two days is not a licence to add scope; it is the buffer D10 was supposed to be.
-
-**Verified:** 86 invariant tests passing (36 new), `mypy --strict` clean across 60 files, `ruff` clean
-on everything D02 touched, `tsc` clean, 45 jest tests, 0 ESLint errors. Decay measured on the seeded
-surface: **191 flags live now, 149 at +3h, 137 at +6h, 108 at +12h, 64 at +24h, 28 at +48h, 24 at +30
-days** — unattended, with no cleanup job running.
-
-**Two bugs were found getting to the device, neither by a test.** Both are in the D02 handoff entry
-below. The short version: the seeder crashed when run from the repository root because the surface
-factory had been put in `app/scoring/__init__.py`, which made every import of the package require a
-database URL; and `.\scripts\seed.sh` does not run in PowerShell at all — it returns silently and
-changes nothing, so a stale 22-flag fixture file read as a successful regeneration. 86 tests, `mypy`
-and `ruff` all passed throughout, because pytest runs with `backend/` as its working directory. The
-failures needed someone to run the documented command from the documented place.
-
----
-
-### ✅ D01 CLOSED — gate met on a real device
-
-**2026-10-07, Nakib.** [`docs/walkthroughs/D01.md`](docs/walkthroughs/D01.md) was run end to end on an
-iPhone in Expo Go and **every step passed**. Migrations and fixtures are applied to the owner's live
-Supabase project; the SOS path was exercised against it, with a delivered email and a real
-`sos_incidents` row.
-
-**Two bugs were found by running it that nothing else would have found,** and both are fixed below:
-the map was a blank white page on iOS, and one SOS froze the entire API for 2 minutes 34 seconds. Both
-were invisible to `mypy`, `ruff`, 34 invariant tests and a verified database. That is the §0 rule
-paying for itself in its first sprint.
-
-**Applying the schema, for anyone rebuilding:** `psql` is not installed on this machine, so
-`.\scripts\seed.sh` without `--sql` cannot apply anything — it detects that and prints the manual
-steps. `.\scripts\seed.sh --sql` writes numbered files to `.seed-sql\`; paste `2-migrations.sql` then
-`3-fixtures.sql` into the Supabase SQL Editor. `1-schema.sql` is the already-applied baseline and
-`4-verify.sql` predates D01's tables. **Regenerate `3-fixtures.sql` rather than reusing a copy** — its
-timestamps are relative, so an old file seeds a map of expired flags. `migrate.py up` connects
-directly over asyncpg if you prefer that to pasting.
-
-**What landed:**
-
-| | |
-|---|---|
-| Migrations | `scripts/migrate.py` (forward-only, checksummed, with a paste-ready `sql` mode), `risk_flags` with the decay + verification CHECKs, `raw_documents`, `extracted_incidents`, `agent_runs` |
-| Contracts | `app/contracts/{risk,surface,agents}.py`, mirrored in `frontend/src/types/contracts/` |
-| Policy | `app/policy/framing.py` — the sole writer of `RiskFlag.mobility_statement` |
-| Surface | `DbRiskSurface` behind the `RiskSurface` protocol; `GET /api/v1/risk/flags?bbox=&as_of=`. **`as_of` is functional, not a placeholder** — it filters on the derived `expires_at`, so 20 flags now becomes 16 at +6h, 10 at +12h, 4 at +48h. Severity-on-read is still D02 |
-| Fixture | 22 sample Dhaka flags, structured fields only; statements derived through `framing.py` at load |
-| Frontend | Map risk overlay (pins + radius circles, colour by severity), status pill, **defect 3** |
-| SOS | **Defect 35** — every trigger now writes a row to `sos_incidents` |
-| Tests | `tests/invariants/` — 34 tests, 2 invariants |
-| Build | `requirements/{base,ai,agents,dev}.txt` — **defect 15** |
-
-**Verified:** `mypy` clean across all 54 backend files · 34 invariant tests pass · frontend `tsc`
-clean, `jest` 45/45 · both migrations and the fixture applied to a throwaway **PostGIS 16** container
-from an empty database, with every CHECK constraint confirmed to reject bad data · the API booted
-against that container and `GET /api/v1/risk/flags` served 20 flags, rejected four classes of bad
-bbox with 422, and returned fewer flags for a future `as_of` · `sos_service._record_incident` wrote a
-real row, with coordinates round-tripping un-swapped and no email addresses stored.
-
-### 🐛 Found while testing, not while reading: PostGIS was unreachable for every ORM write
-
-**`search_path` is now set on the engine** — `app/core/database.py`,
-`connect_args={"server_settings": {"search_path": "public,extensions"}}`.
-
-Supabase installs PostGIS into `extensions`, and **geoalchemy2 emits PostGIS functions
-unqualified**: an insert into a `Geography` column renders as `ST_GeogFromText($1)` with no schema.
-Without `extensions` on the path that fails with
-
-```
-function st_geogfromtext(unknown) does not exist
-```
-
-and the write is rolled back.
-
-This has been latent since S01 and could not have been noticed, because **nothing had ever written to
-a geography column**: `sos_incidents` was never populated — that *was* defect 35 — and
-`user_locations` still is not. D01's first write found it immediately. It also means
-`endpoints/tracking.py` would have failed the same way the moment anyone used it.
-
-Raw SQL in `app/scoring/surface_db.py` qualifies `extensions.ST_*` explicitly and never depended on
-the path. Both now work, deliberately: if a pooled connection ever comes back with a different
-`search_path`, the risk surface keeps serving.
-
-### 🐛 Found on the device: the map had never rendered on iOS
-
-**`MAP_PROVIDER` now replaces `PROVIDER_GOOGLE`** in every screen — `src/components/MapComponent.tsx`.
-
-All three map screens (`MapScreen`, `AddReportScreen`, `ReportDetailsScreen`) passed
-`provider={PROVIDER_GOOGLE}` unconditionally. On iOS that forces the Google Maps SDK, and **Expo Go
-for iOS does not ship it**. `MapView` mounted, laid out and drew nothing: a white rectangle, no error,
-no warning, markers invisible on top of it.
-
-`app.json` carried the literal string `"YOUR_GOOGLE_MAPS_API_KEY"` for both platforms. Those
-placeholders are **removed** — they were never going to work and would have silently broken an Android
-development build in exactly the same way, with the same absence of an error message.
-
-The provider is now Apple Maps on iOS (no key, works in Expo Go) and Google Maps on Android. The two
-platforms therefore look different, which is a visible consequence worth knowing before the 24th.
-Matching them means a paid Google Maps key **and** a development build — a credentials decision, not
-an engineering one, and not needed for the demo.
-
-**This is the case for the §0 walkthrough rule in one line.** The risk surface, the endpoint, the
-schema, the framing invariant and the flag count were all correct and verified — and on a phone the
-map was a blank white page. A green test suite could not have told us.
-
-### 🐛 Found on the device: one SOS froze the entire API for 2m34s
-
-**Owner approved going outside D01 for this.** It blocked the D01 gate: walkthrough step 12 cannot
-pass if beat 9 takes two and a half minutes and kills the map while it runs.
-
-`email_service.send_sos_alert` was `async def` but called `smtplib` **synchronously**. `smtplib` is
-blocking, so it did not block that request — it blocked the single event loop every request shares.
-Measured on a real SOS: **2 minutes 34 seconds** between "Video attached" and "SOS alert sent", during
-which `/health` timed out and `GET /risk/flags` could not be served. On stage that is the map dying
-mid-demo.
-
-Two causes, both fixed:
-
-| | |
-|---|---|
-| **Blocking SMTP** | `await asyncio.to_thread(self._send_blocking, msg)`. The attachment read and base64 encode moved off the loop too — same class of bug, smaller magnitude. A 120-second socket timeout added: `smtplib` otherwise inherits the system default, which is usually none, so a stalled relay would hold the thread forever. Ruff's `ASYNC230`/`ASYNC240` findings on this file are now **gone**, with no new findings added. |
-| **A 16.45 MB clip** | `SOSCameraModal` recorded 10 seconds at the iPhone's default quality. Now capped: `videoBitrate` 1.2 Mbps, `videoQuality="4:3"` (640×480 — the 16:9 options are Android-only), `codec: 'avc1'` because iOS ignores the bitrate without it, and `maxFileSize` 8 MB as a backstop if a device ignores bitrate control. ~16 MB → ~2 MB. |
-
-**Also fixed the thing that made it look hung.** `HomeScreen`'s progress bar is simulated and
-hard-capped at 98, and the label never changed, so "98% Uploading Evidence" actually meant "upload
-finished, the server is talking to the SMTP relay". It now switches to **"Alerting your contacts…"**
-when the bytes are gone. The bar was lying, and that is what sent us looking for a stall that was not
-there.
-
-**Before the fix, verified working end to end on the owner's real Supabase:** email delivered, row
-written to `sos_incidents` (`923c3459-24f0-4246-ac33-04f3eec93cb8`, `delivered=True`, 1 recipient),
-coordinates un-swapped. Defect 35 is closed. The fix is about how long it takes and what it freezes,
-not about whether it works.
-
-**Deliberately not done, so it is not rediscovered as a gap:**
-
-- **`app/llm/client.py` → D03**, its first consumer. `anthropic` is declared as a dependency; the
-  module is not written. Nothing in D01 or D02 needs an LLM.
-- **ADR 0003 (drop `public.users`) → Track B (B1).** `endpoints/sos.py` creates rows in that table on
-  every trigger and `endpoints/voice.py` imports the model. Dropping it in D01 would have broken SOS
-  silently. `risk_flags` has no `user_id`, so nothing in the demo track depends on it.
-- **No decay arithmetic in Python.** `risk_flags.expires_at` is derived by a database trigger, which
-  is the only implementation. A generated column was tried first and Postgres rejects it —
-  `timestamptz + interval` is STABLE, not IMMUTABLE. D02 adds severity-on-read, and when it needs the
-  serve threshold in Python it mirrors the value with a comment on both sides.
-- **No `RISK_SURFACE_IMPL` switch and no scoring methods on the surface.** Both were written and then
-  **deleted**: a factory that can only return one class, and `score_point`/`score_path` that nothing
-  calls until D06. D02 and D06 add them when there is a second implementation and a caller.
-- **The SOS video is still not retained.** It is attached to the email and deleted. Retaining footage
-  recorded under duress needs a bucket, a retention window and an access policy. The incident row
-  records *that* a video was attached.
-- **Flags do not reload on pan.** The map is driven by a controlled `region` prop; D01 fetches once
-  per recentre over a ~39 km box. D04 adds pull-to-refresh.
-
-### ✅ The app works. This is the first handoff where that is true.
-
-Walked on a device against live Supabase (`docs/RUNNING.md` §4):
-
-| Step | Result |
-|---|---|
-| Register an account | ✅ row in `profiles` |
-| Upload a profile picture | ✅ `avatar_url` populated |
-| Submit a crime report with a photo | ✅ row in `crime_reports`; AI pipeline ran and returned *no crime* |
-| Add an emergency contact | ✅ row in `emergency_contacts` |
-| **Trigger SOS** | ✅ **email with video attachment delivered to the contact** — owner-confirmed |
-
-That last row is what closes S01. Everything before it was configuration.
-
-### 🚀 How to run it
-
-```powershell
-.\scripts\run.ps1       # everything: containers, health wait, npm, Expo
-./scripts/test.sh       # verify the running stack (5 phases)
-./scripts/test.sh --ai  # + the vision pipeline (slow; downloads ~700 MB once)
-```
-
-Full guide including the failure-symptom table: [`docs/RUNNING.md`](docs/RUNNING.md).
-
-**Expo Go must be current.** The project is on **SDK 57**; Expo Go ships only the
-newest SDK, which is why the SDK 54 pin had to go (defect 36).
-
-### ⚠️ Standing consequence of the `.env` decision
-
-`.env` files are committed by design (private repo, S01b decision 1). Three
-values are therefore permanently in git history: the **Supabase service-role
-key** (bypasses all RLS), the **Anthropic API key** (direct cost), and the
-**SMTP app password**. If this repo ever goes public or changes hands they must
-be **rotated** — deleting the files does not remove them from history. This is
-independent of, and additional to, the incident rotation above.
-
-### System state
-
-| Subsystem | State |
-|---|---|
-| Auth | ✅ **Real.** Supabase ES256 verified via JWKS (`app/core/jwks.py`), `aud=authenticated`, HS256 still accepted for legacy tokens |
-| Supabase | ✅ 7 tables, RLS on all, `avatars` bucket. `public.users` is TRANSITIONAL — ADR 0003 deletes it |
-| Frontend | ✅ Expo **SDK 57**, RN 0.86.3, React 19.2.3. `tsc --noEmit` clean. ESLint 106 warnings / 0 errors (budget 106; D01 added exactly one). **Maps: Apple Maps on iOS, Google on Android** via `MAP_PROVIDER` — no API key, and no blank map |
-| Docker | ✅ `docker compose up` → `api` + `redis`; one command via `scripts/run.ps1` |
-| AI vision | ⚠️ **Runs, but measurably limited** — see the two new blockers below |
-| SOS | ✅ Verified end to end on real Supabase: email delivered, row written to `sos_incidents` (defect 35 closed). SMTP now runs off the event loop, and the evidence clip is capped at ~2 MB instead of 16 MB. The clip is still not retained after sending — deliberate, see above |
-| `app/contracts/` | ✅ `risk`, `surface`, `agents`. `mypy --strict` clean. Mirrored in `frontend/src/types/contracts/` by hand; a drift check is Track B (B2) |
-| `RISK_SURFACE_IMPL` | ❌ No switch yet, on purpose — there is one implementation (`DbRiskSurface`) and a factory over one class is not a seam. D02 adds `SeededRiskSurface` and the setting together |
-| Risk surface | ✅ `risk_flags` + `DbRiskSurface` + `GET /api/v1/risk/flags`. 22 sample flags across Dhaka, rendered as coloured pins on `MapScreen`. **All sample data is marked `sample_`** — live ingestion is D04 |
-| Python env | ✅ `backend/venv` on **3.12.10**. Note the Docker image is 3.11-slim; the venv is for local `check.sh` only. The backend **cannot start without the full ~2 GB AI stack**, because `api/v1/api.py` imports the vision endpoints eagerly — Track B (B3) |
-| Agents live | **0 of 8** |
-| LLM client | ⚠️ `anthropic` is declared in `requirements/agents.txt`; `app/llm/client.py` not written — **D03**, its first consumer. Env vars declared, unused |
-| Migrations | ✅ `backend/scripts/migrate.py` — forward-only, sha256-checksummed, refuses to run if an applied file changed. `schema_migrations` ledger. `migrate.py sql` emits paste-ready SQL with the ledger insert included, for a database that refuses direct connections. ADR 0004 itself is Track B (B1) |
-| `tests/invariants/` | ✅ 34 tests over 2 invariants: mobility framing, and one source never confirmed. The other five are Track B (B2) |
-| Known defects | **17 open of 41.** 24 closed across S01/S01b/S01c/S01d. **Defects 29–41 are new since the last handoff** — see [plan §1](IMPLEMENTATION_PLAN.md) |
-| Feature flags off | `POLICE_ROUTING_ENABLED=false` — and it is now actually *checked* (defect 31) |
-
-### 🔴 Two new blockers Nakib should know about before S06
-
-Both were found by building a measurement harness rather than by reading code,
-and both mean the AI pipeline is weaker than it looks:
-
-1. **Pose analysis has never run.** `mediapipe==1.1.0` removed the
-   `mp.solutions` namespace that `pose_service.py` is built on, so the import
-   fails and `pose_service` is left `None`. Every response carries
-   `pose_analysis: null`. **This supersedes the S01b entry's claim that defect 5
-   was reproduced live** — defect 5 was never the binding constraint, because
-   pose never ran at all. Logged as **defect 29**.
-2. **Three of the six crime classes are structurally unreachable.** The decision
-   engine scores against 21 object signals; YOLOv9c emits COCO's 80 classes, and
-   11 of those signals are not among them (`gun`, `blood`, `broken window`,
-   `damaged property`, `graffiti`, `crowbar`, `spray paint`, `money`, `door`,
-   `window`, `building`). With pose dead, no input can produce `harassment`,
-   `theft` or `vandalism`. Logged as **defect 30**.
-
-```bash
-docker compose exec api python scripts/eval_crime_vision.py   # prints the reachability table
-```
-
-**Do not tune the pipeline before the eval set has images in it.** The harness
-and a committed baseline exist; the set itself has 2 seed negatives. "Detection
-is poor" was an accurate impression but an unmeasurable one, and the chosen
-order was *measure first, then decide* — so the reasoning-layer decision
-(local-only / local + Claude vision / Claude-only) is **open and deliberately
-deferred** until Arafat and Nakib have discussed it.
-
-### 🧵 Background activities (off-baton, §3.6)
-
-| Activity | Owner | Started | Status |
-|---|---|---|---|
-| Credential rotation (incident) | Arafat | 2026-10-07 | ⏳ in progress, from a separate device |
-| Crime-vision eval set | Arafat | 2026-10-07 | 2 of ~60 target images; **S06 is blocked on this** |
+| **OSRM graph (D06)** | — | ❌ **not started. The long pole.** D06 assumes it is built |
+| Eval set (D07) | Arafat | 2 of 30–40 images |
+| Gazetteer density (B7) | — | 1,022 entries, central Dhaka, 22 reviewed |
+| Native Bangla reader (D08) | — | not arranged |
+| Credential rotation (B0) | Arafat | in progress |
 
 ### ▶️ RESUME HERE
 
-**D04 is built on `ishraq-dev` and verified on the backend; the device walkthrough is the one gate
-left.** D01–D03 are closed. By agreement with the owner, work is committed to `ishraq-dev` only —
-nothing is pushed to or merged into `main` from this side.
+**Commit the working tree first** — 7 changed files plus `backend/data/fixtures/live_replay.json`.
+The replay fixture is the offline demo's beat 1; until it is pushed, nobody else has an offline path.
 
-**1. Bring the stack up — `-Rebuild` once, because D04 added Chromium and a `worker` container:**
+Then **D05 — Verification you can see** ([DEMO_PLAN.md](DEMO_PLAN.md) §D05). Two notes on its scope
+that changed underneath it:
 
-```powershell
-.\scripts\run.ps1 -Rebuild
-docker ps        # meridian-api, meridian-worker, meridian-redis
-```
-
-**2. Close D04: run [`docs/walkthroughs/D04.md`](docs/walkthroughs/D04.md) on the phone, in Dhaka
-daytime.** At night the outlets publish almost nothing about Dhaka's roads and an empty map is the
-correct result, not a bug. While live news flags exist, do step O1 — `python -m app.agents
-export-replay` — and **commit `backend/data/fixtures/live_replay.json`**: it is the offline demo's beat
-1. Re-run D01–D03 in the same session (§3: every previous walkthrough still passes). Then fill in the
-walkthrough's "Ran on" line and flip the 🟡 above to ✅.
-
-**3. Then D05 — *Verification you can see*, Oct 15.** [DEMO_PLAN.md](DEMO_PLAN.md) §D05, source S15
-in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). Four things D04 built that D05 should use:
-
-1. **`extracted_incidents` is the input.** Every incident the agent read is a row, published or not,
-   with its `doc_id`, `location_text`, `kind` and the flag it produced (`flag_id`). Corroboration is
-   "several rows from *different* `source_id`s describing one event".
-2. **Live flags have `event_key = live-<doc_id[:16]>-<n>`** — one per incident, no dedup yet. Rumour
-   Guard's job is to give corroborating flags a shared `event_key`, raise `source_count`, merge
-   `sources`, and only then set `confirmed`. The database's CHECK still refuses `confirmed` below two
-   sources; do not weaken it.
-3. **Two of the three outlets run on one CMS** (Ekattor TV, Independent TV) but are separate newsrooms.
-   Syndicated identical copy is already collapsed by `raw_documents.content_hash`; the D05 independence
-   check (cut-first per §1) is about ownership, not CMS.
-4. **`sentence-transformers` is already in `requirements/agents.txt`** and therefore in the image.
-
-**Two traps that have each cost a session on this project:**
-
-- **PowerShell cannot execute a `.sh` file.** It returns silently and changes nothing, which is
-  indistinguishable from success. `.\scripts\seed.sh` does *nothing*. Only `run.ps1` is native —
-  for the others, call the Python directly or use Git Bash.
-- **Never write a literal backslash inside a bash heredoc in this repo.** It gets collapsed before
-  Python sees it, so `\\run.ps1` becomes `\run.ps1` and the `\r` turns into a carriage
-  return inside your file. This has corrupted documents three times. Build paths from `chr(92)`.
-
-**The gazetteer is done and §9 item 1 was wrong about it.** It said "pure data entry… no coding agent
-can compress it". OpenStreetMap's Dhaka data is Bangla-primary, so a harvest produced 1,022 paired
-entries in an afternoon. What cannot be automated is the **alias layer** — a synonym is not a spelling
-— and 22 entries have one. Extending it is B7 and is not blocking.
-
-**§9's remaining off-baton work. None of it has started, and the OSRM graph is now the critical one:**
-
-1. **The OSRM Bangladesh graph — D06 on the 16th assumes it is built.** Multi-gigabyte download plus
-   `osrm-extract` / `osrm-partition` / `osrm-customize` into `osrm-data/`. The compose service already
-   exists and is waiting for the file. No code, no baton, and nothing in D03 moved it. **Start this
-   first with the five days of slack.**
-2. The D07 eval set — 2 images against a target of 30–40.
-3. A native Bangla speaker for D08, for the 20th or 21st. It is a gate on that sprint and depends on
-   someone else's calendar.
-
-**Decision blocking D07, due 17 October — and D03 changed its shape.** `DEMO_PLAN.md` §7.1 recommends
-local YOLOv9c detection plus **Claude** vision, and claims the key is already configured. **It is not:
-this project has no Anthropic key.** Gemini's flash-lite models are multimodal, free, and already
-working through `app/llm/client.py`, which makes them the obvious substitute — but that is a decision,
-not a default, and it needs the conversation.
-
-**Decision open from D03, one line of config:** whether to drop `groq:openai/gpt-oss-120b` from
-`LLM_CHAIN_GEO`. See the ⚠️ block at the top of this file. Recommendation is to drop it.
-
-**Outstanding owner actions on the security incident (B0), unchanged:** rotate the credentials, rewrite
-history to drop the payload from `db6c42f`, untrack both `.env` files, delete the `agent/Arafat`
-branch. Both `.env` files are tracked and hold live values, so **this repository must not be made
-public.** See the incident block at the top of this file.
-
+- **D05 now has real single-source data to promote.** Before today there were no live news flags at
+  all, so the `unconfirmed → confirmed` path could only have been tested against fixtures.
+- **Capture a fresher replay while you are in D05.** The current `live_replay.json` is frozen at 4.1
+  hours old and severity 31.1 — technically correct, visually weak. `export-replay` captures every
+  live flag, so re-running it when a fresh flag exists simply improves the file.
 
 ---
 
@@ -694,6 +184,178 @@ git push   # then PR, squash-merge to main, tell your partner
 ---
 
 # 📜 Handoff Log
+
+*Newest first. Append-only.*
+
+---
+
+## D04b — D04's device gate: three defects, two of them older than D04
+
+**Owner:** Arafat · **Date:** 2026-10-08 · **Branch:** working tree on `develop` · **Merge:** _pending_
+
+Not a sprint. This is the device run that closes D04, written as its own entry because the previous
+one is append-only and because what the run found belongs next to the claim it falsified.
+
+### Shipped
+
+**D04 is closed.** [`docs/walkthroughs/D04.md`](docs/walkthroughs/D04.md) passed on a device, live and
+offline — all 12 live steps and O1–O6. The map now carries a flag extracted from a real Bangla news
+article published this morning, with its headline, its outlet and a working link to the article, and
+the same flag survives the database and the extraction key being taken away.
+
+Ishraq's D04 entry below is accurate about everything it claims. What it could not know is that the
+pipeline it verified had never produced output, because the thing discarding the output was in D03's
+gazetteer, not in D04.
+
+### Files
+
+- **Changed:** `backend/app/agents/live_risk.py` (`PLACE_GENERIC_TAIL`, `_without_generic_tail()`,
+  `place_candidates()`), `backend/tests/invariants/test_live_flags_are_unconfirmed.py` (+3 tests),
+  `frontend/src/services/api.service.ts`, `frontend/src/services/auth.service.ts`,
+  `frontend/src/screens/Home/HomeScreen.tsx`
+- **Added:** `backend/data/fixtures/live_replay.json` — the offline demo's beat 1
+- **Docs:** `docs/walkthroughs/D04.md` (header, step 6, O2, O3, O5, two new sections),
+  `DEMO_PLAN.md` (§1, §D04, §8), `IMPLEMENTATION_PLAN.md` (defects 42–44)
+
+### Decisions
+
+1. **Fixed the gazetteer matcher rather than the extraction prompt.** The prompt already tells the
+   model to drop filler and it does; the problem is that `বাস টার্মিনালে` is not filler, it is part of
+   the place's name. Loosening the prompt to ask for *vaguer* answers would trade precision for
+   recall across every future extraction. Stripping trailing place-*type* nouns is deterministic,
+   testable, and cannot invent a name.
+2. **Rejected a prefix-span fallback, which was the obvious fix.** It worked on Mohakhali and also
+   resolved the fabricated `গুলশান ৯৭ গোলচত্বর` to Gulshan — exactly the fabrication D03's eval set was
+   built to catch, reintroduced by the fix for a different defect. The generic-tail version reduces
+   that phrase to `গুলশান ৯৭`, which matches nothing. **The thing that makes this safe is D03's
+   number-identity rule, not anything D04 added** — worth knowing before anyone "simplifies" either.
+3. **Stripped from the end only.** Bangla puts the specific name first, so the head is the identity
+   and the tail is the category. Candidate order is as-written → filler-stripped → tail-stripped, so
+   `যাত্রাবাড়ী চৌরাস্তা` and `কারওয়ান বাজারে` resolve to *themselves*, not to their prefixes. A test
+   pins that, because it is the property that keeps this from being a recall-for-precision trade.
+4. **Made `supabase.auth.getSession()` the single source of the access token.** The valid token was
+   there all along. Two parallel stores — Supabase's own session in AsyncStorage and a hand-rolled
+   SecureStore cache — is the defect; deleting the second one is the fix, not adding expiry checks to
+   it. The SecureStore *writes* in `saveAuthData()` are left in place with a comment, because
+   removing them means touching the login and register flows, which was out of scope for a test run.
+5. **Changed SOS's token read as well, beyond the reported 401.** Flagged to the owner before doing
+   it. Without it the fix is half-applied: `HomeScreen` would still send the token
+   `authStore.initialize()` captured at launch. SOS is beat 9 and it was the more serious half.
+6. **Re-queued one `raw_documents` row** by clearing `extracted_at`, with the owner's explicit
+   consent, so the already-consumed Mohakhali article would be re-read by the fixed matcher. Scoped
+   to one `doc_id` and guarded on `rowcount == 1`; the other two extracted documents were judged
+   irrelevant correctly and re-reading them would have spent Gemini quota for nothing. This is also
+   the lever `D10` can pull to make the newspaper button produce a visible pin on stage.
+7. **Did not fake the replay's freshness.** The capture is stuck at 4.1 hours old and therefore at
+   severity 31 forever, which is a weak pin. Hand-editing `observed_offset_hours` would fix the optics
+   and break the provenance: the article's real publication time is one tap away in the browser.
+   Recorded in `D04.md` as a thing to improve by capturing earlier, not by editing.
+
+### CONTRACT CHANGE
+
+None.
+
+**One signature changed:** `AuthService.getAuthToken()` no longer consults SecureStore. Anything that
+needs a token must call it (or `supabase.auth.getSession()`) at the moment of use — a token held in
+React state or a Zustand store goes stale in an hour. That is defect 43's whole shape.
+
+### Migrations
+
+None. One data write, item 6 above.
+
+### Env vars added
+
+None.
+
+### Measurements
+
+**The gazetteer fix**, measured through `resolve_news_place()`:
+
+| Location text | Before | After |
+|---|---|---|
+| `মহাখালী বাস টার্মিনালে` | unresolved | **Mohakhali 1.00** |
+| `রাজধানীর মিরপুর ১০ নম্বর গোলচত্বর এলাকায়` | Mirpur-10 Circle | Mirpur-10 Circle |
+| `যাত্রাবাড়ী চৌরাস্তা` | Jatrabari Mor | Jatrabari Mor |
+| `কারওয়ান বাজারে` | Karwan Bazar 0.97 | Karwan Bazar 0.97 |
+| `গুলশান ৯৭ গোলচত্বর` *(fabricated)* | refused | **refused** |
+| `উত্তরা সেক্টর ১১` *(ambiguous)* | refused | **refused** |
+| `বাজারে` *(category only)* | refused | **refused** |
+
+**The first live news flag this project has produced:**
+
+```
+listed 481 → relevant 3 → documents_read 1 → incidents 1 → published 1,  0 errors
+Road blocked near Mohakhali.   fire · unconfirmed · 1 source
+channel24 · রাজধানীতে এসি বাসে অগ্নিকাণ্ড · real https:// article URL
+severity_0 70.0 → severity_now 39.98 at publish, 31.3 four hours later · half-life 3.5 h
+```
+
+**The newspaper button, eight consecutive runs:** `listed` 480 → 494, `relevant` pinned at **3**,
+`fetched` 0, `published` 0 every time. Nothing new to read, no quota spent. A tap changing nothing is
+the normal case, not a failure.
+
+**Gates:** backend 222 passed / 1 skipped / 2 failed (both pre-existing in `tests/test_crime_vision.py`
+— verified by stashing the change and re-running), `tsc` clean, jest 45/45, ESLint 0 errors on all
+three changed frontend files.
+
+### Deliberately NOT done
+
+- **Nothing committed.** Seven changed files plus `live_replay.json` are in the working tree.
+- **Did not touch `Ekattor TV` or `Independent TV`.** They listed 173 articles today and passed **0**
+  through the relevance filter, and `raw_documents` has never held a document from either. Their
+  headlines genuinely contained no road incidents, so this is not provably a defect — but **the
+  three-source claim currently rests on one source, and it is Channel 24, the Playwright one.**
+  Worth a deliberate look before the 24th; it is the single point of failure behind beat 1.
+- **Did not fix the orange collision.** `CRIME_COLORS.theft` is `#FF9800` and
+  `RISK_SEVERITY_BANDS` High is `#F57C00`. A judge cannot tell a crime report from a risk flag by
+  colour. Raised with the owner, left alone.
+- **Did not add a `demo_D04` to `smoke.sh`** — best-effort per `DEMO_PLAN.md` §3, and the things worth
+  asserting need a live Supabase and a network.
+- **Did not revisit the open `LLM_CHAIN_GEO` question** from the D04 entry below. Still the owner's.
+
+### Known broken / rough edges
+
+- **The replay flag is permanently 4.1 h old and severity 31.1** — one barely-yellow pin among 48
+  blue-grey fixtures. Re-run `export-replay` when a fresher news flag exists; it captures all live
+  flags, so a newer one joins the file.
+- **The live Mohakhali flag expires 2026-10-08 22:49 UTC.** After that, live beat 1 needs new news.
+- Two `tests/test_crime_vision.py` failures remain, untouched, D07's territory.
+
+### Gotchas for the next agent
+
+- **A walkthrough re-run reproduces the steps, not the state.** Defect 43 needed a session older than
+  an hour. No number of `D01.md` re-runs would have found it, because step 1 of every walkthrough is
+  signing in. **For auth-sensitive steps, sign in the day before.** This is the limit of §3's
+  regression gate and it is now defect 44.
+- **Do not read an access token from React state, a store, or SecureStore.** Call
+  `supabase.auth.getSession()` at the point of use. One hour is shorter than a debugging session.
+- **Celery does not hot-reload.** `backend/app` is bind-mounted into `meridian-worker`, so a change
+  to agent code looks applied and the 15-minute schedule keeps running the old module until
+  `docker compose restart worker`.
+- **In PowerShell, `curl` is an alias for `Invoke-WebRequest`** and throws instead of printing a
+  status. Use `curl.exe`, or `(Invoke-WebRequest <url>).StatusCode`.
+- **An unparseable `DATABASE_URL` kills the API at import**, before FastAPI exists, so `/health`
+  returns nothing rather than an error. An *unreachable* one is fine — `lifespan()` catches it and
+  logs `⚠️ Database not available`, which is the offline path working as designed.
+- **`--force-recreate api` does not touch `meridian-worker`**, which keeps its old environment and
+  carries on ingesting through an "offline" test.
+- **Finding a news flag among 212 fixtures is a search, not a tap.** Ask
+  `GET /risk/flags` for the coordinates first, and do not use the D03 search box to navigate there —
+  its marker renders over the pin, at identical coordinates.
+
+### RESUME HERE
+
+See `CURRENT STATE` at the top of this file.
+
+### Prototype Gate
+
+- [x] 1 · `check.sh` green
+- [x] 2 · Schema unchanged; no migration
+- [x] 3 · **App runs on a device — D04's walkthrough passed live and offline**
+- [x] 4 · `smoke.sh` unchanged and passing; no `demo_D04` (relaxed, §3)
+- [x] 5 · This entry + `CURRENT STATE` overwritten
+- [x] 6 · No new env vars
+- [x] 7 · Nothing half-migrated
 
 ---
 
@@ -1284,9 +946,6 @@ before they went near Supabase, with every CHECK confirmed to reject bad data.
 | `.env.example` + plan §9 | ⏭️ relaxed to best-effort until 24 Oct |
 | Nothing half-migrated | ✅ ledger matches disk |
 
-*Newest first. Append-only.*
-
----
 
 ## S01d — SDK 57, real auth, and the first live walkthrough
 

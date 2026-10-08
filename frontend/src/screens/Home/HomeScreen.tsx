@@ -27,6 +27,7 @@ import {
   gradients,
 } from '../../theme';
 import { useAuthStore, useLocationStore } from '../../store';
+import AuthService from '../../services/auth.service';
 import { GlassCard } from '../../components/GlassCard';
 import { SOSCameraModal } from '../../components/SOSCameraModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -41,7 +42,7 @@ type HomeScreenNavigationProp = BottomTabNavigationProp<
 >;
 
 const HomeScreen: React.FC = () => {
-  const { user, token } = useAuthStore();
+  const { user } = useAuthStore();
   const { currentLocation, getCurrentLocation } = useLocationStore();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<HomeScreenNavigationProp>();
@@ -68,6 +69,16 @@ const HomeScreen: React.FC = () => {
     setIsSendingSOS(true);
 
     try {
+      // Fetched at trigger time, not read from the store.
+      //
+      // `useAuthStore().token` is captured once by `initialize()` and never
+      // updated, and a Supabase access token lasts an hour -- so an SOS sent from a
+      // session older than that went out with a dead token and the backend answered
+      // 401 after the video had already uploaded. `getAuthToken()` asks Supabase,
+      // which refreshes if needed. This is the single most important call in the
+      // app to get right; it must not depend on how long the app has been open.
+      const token = await AuthService.getAuthToken();
+
       if (!token) {
         throw new Error('You are not logged in. Please Logout and Login again.');
       }

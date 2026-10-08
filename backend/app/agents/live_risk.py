@@ -159,6 +159,71 @@ PLACE_FILLER: Final = frozenset(
     }
 )
 
+# Generic place-*type* nouns that trail a specific name in Bangla news copy, with
+# the case suffixes the copy actually uses. Stripped from the END only, because
+# Bangla puts the specific name first: মহাখালী বাস টার্মিনালে is Mohakhali + "bus
+# terminal", so the head is the identity and the tail is the category.
+#
+# Why this exists: the Live Risk Agent asks the model for "the most specific place
+# name", and on 2026-10-08 it correctly answered মহাখালী বাস টার্মিনালে for a real
+# bus fire. The gazetteer resolves মহাখালী at confidence 1.00 and that phrase at
+# nothing, so the most specific answer was the least resolvable one and a genuine
+# Dhaka road event was discarded as unresolved_location. Filler removal did not
+# help: বাস and টার্মিনালে are part of the place's name, not wrapping around it.
+#
+# This stays on the right side of "discarded, never guessed" for the same reason
+# PLACE_FILLER does — the result is a prefix of what the article said, never a
+# different name. The protection against it becoming a *vaguer* name than the
+# article supports is D03's number-identity rule: গুলশান ৯৭ গোলচত্বর reduces to
+# গুলশান ৯৭, which no entry matches, so a fabricated sub-location is still
+# refused rather than being rounded up to Gulshan. Do not add bare numbers here.
+PLACE_GENERIC_TAIL: Final = (
+    # multi-word first; matching is longest-first so these strip as a unit
+    "বাস টার্মিনালে",
+    "বাস টার্মিনাল",
+    "বাস স্ট্যান্ডে",
+    "বাস স্ট্যান্ড",
+    "বাসস্ট্যান্ডে",
+    "বাসস্ট্যান্ড",
+    "রেল স্টেশনে",
+    "রেল স্টেশন",
+    # single tokens
+    "টার্মিনালে",
+    "টার্মিনাল",
+    "স্ট্যান্ডে",
+    "স্ট্যান্ড",
+    "স্টেশনে",
+    "স্টেশন",
+    "গোলচত্বরে",
+    "গোলচত্বর",
+    "চত্বরে",
+    "চত্বর",
+    "চৌরাস্তায়",
+    "চৌরাস্তা",
+    "মোড়ে",
+    "মোড়",
+    "ক্রসিংয়ে",
+    "ক্রসিং",
+    "রেলগেটে",
+    "রেলগেট",
+    "ফ্লাইওভারে",
+    "ফ্লাইওভার",
+    "ওভারব্রিজে",
+    "ওভারব্রিজ",
+    "ব্রিজে",
+    "ব্রিজ",
+    "সেতুতে",
+    "সেতু",
+    "বাজারে",
+    "বাজার",
+    "সড়কে",
+    "সড়ক",
+    "রোডে",
+    "রোড",
+    "রাস্তায়",
+    "রাস্তা",
+)
+
 SYSTEM_PROMPT: Final = (
     "You read Bangla news articles for a navigation app in Dhaka, Bangladesh. "
     "List only events that affect movement on roads inside Dhaka city today: road "
@@ -189,17 +254,44 @@ def is_relevant(ref: ArticleRef, now: datetime) -> bool:
     return any(word in ref.title for word in INCIDENT_WORDS)
 
 
+def _without_generic_tail(text: str) -> str:
+    """
+    Drop trailing generic place-type nouns, longest match first, repeatedly.
+
+    `মহাখালী বাস টার্মিনালে` -> `মহাখালী`. Returns `text` unchanged when nothing
+    matches, and never returns an empty string — a bare category word like
+    `বাজারে` with no name in front of it is left alone to be refused, because on
+    its own it identifies nowhere.
+    """
+    current = text
+    while True:
+        for tail in sorted(PLACE_GENERIC_TAIL, key=len, reverse=True):
+            if current == tail:
+                return current  # nothing but a category; let it fail to resolve
+            if current.endswith(" " + tail):
+                current = current[: len(current) - len(tail)].strip()
+                break
+        else:
+            return current
+
+
 def place_candidates(location_text: str) -> list[str]:
     """
-    The location as written, then without filler words. Never a shorter *different* name.
+    As written, then without filler, then without a trailing place-type noun.
+    Never a shorter *different* name.
 
-    Only words in `PLACE_FILLER` are removed, so every candidate is a substring of
-    what the article said. That is what keeps this on the right side of "discarded,
-    never guessed": it can make a match possible, it cannot make one up.
+    Every candidate is built by **removing** words — those in `PLACE_FILLER`, then
+    those in `PLACE_GENERIC_TAIL` from the end — so each one is a sub-phrase of
+    what the article said. That is what keeps this on the right side of
+    "discarded, never guessed": it can make a match possible, it cannot make one
+    up. Order matters: the most specific form is tried first, so a place the
+    gazetteer knows in full (`যাত্রাবাড়ী চৌরাস্তা`, `কারওয়ান বাজারে`) resolves to
+    itself and never to its own prefix.
     """
     original = " ".join(location_text.split())
     cleaned = " ".join(w for w in original.replace("-", " ").split() if w not in PLACE_FILLER)
-    return [c for c in dict.fromkeys((original, cleaned)) if c]
+    trimmed = _without_generic_tail(cleaned)
+    return [c for c in dict.fromkeys((original, cleaned, trimmed)) if c]
 
 
 async def resolve_news_place(location_text: str) -> GeoResolution:

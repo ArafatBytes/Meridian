@@ -55,7 +55,7 @@ to do on the device that evening.
 | **D01** | Oct 7–8 | Risk-flag pins on the map, coloured by severity. Crime markers finally have colours. Trigger SOS and see it **recorded**. | S02, S03, S05, S07 |
 | **D02** | Oct 9–10 | 200 flags across Dhaka. Tap one: severity, half-life, time left. Watch one decay and vanish. | S04, S19, S20 |
 | **D03** | Oct 11–12 | Type **"Mirpur 10 golchattar"**. The map flies there and tells you how it resolved it. | S10, S11, S04 |
-| **D04** | Oct 13–14 | Pull to refresh: flags from **today's real news**, each with its headline and outlet. | S09, S14, S04 |
+| **D04** | Oct 13–14 | Pull to refresh: flags from **today's real news**, each with its headline and outlet. — **✅ closed Oct 8** | S09, S14, S04 |
 | **D05** | Oct 15 | Unconfirmed flags look different. Tap one: the sources listed. Watch a promotion happen. | S15 |
 | **D06** | Oct 16–17 | Ask for a route through a flagged corridor. Get alternatives, each with a plain-English reason. | S12, S13, S05, S07 |
 | **D07** | Oct 18–19 | Photograph a two-person scene. Get a real interaction read. See the evidence photo stored. | S06 |
@@ -360,7 +360,54 @@ replaying from the document cache. D01–D03 still pass.
 - [x] 📱 **A "last updated" indicator and pull-to-refresh** on the map, so ingestion is visible as an
       event rather than inferred from pins changing — a refresh button, since a map has no scroll to
       pull, plus "fetch news now"
-- [x] 📄 `docs/walkthroughs/D04.md` — written; **not yet run on a device** (the remaining gate)
+- [x] 📄 `docs/walkthroughs/D04.md` — **run end to end on a device, live and offline; all 12 live
+      steps and O1–O6 passed (Arafat, 2026-10-08). D04 is closed.** The offline pass served the
+      captured replay with `DATABASE_URL` pointed at a dead host and the extraction key removed
+- [x] **Not planned, found by running it on a phone — and this is §0 earning its place twice over,
+      because two of the three were not in D04's code at all:**
+
+      **(a) Live ingestion had never published a single flag.** The agent, the sources, the extraction
+      and the audit trail all worked; the gazetteer was throwing the results away. A real Mohakhali
+      bus fire was extracted at **0.95 confidence** and discarded as `unresolved_location`, because
+      the extraction prompt asks for *"the most specific place name"*, the model correctly answered
+      `মহাখালী বাস টার্মিনালে`, and the gazetteer resolves `মহাখালী` at 1.00 and that phrase at
+      nothing — **the most specific answer was the least resolvable one.** `PLACE_FILLER` could not
+      help: `বাস` and `টার্মিনালে` are part of the name, not wrapping around it. Fixed with
+      `PLACE_GENERIC_TAIL` — generic place-*type* nouns stripped from the end only, longest match
+      first. **The discard invariant survived**, which was the hard part: a prefix fallback was tried
+      first and rejected because it resolved the fabricated `গুলশান ফ৭ গোলচত্বর` to Gulshan, and
+      what saves the chosen fix is **D03's number-identity rule**. Three regression tests pin it
+
+      **(b) ⚠️ Beat 9 was silently dead, and had been since D01.** Every authenticated backend call
+      401'd about an hour after sign-in — the symptom D04 surfaced was the newspaper icon failing with
+      `No refresh token`. `api.service.ts` read the access token from a `SecureStore` copy written once
+      at sign-in and never refreshed; Supabase tokens last an hour; and the 401 recovery path POSTed to
+      the backend's `/auth/refresh`, a `# TODO` stub whose signature did not even match the request.
+      All the while the Supabase client held a valid token (`autoRefreshToken: true`).
+      **`HomeScreen` SOS had the same bug** — it read `useAuthStore().token`, captured once at
+      `initialize()` — so an SOS from an older session uploaded the video and *then* got a 401. It
+      passed every time anyone tested it because `D01.md` is run just after signing in. Fixed by making
+      `supabase.auth.getSession()` the only token source in all three read paths. **This is exactly the
+      cross-sprint silent breakage §8 row 3 predicts**, and the only reason it was caught before the
+      23rd is that D04 happened to need a token on a stale session
+
+      **(c) The walkthrough's own offline instructions bricked the API**, and its O5 claim was wrong.
+      `D04.md` is corrected: O2 now says to preserve the `DATABASE_URL` shape and change only the
+      host (an unparseable URL raises in `create_async_engine` at *import*, so nothing answers
+      `/health`), O3 names `⚠️ Database not available` as the success signal, and O5 no longer claims
+      the replayed flag is "fresh again" — `observed_offset_hours` preserves the flag's age, so a
+      capture taken late in a flag's life replays weak forever
+- [x] **Also found, and worth knowing before the stage:** a tap on the newspaper icon normally changes
+      **nothing**, and that is correct. Across eight consecutive runs `listed` climbed 480 → 494 while
+      `relevant` stayed pinned at **3**, all already in `raw_documents` and skipped on URL —
+      `fetched: 0, published: 0`, no quota spent. Step 4's "**if** the outlets published something" is
+      doing more work than it looks. **§D10 must decide** whether to narrate that honestly or to clear
+      `extracted_at` on one document before the demo so the tap produces a visible pin
+- [x] **Step 6 was not a procedure.** It said news flags *"look like any other flag; tap pins until
+      the Source line names an outlet"* — with 212 fixture flags on the map. Pin colour encodes
+      decayed severity, not provenance; crime-report markers are a second unrelated colour scheme;
+      and fixture flags are `unconfirmed` too, so nothing narrows it visually. `D04.md` now has a
+      *Finding the news flag* section that asks the backend for the coordinates first
 
 ---
 
@@ -686,7 +733,7 @@ Stated now so they are recognised rather than discovered.
 |---|---|---|
 | **The schedule slips.** ~140 checkboxes in 17 days with zero slack. | The one-sprint-per-week estimate in the long plan was not arbitrary. The bet is that coding agents change it, and that bet is untested. | **D10 holds no feature work**, so it absorbs overflow. Plus the cut-don't-extend rule and **cut depth, never the screen** (§3). |
 | **The UI slice gets deferred "just this once."** | It is always the fastest thing to drop at 1 a.m., and the cost is invisible until the 23rd. | §0 makes the walkthrough a gate. A sprint with no walkthrough has not ended. This is the rule the whole plan rests on. |
-| **A sprint silently breaks an earlier one.** | Nine sprints touching one app in 17 days. The D01 draft of this plan dropped `public.users` while `sos.py` still wrote to it — beat 9 would have died on 8 October and surfaced on the 23rd. | §3's second gate: **every previous walkthrough still passes before you hand over.** That is the regression suite. |
+| **A sprint silently breaks an earlier one.** | Nine sprints touching one app in 17 days. The D01 draft of this plan dropped `public.users` while `sos.py` still wrote to it — beat 9 would have died on 8 October and surfaced on the 23rd. **This has now actually happened once:** D04 found that SOS had been 401ing on any session older than an hour since D01, undetected because `D01.md` is always run just after signing in. | §3's second gate: **every previous walkthrough still passes before you hand over.** That is the regression suite — and note it was not enough here. A walkthrough re-run reproduces the *steps*, not the *state*; this bug needed a stale session. **When re-running D01, sign in at least an hour beforehand, or sign in on the previous day.** |
 | **Live ingestion is unreliable on the day.** Scrapers break, sites block, networks fail. | Beat 1 depends on D04 working at a specific minute in a specific room. | D02's fixture plus D04's replayable cache. D04's gate requires a successful run **with the network off**. |
 | **The gazetteer and the OSRM graph are long poles.** Manual and slow, neither compressible by an agent. | The concept document names the gazetteer the primary technical risk; the OSRM graph is a multi-gigabyte download plus preprocessing. | Both are §9 background work, started **now**, off the baton, during D01–D02. |
 | **Bangla output is subtly wrong, or renders as boxes.** | Formal legal Bangla is not validatable by eye the night before, and PDF base fonts have no Bengali glyphs. | Native-speaker sign-off is a D08 *gate*. The font is an explicit D08 task. Arrange the reviewer in §9. |

@@ -1,0 +1,35 @@
+# =============================================================================
+# Frontend build context
+# =============================================================================
+# node_modules is the important line: once installed it is 1–2 GB of mostly
+# platform-specific binaries, and Docker would upload all of it to the daemon
+# on every build — then the image's own install would shadow it anyway.
+# =============================================================================
+
+node_modules/
+.expo/
+.expo-shared/
+dist/
+web-build/
+coverage/
+
+# Native build outputs — irrelevant to the Metro dev server and very large.
+android/build/
+android/app/build/
+android/.gradle/
+ios/build/
+ios/Pods/
+
+# Secrets. Passed in via env_file at runtime, never copied into the image.
+.env
+.env.*
+!.env.example
+
+# Local noise
+*.log
+npm-debug.log*
+.DS_Store
+.vscode/
+.idea/
+*.jsbundle
+.metro-health-check*
