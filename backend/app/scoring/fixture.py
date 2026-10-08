@@ -206,6 +206,11 @@ def _row_from_entry(entry: dict[str, Any], now: datetime) -> dict[str, Any]:
         "observed_at": now + timedelta(hours=observed_offset),
         "valid_from": _offset_or_none(now, entry.get("valid_from_offset_hours")),
         "valid_to": _offset_or_none(now, entry.get("valid_to_offset_hours")),
+        # D05. Optional, and absent from the whole fixture today: a flag authored
+        # confirmed was never *promoted*, so there is no moment of confirmation to
+        # record, and `observed_at` would be a lie dressed as data. A scripted stage
+        # demo that wants "confirmed 14:31" on a seeded flag sets this offset.
+        "confirmed_at": _offset_or_none(now, entry.get("confirmed_offset_hours")),
         "source_count": source_count,
         "sources": sources,
         # The one and only writer of this string.

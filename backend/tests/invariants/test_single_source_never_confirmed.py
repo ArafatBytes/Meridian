@@ -11,12 +11,20 @@ news, every one of them from one source, and the test is what makes it impossibl
 for that sprint to quietly mark them confirmed because the map looks better that
 way.
 
-Three layers enforce the same rule, and this file checks all three:
+Four layers enforce the same rule, and this file checks all four:
 
 1. the `risk_flags_confirmed_needs_two_sources` CHECK constraint, verified by
    reading the migration (the database is not available in unit tests);
 2. the fixture, which must not ship a confirmed flag with one source;
-3. the seed loader's own validation, which refuses to build such a row.
+3. the seed loader's own validation, which refuses to build such a row;
+4. **the rows actually in the database**, and the promotion logic that puts them
+   there. Added in D05, which is what `DEMO_PLAN.md` means by *"the invariant test
+   from D01 now runs against real data, not a stub"* — until Rumour Guard existed
+   there was no promotion path to test, only a fixture and a constraint.
+
+Layers 1-3 need no database and run on every push. Layer 4 is marked `integration`
+and skips when there is no database to ask, because a developer without Supabase
+credentials should see the first three pass rather than a connection error.
 """
 
 import json
@@ -240,3 +248,148 @@ def test_the_seeder_turns_a_fixture_error_into_an_exit_code() -> None:
         "seed_risk_flags.py must catch FixtureError and return a non-zero exit code"
     )
     assert "return 2" in source
+
+
+# ---------------------------------------------------------------------------
+# 4. The promotion path, and the rows it has actually written
+# ---------------------------------------------------------------------------
+#
+# D05. Everything above this line is true of a fixture file and a migration's text.
+# None of it would have noticed a Rumour Guard that promoted on one publisher,
+# because before D05 nothing promoted at all.
+
+
+def test_promotion_needs_two_independent_publishers_not_two_articles() -> None:
+    """
+    The decision itself, taken straight from the module that makes it.
+
+    `merge_into()` recomputes `source_count` through
+    `policy.independence.independent_publishers` and promotes only when that reaches
+    `MIN_SOURCES_FOR_CONFIRMED`. The failure this guards against is the tempting one:
+    incrementing a counter per article, so an outlet publishing a follow-up
+    corroborates itself and `confirmed` comes to mean "written about twice".
+    """
+    from app.core.config import settings
+    from app.policy.independence import independent_publishers, is_confirmable
+
+    assert settings.MIN_SOURCES_FOR_CONFIRMED >= 2, (
+        "lowering this below 2 contradicts the database CHECK, which would reject the "
+        "insert -- but it would also mean the code intended to"
+    )
+
+    one_outlet_three_articles = ["channel24", "channel24", "channel24"]
+    assert len(independent_publishers(one_outlet_three_articles)) == 1
+    assert not is_confirmable(
+        one_outlet_three_articles, minimum=settings.MIN_SOURCES_FOR_CONFIRMED
+    )
+
+    two_outlets = ["channel24", "ekattor_tv"]
+    assert is_confirmable(two_outlets, minimum=settings.MIN_SOURCES_FOR_CONFIRMED)
+
+
+def test_the_merge_statement_cannot_set_confirmed_without_recounting() -> None:
+    """
+    Read the guard's own SQL: `status` and `source_count` are always written together.
+
+    A merge that updated `status` while leaving `source_count` alone would satisfy
+    every test above and still violate the invariant at runtime, because the CHECK
+    compares the two columns. They move together or not at all.
+
+    This is a source check, for the same reason `test_the_seeder_turns_a_fixture_error
+    _into_an_exit_code` is one: the alternative is reaching into a module's private
+    SQL string from a test, and saying so out loud is better than pretending.
+    """
+    guard = (BACKEND / "app" / "agents" / "rumour_guard.py").read_text(encoding="utf-8")
+    merge = guard[guard.index("_MERGE: Final"):]
+    merge = merge[: merge.index('"""', merge.index('"""') + 3)]
+    assert "source_count = :source_count" in merge
+    assert "status       = :status" in merge, (
+        "the merge must write status and source_count in the same statement; the CHECK "
+        "constraint compares them, so updating one without the other is how a "
+        "single-source confirmed flag would get written"
+    )
+
+
+def test_nothing_writes_confirmed_except_the_guard() -> None:
+    """
+    `status = 'confirmed'` must not appear in any INSERT outside Rumour Guard.
+
+    The specific regression this prevents: D04's `LiveRiskAgent` hard-codes
+    `"status": "unconfirmed"` in `flag_row()`, and the cheap way to make the map look
+    better is to change that word. Then one article would produce a confirmed flag and
+    the only thing standing in the way would be the database.
+
+    Scoped to `app/`, and `rumour_guard.py` is the one allowed producer.
+    """
+    import re
+
+    offenders: list[str] = []
+    for path in sorted((BACKEND / "app").rglob("*.py")):
+        if path.name == "rumour_guard.py":
+            continue
+        text = path.read_text(encoding="utf-8")
+        # A literal assignment of the word, not a comparison or a docstring mention.
+        for match in re.finditer(r"""["']status["']\s*:\s*["']confirmed["']""", text):
+            line = text[: match.start()].count("\n") + 1
+            offenders.append(f"{path.relative_to(BACKEND)}:{line}")
+
+    assert offenders == [], (
+        "only app/agents/rumour_guard.py may write status='confirmed', because it is "
+        f"the only module that counts independent publishers first. Found: {offenders}"
+    )
+
+
+@pytest.mark.integration
+async def test_no_row_in_the_database_is_confirmed_on_one_publisher() -> None:
+    """
+    The real-data check: every `confirmed` row, as it actually exists.
+
+    This is the one test in this file that could catch a Rumour Guard bug in
+    production data rather than in intent. It reads `sources` and counts *distinct
+    publishers*, not `source_count` — a count that agrees with itself proves nothing,
+    and the whole failure mode is the two drifting apart.
+
+    Skips rather than fails when there is no database. A developer without Supabase
+    credentials should see layers 1-3 pass, not a connection error dressed as an
+    invariant violation.
+    """
+    import json
+
+    from sqlalchemy import text as sql
+
+    try:
+        from app.core.database import AsyncSessionLocal
+    except Exception as exc:  # pragma: no cover
+        pytest.skip(f"no database configured: {exc}")
+
+    try:
+        async with AsyncSessionLocal() as db:
+            rows = (
+                await db.execute(
+                    sql(
+                        "select event_key, status, source_count, sources::text as sources_json "
+                        "from public.risk_flags where status = 'confirmed'"
+                    )
+                )
+            ).mappings().all()
+    except Exception as exc:
+        pytest.skip(f"database unreachable: {type(exc).__name__}")
+
+    from app.policy.independence import independent_publishers
+
+    offenders: list[str] = []
+    for row in rows:
+        refs = json.loads(row["sources_json"] or "[]")
+        publishers = independent_publishers(
+            str(r.get("source_id", "")) for r in refs if r.get("source_id")
+        )
+        if len(publishers) < 2:
+            offenders.append(
+                f"{row['event_key']} claims source_count={row['source_count']} but cites "
+                f"publishers {sorted(publishers)}"
+            )
+
+    assert offenders == [], (
+        "confirmed flags in the database that are not corroborated by two independent "
+        "publishers:\n  " + "\n  ".join(offenders)
+    )

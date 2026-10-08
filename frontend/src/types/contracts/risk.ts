@@ -114,4 +114,31 @@ export interface RiskFlag {
   /** Set only on forward-dated flags from the Scheduled Risk Agent (D09). */
   validFrom: string | null;
   validTo: string | null;
+
+  /**
+   * When Rumour Guard promoted this flag to `confirmed` (D05).
+   *
+   * Null in three legitimate cases, and the UI must render the absence rather than
+   * substituting `observedAt`: the flag is still unconfirmed; it was authored
+   * confirmed in a fixture, so there was no moment of promotion; or it predates the
+   * column. "Confirmed, time unknown" is true. "Confirmed at the moment the fire
+   * started" is not.
+   */
+  confirmedAt: string | null;
+
+  /**
+   * How much of `severityNow` should count in a decision, 0-1.
+   *
+   * Derived server-side from `status` by `app/policy/independence.py` — 1.0 for
+   * `confirmed`, 0.6 for `unconfirmed`. Mirrored here rather than re-derived from
+   * `status` in TypeScript so that the weight is a server policy with one
+   * definition; a copy of the 0.6 in this file is a second definition waiting to
+   * drift.
+   *
+   * `severityNow` is deliberately NOT pre-multiplied by this. That value is the
+   * decay story the flag sheet narrates ("74 when observed, 31 now, 42% remaining")
+   * and damping it would make that arithmetic wrong. Anything *deciding* something
+   * wants `severityNow * confidence`.
+   */
+  confidence: number;
 }

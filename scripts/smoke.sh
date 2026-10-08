@@ -267,10 +267,23 @@ demo_S01c() {
     grep -q 'spawn' frontend/babel.config.js
 
   # Signature check for the specific actor, so a repeat is caught by name.
+  #
+  # The same pathspec exclusions scan-injection.sh carries, and for the same reason:
+  # the incident write-up quotes these indicators, the scanner greps for them, and
+  # this file asserts their absence -- so an unfiltered `git grep` finds the strings
+  # in the documentation ABOUT the payload and reports the repo as infected.
+  #
+  # These two passed for a week only because those files were untracked; `git grep`
+  # searches the index, so committing the D04 work made them fail with nothing
+  # actually wrong. An assertion that depends on whether its own evidence has been
+  # committed is not asserting what its name claims.
+  IOC_EXCLUDE=(':!docs/SECURITY-INCIDENT-*.md' ':!scripts/scan-injection.sh' \
+               ':!scripts/smoke.sh' ':!PROGRESS.md' ':!IMPLEMENTATION_PLAN.md' \
+               ':!DEMO_PLAN.md' ':!docs/INCIDENT-RESPONSE-CHECKLIST.md')
   refute "dead-drop wallet address absent from the repo" \
-    git grep -qIF -- '0xa322E5f3D311D3080e6f0121063e9aDC2490Ef1a'
+    git grep -qIF -- '0xa322E5f3D311D3080e6f0121063e9aDC2490Ef1a' "${IOC_EXCLUDE[@]}"
   refute "C2 payload header absent from the repo" \
-    git grep -qiIF -- 'X-Payload-B64'
+    git grep -qiIF -- 'X-Payload-B64' "${IOC_EXCLUDE[@]}"
 
   # Guards must be wired in, not merely present on disk.
   assert "scanner runs in CI"         grep -q 'scan-injection.sh' .github/workflows/ci.yml

@@ -28,6 +28,11 @@ independent sources. That is the "verification before publication" invariant,
 and it is checked in three places: here, in
 `tests/invariants/test_single_source_never_confirmed.py`, and by a CHECK
 constraint on `risk_flags`.
+
+`unconfirmed` is **published, not suppressed** — at reduced weight, and visibly
+distinct on the map. Suppressing it would throw away the early signal that is
+half the point of reading news at all; promoting it silently would break the
+invariant. See `app.policy.independence.confidence`.
 """
 
 
@@ -171,6 +176,33 @@ class RiskFlag(BaseModel):
     sources: list[SourceRef] = Field(default_factory=list)
     mobility_statement: str  # ONLY written by policy.framing
     time_profile: TimeProfile | None = None
+
+    # ---------------------------------------------------------------- D05 ----
+    # When the second independent publisher arrived and `status` became
+    # `confirmed`. Null on an unconfirmed flag, which is most of them, and null on
+    # a fixture flag that was simply authored confirmed.
+    #
+    # This is a *claim about our own process*, not about the event: it answers
+    # "when did you decide to believe this?", which is the question behind demo
+    # beat 2's "confirmed 14:31". Set only by Rumour Guard.
+    confirmed_at: datetime | None = None
+
+    # How much of this flag's severity should count in a decision, 0-1.
+    #
+    # **Derived from `status`, never stored**, by `policy.independence.confidence`.
+    # The two `RiskSurface` implementations are its only producers, exactly as with
+    # `severity_now`.
+    #
+    # It exists as a field rather than being left for each consumer to re-derive
+    # because "unconfirmed is published at reduced weight" (plan S15) is a policy
+    # decision, and a policy decision duplicated in the routing service and again
+    # in TypeScript is a policy decision that will come to mean three things.
+    # `severity_now` is deliberately **not** damped by it: that value is the decay
+    # story the flag sheet narrates ("74 when observed, 31 now, 42% remaining"),
+    # and multiplying it would make that arithmetic lie. Consumers that are making
+    # a decision want `severity_now * confidence`; see
+    # `app.scoring.decay.effective_severity`.
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
 
     # ---------------------------------------------------------------- D09 ----
     # Forward-dated flags: an announced procession is a claim about a window in

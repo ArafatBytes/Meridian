@@ -34,6 +34,7 @@ import type { RiskFlag } from '../../types/contracts/risk';
 import { routeService, RouteResponse, Location } from '../../services/route.service';
 import { riskService, type IngestionStatus } from '../../services/risk.service';
 import RiskFlagSheet, { riskBand } from '../../components/RiskFlagSheet';
+import { RiskFlagMarker, isConfirmedFlag } from '../../components/RiskFlagMarker';
 import PlaceSearch from '../../components/PlaceSearch';
 import type { GeoResolution } from '../../types/contracts/geo';
 
@@ -591,14 +592,22 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
             .filter(flag => flag.radiusM <= MAX_DRAWN_RADIUS_M)
             .map(flag => {
               const band = riskBand(flag.severityNow);
+              // D05. The verification tier, on the area as well as on the pin: a
+              // corroborated claim is drawn solid, a single-source one dashed and
+              // fainter. Two channels for one distinction, because colour is already
+              // carrying severity and a dashed outline survives a bad projector.
+              const confirmed = isConfirmedFlag(flag);
               return (
                 <Circle
-                  key={`risk-circle-${flag.flagId}`}
+                  key={`risk-circle-${flag.flagId}-${flag.status}`}
                   center={{ latitude: flag.lat, longitude: flag.lon }}
                   radius={flag.radiusM}
-                  strokeWidth={1}
-                  strokeColor={withAlpha(band.color, '99')}
-                  fillColor={withAlpha(band.color, '26')}
+                  strokeWidth={confirmed ? 2 : 1}
+                  strokeColor={withAlpha(band.color, confirmed ? 'CC' : '77')}
+                  fillColor={withAlpha(band.color, confirmed ? '2E' : '12')}
+                  // Android ignores a dash pattern below ~2px stroke width; the fill
+                  // and stroke alpha carry the distinction where this does not land.
+                  lineDashPattern={confirmed ? undefined : [8, 6]}
                 />
               );
             })}
@@ -612,25 +621,18 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
             Colour is `severityNow`, not `severity0`: a pin that fades as the time
             control moves is demo beat 5, and it only works if the colour tracks the
             decayed value. */}
-        {!routeMode && riskFlags.map(flag => {
-          const band = riskBand(flag.severityNow);
-          return (
-            <Marker
-              key={`risk-${flag.flagId}`}
-              coordinate={{ latitude: flag.lat, longitude: flag.lon }}
-              title={flag.mobilityStatement}
-              description={`${band.label} · ${Math.round(flag.severityNow)}/100 · ${
-                flag.status === 'confirmed'
-                  ? `${flag.sourceCount} sources`
-                  : 'unconfirmed'
-              }`}
-              pinColor={band.color}
-              // The callout still carries the statement, because a tap-and-hold on iOS
-              // shows it; the sheet is what a tap opens. Both are the same string.
-              onPress={() => !routeMode && setSelectedFlag(flag)}
+        {!routeMode &&
+          riskFlags.map(flag => (
+            // D05 replaced the native teardrop here. `pinColor` can carry exactly one
+            // variable and D04 had already spent it on severity, leaving nowhere for
+            // the verification tier or the source count. See RiskFlagMarker for the
+            // `tracksViewChanges` and `key` reasoning -- both matter at ~60 markers.
+            <RiskFlagMarker
+              key={`risk-${flag.flagId}-${flag.status}-${flag.sourceCount}`}
+              flag={flag}
+              onPress={setSelectedFlag}
             />
-          );
-        })}
+          ))}
 
         {/* Crime Report Markers */}
         {!routeMode && resolvedPlace && (

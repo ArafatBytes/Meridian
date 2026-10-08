@@ -69,95 +69,111 @@ Full write-up, indicators of compromise and the remediation checklist:
 
 ## 📍 CURRENT STATE
 
-*Last updated: 2026-10-08 · by: Arafat · after: D04 (closed on a device)*
+*Last updated: 2026-10-08 · by: Arafat · after: D05 (closed on a device)*
 
 | | |
 |---|---|
-| **Last sprint completed** | **D04 — ✅ CLOSED.** [`docs/walkthroughs/D04.md`](docs/walkthroughs/D04.md) passed on a device **live and offline** — 12 live steps and O1–O6. D01–D03 all closed |
-| **NEXT SPRINT** | **D05 — Verification you can see** (scheduled Oct 15) → [DEMO_PLAN.md](DEMO_PLAN.md) §D05, source S15 |
+| **Last sprint completed** | **D05 — ✅ CLOSED.** All 11 steps of [`docs/walkthroughs/D05.md`](docs/walkthroughs/D05.md) passed on a real device, first run, no issues — including the promotion and the reset. D01–D04 all closed |
+| **NEXT SPRINT** | **D06 — Routing, explanations, and the reason why** (scheduled Oct 16–17) → [DEMO_PLAN.md](DEMO_PLAN.md) §D06. ⚠️ **It assumes the OSRM graph exists and it does not** — see Background activities |
 | **Baton holder** | **free** |
-| **Trunk** | `develop` · **working tree uncommitted** — 7 changed files + `backend/data/fixtures/live_replay.json` |
-| **Build status** | 🟢 **GREEN.** Backend 222 passed / 1 skipped / **2 pre-existing failures** in `tests/test_crime_vision.py` (D07's, verified unrelated by stashing). `tsc` clean, jest 45/45, ESLint 0 errors on changed files |
-| **Slack** | D04 was scheduled Oct 13–14 and closed Oct 8 — **five days ahead.** The OSRM graph (§9 item 2) is still not started and is still the long pole for D06 |
+| **Trunk** | `develop` · D05 committed and pushed |
+| **Build status** | 🟢 **GREEN.** 250 backend tests pass (23 new), `mypy --strict` clean on 83 files, `tsc` clean, ESLint 0 errors. Pre-existing and untouched: 2 failures in `tests/test_crime_vision.py` (D07's) |
+| **Slack** | D05 was scheduled Oct 15 and built Oct 8 — **seven days ahead.** The OSRM graph (§9 item 2) is **still not started** and D06 assumes it is built. It is now the only thing standing between the slack and D06 |
 | **Phase** | 0 — Foundation & Contracts |
 
-### ✅ Today's news is on the map, and it survives the network going away
+### ✅ Verification is now visible, not just stored
 
-The live pass: a fire reported in Bangla by Channel 24 at 09:30 became
-**`Road blocked near Mohakhali.` · unconfirmed · 1 source**, with the real headline and a working link
-to the article, decaying on a 3.5-hour half-life. The offline pass served the same flag from
-`live_replay.json` with `DATABASE_URL` pointed at a dead host and the extraction key removed.
+- **The map carries the tier.** Hollow + dashed + `?` for a single-source claim; solid +
+  filled + source count for a corroborated one. The radius circle splits the same way.
+- **The sheet carries the provenance.** Which publishers, a **Confirmed** time (or
+  `time not recorded`, never a substituted `observed_at`), and the consequence stated:
+  shown and counted at **60% weight**, never hidden.
+- **The promotion is repeatable on demand** — `python -m app.agents promote-demo`,
+  through the production merge path, `--reset` to rehearse again.
 
-### 🔴 Running it on a phone found three defects. Two were older than D04.
+### 🔴 The finding of the sprint: a planned constant was wrong
 
-Full detail in the **D04b** handoff entry and as **defects 42–44** in
-[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+`DEMO_PLAN.md` §9 declared `DEDUP_SIMILARITY_THRESHOLD=0.82`. Measured on
+`all-MiniLM-L6-v2` against the text the system actually embeds, **0.82 merges 1 of 18
+known duplicate pairs** — D05 would have shipped as a **no-op that looked implemented**:
+four outlets would still have produced four unconfirmed pins, and nothing in a green
+test suite would have said so. Now **0.72**, the highest threshold with zero false
+merges. `scripts/eval_dedup.py` + `data/eval/dedup/clusters.json` make it reproducible.
 
-1. **Live ingestion had never published a flag** (defect 42). The agent, sources, extraction and audit
-   trail all worked — D03's gazetteer was discarding the results. A real Mohakhali bus fire was
-   extracted at 0.95 confidence and dropped as `unresolved_location`, because the prompt asks for *the
-   most specific place name*, the model correctly answered `মহাখালী বাস টার্মিনালে`, and the gazetteer
-   resolves `মহাখালী` at 1.00 and that phrase at nothing. **The most specific answer was the least
-   resolvable one.** Fixed with `PLACE_GENERIC_TAIL`; the discard invariant is intact and three
-   regression tests pin it.
-2. **⚠️ Beat 9 was silently dead and had been since D01** (defect 43). Every authenticated backend call
-   401'd about an hour after sign-in, SOS included — the video uploaded and *then* failed. Nobody saw
-   it because `D01.md` is always run minutes after signing in. Fixed: `supabase.auth.getSession()` is
-   now the only token source.
-3. **The walkthrough's own offline instructions bricked the API** and its O5 claim was wrong. Both
-   corrected in `D04.md`.
+**And the classes are not separable.** Lowest true duplicate 0.503, highest false pair
+0.718 — and the second account of the real Mohakhali fire scores **0.718**, identical to
+the worst false pair. Recall is **~56% by choice**, precision 100% on the labelled set.
+That asymmetry is deliberate: a missed merge costs a duplicate pin, a false merge puts a
+`confirmed` badge on an event that did not happen. It is also exactly why the scripted
+replay exists rather than hoping two outlets phrase a fire alike mid-demo.
 
-### 🧠 The lesson worth carrying into every later sprint
+### ⚠️ One thing D06 must not miss
 
-**A walkthrough re-run reproduces the steps, not the state.** Defect 43 needed a session older than an
-hour, and step 1 of every walkthrough is signing in — so §3's "every previous walkthrough still
-passes" gate could never have caught it. **When re-running an auth-sensitive walkthrough, sign in the
-day before.** Recorded as defect 44 and in `DEMO_PLAN.md` §8.
+**`RiskFlag.confidence` is carried but not yet consumed by routing.** D06 has to score
+with `app.scoring.decay.effective_severity(severity_now, confidence)`, not with
+`severity_now` — otherwise an unconfirmed rumour bends a route exactly as hard as a
+corroborated fact and the whole tier is decoration. There is a test pinning the ordering
+it should produce. This is the easiest thing in D06 to get wrong and the failure is
+invisible.
 
-### ⚠️ Two things to decide before the 24th
+### System state
 
-- **The three-source claim rests on one source.** Ekattor TV and Independent TV listed 173 articles
-  today and passed **0** through the relevance filter; `raw_documents` has never held a document from
-  either. Today's headlines genuinely had no road incidents, so it is not provably a defect — but
-  beat 1 currently depends on **Channel 24 alone**, and that is the Playwright one.
-- **The newspaper button normally changes nothing.** Eight consecutive runs: `listed` 480 → 494,
-  `relevant` pinned at 3, all already consumed, `published: 0`. **D10 must choose** between narrating
-  that honestly ("it just checked 494 articles; the three about road incidents are already on the
-  map") and clearing `extracted_at` on one document beforehand so the tap produces a visible pin.
+| Subsystem | State |
+|---|---|
+| Rumour Guard | ✅ **Live.** Semantic dedup, promotion, independence policy, measured threshold |
+| Verification tier on device | ✅ Map markers, radius circles, sheet rows, weight stated in words |
+| Live ingestion | ✅ Reads 3 outlets every 15 min; **only Channel 24 has ever yielded a document** |
+| Risk surface | ✅ `db` (and `seeded` for the offline path); both satisfy the protocol, test asserts it |
+| Migrations | ✅ 4 applied, forward-only, through `scripts/migrate.py` |
+| Agents live | **3 of 8** — Live Risk, Expiry Sweep, Rumour Guard |
+| Routing | ⚠️ Public OSRM demo server, flat 30 km/h, ignores `confidence` — **all D06** |
+| Vision | ⚠️ `pose_analysis: null` always; 3 of 6 crime classes unreachable — **D07** |
+| Known defects | **18 open of 44** — see [plan §1](IMPLEMENTATION_PLAN.md) |
 
-### ⏳ Still open from earlier entries
+### ⏳ Still open, unchanged by this sprint
 
-- **`LLM_CHAIN_GEO`'s Groq fallback** — keep it for 95.6% with 1 fabrication, or drop it for 93.3%
-  with none and no network. Recommendation is to drop it. **Owner's call, unchanged.**
-- **§7.1, the image-analysis reasoning layer, blocks D07 and is due 17 October.** There is no
-  Anthropic key, so §7.1's "local detection plus Claude vision" needs rewording to a provider that
-  exists — Gemini's flash-lite models are multimodal and free.
-- **B0 is still outstanding:** credential rotation and the git-history rewrite from the 7 October
-  security incident.
+- **B0: credential rotation and the git-history rewrite** from the 7 October incident.
+- **§7.1, the image-analysis reasoning layer, blocks D07, due 17 October.** There is no
+  Anthropic key, so §7.1's "local detection plus Claude vision" needs rewording to a
+  provider that exists.
+- **`LLM_CHAIN_GEO`'s Groq fallback** — 95.6% with 1 fabrication, or 93.3% with none and
+  no network. Recommendation is to drop it. Owner's call.
+- **Beat 1 rests on one source.** Ekattor and Independent have never produced a document.
+- **Social media / official feeds** — now backlogged as **B11a**, deliberately.
 
 ### 🧵 Background activities (off-baton, §9)
 
 | Activity | Owner | Status |
 |---|---|---|
-| **OSRM graph (D06)** | — | ❌ **not started. The long pole.** D06 assumes it is built |
+| **OSRM graph (D06)** | — | ❌ **not started. Now the critical path** — D06 is next and assumes it exists |
 | Eval set (D07) | Arafat | 2 of 30–40 images |
-| Gazetteer density (B7) | — | 1,022 entries, central Dhaka, 22 reviewed |
+| Dedup clusters (D05) | Arafat | 8 clusters hand-written; replace with real `summary_en` as the corpus grows |
 | Native Bangla reader (D08) | — | not arranged |
 | Credential rotation (B0) | Arafat | in progress |
 
 ### ▶️ RESUME HERE
 
-**Commit the working tree first** — 7 changed files plus `backend/data/fixtures/live_replay.json`.
-The replay fixture is the offline demo's beat 1; until it is pushed, nobody else has an offline path.
+**1. Build the OSRM graph. This is now the critical path and nothing else is.** D06 is
+next, it assumes `osrm-data/bangladesh-latest.osrm` exists, and the multi-gigabyte
+download plus `osrm-extract` / `osrm-partition` / `osrm-customize` is hours of
+wall-clock that **no coding agent can compress**. Seven days of slack evaporate the
+moment D06 starts without it. Commands are in `docker-compose.yml`'s `osrm` service
+comment and in §9 item 2. Whoever is not holding the baton should start this today.
 
-Then **D05 — Verification you can see** ([DEMO_PLAN.md](DEMO_PLAN.md) §D05). Two notes on its scope
-that changed underneath it:
+**2. Re-run D01–D04 on the device before D06 hands over.** §3's second gate, and it was
+**not** done for D05 — D05's own 11 steps passed, but the earlier walkthroughs were only
+*read* for breakage, not re-run. One real breakage was found that way (`D01.md`'s rough
+edges claimed D05's work was still outstanding) and corrected. Two notes if you do re-run
+them: **sign in at least an hour beforehand** so D01's SOS exercises a stale session
+(that is how D04 found beat 9 was dead), and expect circles where D01 and D02 say
+"pins".
 
-- **D05 now has real single-source data to promote.** Before today there were no live news flags at
-  all, so the `unconfirmed → confirmed` path could only have been tested against fixtures.
-- **Capture a fresher replay while you are in D05.** The current `live_replay.json` is frozen at 4.1
-  hours old and severity 31.1 — technically correct, visually weak. `export-replay` captures every
-  live flag, so re-running it when a fresh flag exists simply improves the file.
+**3. Then D06** ([DEMO_PLAN.md](DEMO_PLAN.md) §D06). **Read the `confidence` warning
+above before writing any route scoring** — it is the easiest thing in D06 to get wrong
+and the failure is invisible.
+
+**Then D06** ([DEMO_PLAN.md](DEMO_PLAN.md) §D06). Read the `confidence` warning above
+before writing any route scoring.
 
 ---
 
@@ -186,6 +202,212 @@ git push   # then PR, squash-merge to main, tell your partner
 # 📜 Handoff Log
 
 *Newest first. Append-only.*
+
+---
+
+## D05 — Verification you can see
+
+**Owner:** Arafat · **Date:** 2026-10-08 · **Branch:** working tree on `develop` · **Merge:** _pending_
+
+### Shipped
+
+**The map no longer treats every claim as equal.** A flag one outlet reported is drawn
+**hollow, dashed, with a `?`**; a flag two independent publishers agree on is drawn
+**solid, with the source count on it**. Tap either and the sheet says which publishers,
+when we decided to believe it, and — for an unconfirmed one — that it is counted at
+**60% weight rather than hidden**. Then one command promotes a flag while the map is
+open, and another puts it back.
+
+- **`app/agents/rumour_guard.py`** — four gates, all required: same `kind`, overlapping
+  radii (capped at 3 km), `observed_at` within 6 hours, then cosine similarity on the
+  extraction model's English summary. The first three are SQL and nearly free, so the
+  embedding only runs on the rows they let through.
+- **`app/policy/independence.py`** — who counts as a separate publisher, and what an
+  unconfirmed flag is worth. `_SAME_OWNER` is the Track B seam, empty and documented.
+- **`app/agents/promote_demo.py`** — `python -m app.agents promote-demo`, through the
+  production merge path, with `--dry-run` and `--reset`.
+- **`components/RiskFlagMarker.tsx`** — the tier, legible without tapping.
+- **`scripts/eval_dedup.py`** + **`data/eval/dedup/clusters.json`** — the labelled
+  cluster set S15 asked for, which is what caught the threshold being wrong.
+
+### Files
+
+- **Added:** `app/agents/rumour_guard.py`, `app/agents/promote_demo.py`,
+  `app/policy/independence.py`, `scripts/eval_dedup.py`,
+  `data/eval/dedup/clusters.json`, `tests/invariants/test_rumour_guard.py`,
+  `migrations/versions/20261008140000__risk_flags_confirmed_at.sql`,
+  `frontend/src/components/RiskFlagMarker.tsx`, `docs/walkthroughs/D05.md`
+- **Changed:** `app/contracts/risk.py` (**contract change**, below),
+  `app/scoring/{decay,fixture,surface_db,surface_seeded}.py`,
+  `app/agents/{live_risk,__main__}.py`, `app/core/config.py`,
+  `tests/invariants/test_single_source_never_confirmed.py`,
+  `frontend/src/types/contracts/risk.ts`, `frontend/src/services/risk.service.ts`,
+  `frontend/src/components/RiskFlagSheet.tsx`,
+  `frontend/src/screens/Map/MapScreen.tsx`, `DEMO_PLAN.md`,
+  `IMPLEMENTATION_PLAN.md` (§9 threshold only)
+
+### CONTRACT CHANGE
+
+- **Changed:** `app/contracts/risk.py` — `RiskFlag` gains `confirmed_at: datetime | None`
+  and `confidence: float` (0–1, derived from `status`, default 1.0).
+- **Breaks:** nothing. Both have defaults, so an older producer still validates.
+- **Updated in this sprint:** both `RiskSurface` implementations produce them;
+  `DbRiskSurface`'s column list and `SeededRiskSurface`'s loader carry them;
+  `risk.service.ts` maps them off the wire with a `?? ` fallback.
+- **TS mirror updated:** yes — `frontend/src/types/contracts/risk.ts`.
+
+### Migrations
+
+- `20261008140000__risk_flags_confirmed_at.sql` — adds `confirmed_at timestamptz` (null),
+  plus `idx_risk_flags_kind_status` for the candidate lookup. **Not back-filled, and no
+  CHECK tying it to `status`**: the 31 confirmed fixture flags have no moment of
+  promotion, so such a constraint would make a valid seed unloadable, and filling the
+  column with `observed_at` would claim we confirmed each event the instant it happened.
+
+### Decisions
+
+1. **`severity_now` is NOT damped by confidence.** The obvious implementation of
+   "unconfirmed at reduced weight" is to multiply inside `severity_at()`, and it is
+   wrong: `severity_now` is the decay story the sheet narrates — *"74 when observed, 31
+   now, 42% remaining"* — and damping it makes that arithmetic lie on most flags. So
+   `confidence` is a separate field and `decay.effective_severity()` is the helper that
+   combines them. **D06 must use it or the tier is decoration**, and there is a test
+   pinning the ordering it should produce (a single-source fire still outranks a
+   corroborated minor delay).
+2. **One `SourceRef` per publisher.** Three constraints interact —
+   `confirmed → source_count >= 2`, `jsonb_array_length(sources) <= source_count`, and
+   the D01 test demanding confirmed flags cite *distinct publishers*. Keeping one ref
+   per publisher makes `source_count == len(sources) == independent publishers`, so all
+   three hold for live data for the same reason they hold for the fixture. A
+   same-outlet follow-up therefore does not inflate corroboration; it is still kept in
+   full in `extracted_incidents`.
+3. **The guard declines when it cannot judge.** No usable summary, no model, no
+   candidate, nothing similar enough — all fall through to "insert as its own
+   unconfirmed flag", which is the pre-D05 behaviour. The asymmetry is the point: a
+   missed merge costs a duplicate pin, a wrong merge puts a `confirmed` badge on an
+   event that did not happen.
+4. **A missing embedding model is not fatal.** `embeddings_available()` returns False
+   and logs loudly that dedup is off for the process. A 90 MB download failing must not
+   take ingestion down, and D04's offline path has no model at all.
+5. **No pgvector, no embedding column.** Candidates are re-embedded at comparison time.
+   That is affordable *because* the three cheap gates run first — a typical run compares
+   one summary against zero to three. At a thousand flags an hour a vector column would
+   be right; at twelve a run it would be a schema dependency bought for nothing.
+6. **The marker replaced the native pin rather than being added to it.** `pinColor`
+   carries exactly one variable and D04 spent it on severity. `tracksViewChanges={false}`
+   is mandatory with a custom marker view — without it every pan re-rasterises ~60
+   bitmaps — and the `key` carries the fields that change the drawing, so React
+   replaces markers instead of mutating snapshotted ones.
+7. **The scripted promotion goes through the real merge function.** `promote-demo`
+   builds a `DuplicateMatch` by hand (we are asserting the source belongs to a chosen
+   flag, not asking whether two articles match) and then calls
+   `rumour_guard.merge_into()`. Nothing in it writes `status='confirmed'`, and an
+   invariant test asserts only `rumour_guard.py` may.
+8. **The synthetic source is labelled, visibly.** `demo_second_source` at
+   `meridian.invalid`. A synthetic corroboration must be distinguishable from a real
+   outlet without anyone having to remember that it is synthetic. `--reset` removes only
+   that id and recomputes from what is left, so it cannot strip real provenance — and it
+   demotes *conditionally*, so a flag that gained a genuine second publisher keeps it.
+
+### Measurements
+
+**The threshold was measured, and the plan's declared value was wrong.**
+`scripts/eval_dedup.py`, 18 labelled duplicate pairs and 6 hard negatives:
+
+| threshold | duplicates merged | recall | false merges |
+|---|---|---|---|
+| 0.70 | 13 / 18 | 0.72 | **2** |
+| **0.72** | **10 / 18** | **0.56** | **0** |
+| 0.82 *(planned)* | **1 / 18** | **0.06** | 0 |
+
+At §9's declared **0.82 the guard merges essentially nothing** — D05 would have shipped
+as a no-op that looked implemented, and no test would have said so.
+
+**The classes are not separable.** Lowest true duplicate **0.503**, highest false pair
+**0.718** — and the second account of the real Mohakhali fire scores **0.718**, the same
+as the worst false pair. "Two reports of one fire in Bangshal" and "two fires in Bangshal
+hours apart" read identically in one line. 0.72 clears the worst negative by **0.002**,
+which is a coincidence rather than a margin.
+
+**Accumulation helps both directions.** The guard compares against *every* summary
+already on the flag. A third account of the Mohakhali fire scores **0.736** against the
+accumulated pair (merges); a different fire near Mohakhali rail gate scores **0.595**
+against the same text (does not).
+
+**Promotion, end to end:** `status=confirmed`, `source_count=2`,
+`confirmed_at=2026-10-08T16:23:54Z`, `confidence=1.0`, served in the contract shape.
+`--reset` → `unconfirmed`, 1, null, 0.6.
+
+**Gates:** 250 backend tests pass (23 new), 2 pre-existing `test_crime_vision.py`
+failures untouched. `mypy --strict` clean on **83 files**. `tsc` clean, ESLint 0 errors.
+
+### Deliberately NOT done
+
+- **Nothing committed.** Working tree.
+- **The device run.** D05's gate. The walkthrough is written and every step was
+  exercised against the live database and the real model, but §0 is explicit that a
+  walkthrough not run on a phone has not closed a sprint.
+- **The independence check** — same-owner outlets and syndicated copy. `DEMO_PLAN.md`
+  §D05 pre-declared it as the first cut, to Track B. `_SAME_OWNER` is the seam and it is
+  empty: guessing Bangladeshi media ownership from memory would be worse than admitting
+  the gap. **Two outlets owned by one house currently count as two sources.**
+- **`RISK_SURFACE_IMPL` was not flipped** (S15's last bullet). It is already `db` and
+  has been since D01; there was nothing to flip.
+- **No `demo_D05` in `smoke.sh`** — best-effort per §3, and what is worth asserting here
+  needs a live database and the model.
+- **Routing does not consume `confidence` yet.** That is D06's first ten minutes, and it
+  is written into the D05 plan entry and the walkthrough's *Rough edges* so it cannot be
+  missed.
+- **Did not touch D04's `live_replay.json`.** The captured flag is still the weak
+  severity-31 one; re-capturing is a D04 follow-up, not D05 scope.
+
+### Known broken / rough edges
+
+- **Recall ~56%.** Real corroboration is missed about half the time, leaving a duplicate
+  pin and an unconfirmed flag. Accepted in exchange for zero false merges.
+- **The 0.002 margin.** Improving this needs a better signal — embedding the location
+  alongside the summary, or a cross-encoder — not a different number.
+- **The eval clusters are hand-written** in the extraction model's style, because live
+  ingestion has produced one flag so far. Format matches real `summary_en`, so swapping
+  in real data later is a straight substitution.
+- Two `test_crime_vision.py` failures remain, untouched, D07's territory.
+
+### Gotchas for the next agent
+
+- **Re-run `scripts/eval_dedup.py` after touching `DEDUP_MODEL` or what gets embedded.**
+  The threshold is a property of the model *and* the text. A multilingual model, or
+  embedding Bangla headlines instead of English summaries, invalidates 0.72 entirely.
+- **Do not "restore" 0.82 from `DEMO_PLAN.md` §9.** A test fails if you do, and §9 is
+  now corrected with the reasoning.
+- **`severity_now` is not the decision value.** Use
+  `decay.effective_severity(severity_now, confidence)`. This is the single easiest thing
+  in D06 to get wrong, and getting it wrong is invisible — routes just quietly treat
+  rumours as facts.
+- **Only `rumour_guard.py` may write `status='confirmed'`.** An invariant test scans
+  `app/` for the literal. If you need to confirm a flag, go through `merge_into()`.
+- **`tracksViewChanges={false}` on any custom `Marker`.** Without it the map stutters
+  visibly at ~60 pins, and the cause is not obvious from the symptom.
+- **asyncpg leaves a bare parameter's type unresolved.** `:now + interval '30 minutes'`
+  parses as interval arithmetic and fails with *operator does not exist: timestamp with
+  time zone > interval*. Write `cast(:now as timestamptz) + interval '…'`.
+- **The container does not pick up `.env` on `restart`.** After the D04 offline test the
+  api container was still holding `nowhere.invalid` while the file on disk was correct;
+  `migrate.py` could not connect. `docker compose up -d --force-recreate api worker`.
+
+### RESUME HERE
+
+See `CURRENT STATE` at the top of this file.
+
+### Prototype Gate
+
+- [x] 1 · `check.sh` green
+- [x] 2 · Migration written and applied; `seed.sh` unaffected
+- [x] 3 · **App builds and launches — D05.md's 11 steps all passed on a real device**, first
+      run, no issues found
+- [x] 4 · `smoke.sh` unchanged and passing; no `demo_D05` (relaxed, §3)
+- [x] 5 · This entry + `CURRENT STATE` overwritten
+- [x] 6 · New settings documented in `config.py` and plan §9
+- [x] 7 · Nothing half-migrated — contract, both surfaces and the TS mirror moved together
 
 ---
 

@@ -1,0 +1,107 @@
+{
+  "_README": "Labelled duplicate clusters for Rumour Guard (D05, source S15: 'Gets its own labelled test set of known-duplicate clusters'). Scored by backend/scripts/eval_dedup.py, which sweeps the similarity threshold and reports precision/recall so DEDUP_SIMILARITY_THRESHOLD is chosen from evidence rather than taste. HONEST LIMIT: these summaries are hand-written in the style the extraction model produces (short, English, one event per line) rather than captured from real runs, because live ingestion has produced one flag so far. Replace them with real extracted_incidents.summary_en values as the corpus grows -- that is strictly better and the format is identical.",
+  "notes_on_construction": "Each cluster is one real-world event as several outlets would describe it. `hard_negatives` are the pairs that actually reach the embedding test: same kind, same neighbourhood, same 6-hour window, different event. Pairs that differ in kind or sit kilometres apart are excluded by the SQL gates before any embedding happens, so scoring them here would flatter the threshold.",
+  "clusters": [
+    {
+      "event": "bus fire at Mohakhali terminal",
+      "kind": "fire",
+      "members": [
+        "An AC bus caught fire at Mohakhali Bus Terminal, causing traffic delays.",
+        "Fire broke out in a bus near Mohakhali terminal; traffic is being diverted.",
+        "A passenger bus burned at the Mohakhali bus stand and the road is congested."
+      ]
+    },
+    {
+      "event": "market fire at Bangshal",
+      "kind": "fire",
+      "members": [
+        "A fire broke out in a market at Bangshal, blocking the road.",
+        "Shops caught fire at Bangshal market and fire service units are on the road.",
+        "Fire at a Bangshal market has closed the surrounding streets to traffic."
+      ]
+    },
+    {
+      "event": "bus-CNG collision at Jatrabari",
+      "kind": "road_accident",
+      "members": [
+        "A bus and a CNG auto-rickshaw collided at Jatrabari, one injured, traffic slow.",
+        "Collision between a bus and an auto-rickshaw at Jatrabari crossing has slowed traffic.",
+        "Road accident involving a bus and a CNG at Jatrabari; one person hurt."
+      ]
+    },
+    {
+      "event": "waterlogging on Mirpur road",
+      "kind": "waterlogging",
+      "members": [
+        "Heavy rain left Mirpur road waterlogged and traffic crawling.",
+        "Waterlogging after heavy rainfall has slowed vehicles on Mirpur road.",
+        "Mirpur road is under water following the night's rain, delaying traffic."
+      ]
+    },
+    {
+      "event": "garment workers' procession at Farmgate",
+      "kind": "procession",
+      "members": [
+        "Garment workers marched at Farmgate, blocking one side of the road.",
+        "A workers' procession at Farmgate has closed a lane to traffic.",
+        "Demonstrating workers gathered at Farmgate and vehicles are being diverted."
+      ]
+    },
+    {
+      "event": "gas line work on Dhanmondi 27",
+      "kind": "utility_outage",
+      "members": [
+        "Gas line work has closed part of Dhanmondi 27 road.",
+        "Utility digging on Dhanmondi 27 has shut one lane to vehicles."
+      ]
+    },
+    {
+      "event": "truck overturned on Gulshan avenue",
+      "kind": "road_accident",
+      "members": [
+        "A truck overturned on Gulshan avenue and traffic is backed up.",
+        "An overturned truck is blocking Gulshan avenue, causing long queues."
+      ]
+    },
+    {
+      "event": "building site collapse at Uttara",
+      "kind": "construction",
+      "members": [
+        "Part of a construction site collapsed at Uttara, closing the adjacent road.",
+        "A building under construction partly fell at Uttara; the road beside it is shut."
+      ]
+    }
+  ],
+  "hard_negatives": [
+    {
+      "why": "two separate fires, same kind, both central Dhaka, hours apart",
+      "a": "A fire broke out in a market at Bangshal, blocking the road.",
+      "b": "A fire broke out at a restaurant kitchen in Bangshal, smoke on the street."
+    },
+    {
+      "why": "two separate accidents at the same crossing in one window",
+      "a": "A bus and a CNG auto-rickshaw collided at Jatrabari, one injured, traffic slow.",
+      "b": "A motorcycle hit a pedestrian at Jatrabari crossing, one person injured."
+    },
+    {
+      "why": "same kind and place, different scale -- a lane closure is not a road closure",
+      "a": "Gas line work has closed part of Dhanmondi 27 road.",
+      "b": "Water line repair has fully closed Dhanmondi 27 road to all vehicles."
+    },
+    {
+      "why": "two fires in the same area on the same day, different premises",
+      "a": "An AC bus caught fire at Mohakhali Bus Terminal, causing traffic delays.",
+      "b": "A warehouse caught fire near Mohakhali rail gate, road partly blocked."
+    },
+    {
+      "why": "two processions, same place, different groups -- still two events",
+      "a": "Garment workers marched at Farmgate, blocking one side of the road.",
+      "b": "Students gathered at Farmgate demanding safer crossings, lane closed."
+    },
+    {
+      "why": "same event type and road, opposite directions, reported separately",
+      "a": "A truck overturned on Gulshan avenue and traffic is backed up.",
+      "b": "A bus broke down on Gulshan avenue, one lane obstructed."
+    }
+  ]
+}

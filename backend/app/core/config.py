@@ -123,6 +123,51 @@ class Settings(BaseSettings):
     # only tell that you are showing the fixture.
     RISK_SURFACE_IMPL: str = "db"
 
+    # Rumour Guard (D05) -- see app/agents/rumour_guard.py for the reasoning.
+    #
+    # DEDUP_SIMILARITY_THRESHOLD is MEASURED, not chosen, and it is NOT plan section
+    # 9's declared 0.82. Run `python scripts/eval_dedup.py` to reproduce:
+    #
+    #   threshold   true duplicates merged   false merges
+    #     0.70            13/18 (0.72)            2
+    #     0.72            10/18 (0.56)            0     <-- here
+    #     0.82             1/18 (0.06)            0
+    #
+    # At the plan's 0.82 the Rumour Guard merges essentially nothing, so D05 would be
+    # a no-op that looked implemented: four outlets would still make four unconfirmed
+    # pins. The declared value was written before anything measured this model on this
+    # text, and 0.82 is simply not where MiniLM puts paraphrases of a one-line summary.
+    #
+    # 0.72 is the highest threshold with ZERO false merges on the labelled set, and
+    # that is the right side to err on: a missed merge costs a duplicate pin, a false
+    # merge puts a `confirmed` badge on an event that did not happen.
+    #
+    # ⚠️ The classes are NOT linearly separable here -- lowest true duplicate 0.503,
+    # highest false pair 0.718 -- so 0.72 clears the worst negative by 0.002. That is
+    # not a margin, it is a coincidence, and it is why `find_duplicate()` declines
+    # rather than guesses whenever any other gate is unsatisfied. Recall is 56% by
+    # choice. Improving this needs a better signal, not a different number: embed the
+    # location alongside the summary, or use a cross-encoder. Re-run the eval after
+    # ANY change to DEDUP_MODEL or to what gets embedded; the number is a property of
+    # the pair, not of the problem.
+    DEDUP_SIMILARITY_THRESHOLD: float = 0.72
+
+    # Independent publishers required before a flag may be `confirmed`. Two is the
+    # concept document's commitment and the database CHECK enforces the same number;
+    # raising it here without changing that constraint is safe, lowering it to 1 is
+    # not -- the insert would be rejected, which is the layering working.
+    MIN_SOURCES_FOR_CONFIRMED: int = 2
+
+    # How far apart in time two accounts of one event may be observed. Outlets follow
+    # each other within hours; a day apart is a different incident at the same corner.
+    DEDUP_WINDOW_HOURS: float = 6.0
+
+    # English-only and ~90 MB, because what gets embedded is the extraction model's
+    # own `summary_en`, not the Bangla headline. Swap for
+    # paraphrase-multilingual-MiniLM-L12-v2 (~470 MB) if Bangla text ever goes
+    # through the comparison; nothing else changes.
+    DEDUP_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+
     # OSRM
     OSRM_BASE_URL: str = "http://localhost:5000"
     
