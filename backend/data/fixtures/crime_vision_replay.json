@@ -1,0 +1,50 @@
+{
+ "ad07fca4781ce93233039ad7922d65310e5d977eb05535b905c6b43062c133e6": {
+  "physical_confrontation": "no",
+  "weapon_visible": "no",
+  "property_damage": "no",
+  "forced_entry": "yes",
+  "unwanted_pursuit": "no",
+  "struggle_over_property": "no",
+  "goods_concealed": "no",
+  "people_count": 1,
+  "scene": "street",
+  "description": "A person in a black hooded jacket is working at the open fuel cap of a car."
+ },
+ "2b191b4ec15fa095b5c44b2eb30bd24405b5077d27e28d0b09c8ba76981b225f": {
+  "physical_confrontation": "no",
+  "weapon_visible": "no",
+  "property_damage": "no",
+  "forced_entry": "no",
+  "unwanted_pursuit": "no",
+  "struggle_over_property": "no",
+  "goods_concealed": "yes",
+  "people_count": 2,
+  "scene": "indoor",
+  "description": "A man places items into a black bag while standing in an aisle of a store."
+ },
+ "d4256ffb2bcda72bea57fa08fa1edff496eda4a77ef7c2ca750f2c3a0e3e560f": {
+  "physical_confrontation": "yes",
+  "weapon_visible": "yes",
+  "property_damage": "no",
+  "forced_entry": "no",
+  "unwanted_pursuit": "no",
+  "struggle_over_property": "no",
+  "goods_concealed": "no",
+  "people_count": 2,
+  "scene": "street",
+  "description": "Two individuals in hooded sweatshirts are in close physical contact outdoors while one holds a knife near the other."
+ },
+ "a83b39d5020b587cba1bd391e00c2dfe17ef12aa372cc4523304cafba2fa2bd8": {
+  "physical_confrontation": "no",
+  "weapon_visible": "no",
+  "property_damage": "no",
+  "forced_entry": "no",
+  "unwanted_pursuit": "no",
+  "struggle_over_property": "yes",
+  "goods_concealed": "no",
+  "people_count": 2,
+  "scene": "street",
+  "description": "Two people are holding onto opposite ends of a bag outside a building."
+ }
+}

@@ -303,7 +303,8 @@ D01–D02 still pass.
       reload was the only escape). Both fixed
 - [x] **Deviation from this plan's own wording, and why:** the first item says *install `anthropic`*.
       This project has no Anthropic key — `ANTHROPIC_API_KEY` is in `.env.example` and absent from
-      `.env`, so §7.1's claim that "the key is already configured" was wrong. The LLM tier runs on the
+      `.env`, so §7.1's then-claim that "the key is already configured" was wrong — one of the two
+      reasons that recommendation was retired on 9 October. The LLM tier runs on the
       free Gemini and Groq endpoints instead, both of which serve the OpenAI Chat Completions wire
       format, so `openai` is the SDK and one client reaches either provider by changing a base URL.
       The invariant is unchanged in substance — one module, one seam, every response validated — and
@@ -629,42 +630,212 @@ safety score and **one sentence of plain English** saying why it is being sugges
 ---
 
 ## D07 — Crime detection from an image, for real
-**Oct 18–19 · source: S06**
+**Oct 18–19 · source: S06 · decided by [ADR 0006](docs/adr/0006-d07-vision-pipeline.md)**
 
-**Showable:** photograph a staged two-person scene in the report flow. Get a **real interaction
-assessment** instead of `pose_analysis: null`, and see the **evidence photo stored** and visible in
-the report detail screen afterwards.
+**Showable:** photograph a staged scene in the report flow. In about three seconds the card says
+**what is visible** — cues, people count, one plain sentence — and **proposes** a category the
+reporter confirms or overrides. The card names **which engine answered**. The photo is **stored** and
+visible in the report detail screen afterwards.
 
-**Gate:** `docs/walkthroughs/D07.md` passes on a device, and the reachability table in the eval
-output shows **6 of 6** crime classes reachable. D01–D06 still pass.
+**Gate:** `docs/walkthroughs/D07.md` passes on a device, and `eval_crime_vision.py` reports the three
+new numbers — **false-accusation rate**, abstention rate, description faithfulness — over **≥30
+images**, committed as the baseline. D01–D06 still pass.
 
-> **Owner decision, against plan §12.** The long plan parks this work as off the critical path. It is
-> here because beat 6 should be real. Note what that means: today **`harassment`, `theft` and
-> `vandalism` are structurally unreachable** — no input can produce them — so demoing the classifier
-> without this sprint fails in the open.
+> **The gate is that the number exists and can be said out loud, not that it clears a bar.** A
+> threshold invented on the 9th is a threshold defended on the 24th. What must be true is that a
+> judge asking *"how often is it wrong about a crime?"* gets a measured figure.
+
+> **§7.1 is resolved — [ADR 0006](docs/adr/0006-d07-vision-pipeline.md), accepted 2026-10-09.** The
+> model reports **cues**; our code maps cues to a candidate category; **the reporter confirms, so the
+> filed category is always human.** Measured that day: Gemini Flash Lite **≈2.0s**; local
+> `qwen3-vl:4b-instruct-q4_K_M` **≈8–9s on a photo it has not seen**, identical cue answers.
 >
-> **Blocked on §7.1 — the reasoning-layer decision must be made by 17 October.**
+> ⚠️ **The local tier's original 2.61s was an Ollama prompt-cache hit** — the same image called
+> repeatedly. Re-measured over six distinct images it is **≈8.2s**, of which **4.8s is
+> vision-encoder prefill that does not shrink when you shrink the image** (tested 1024 / 768 / 512 /
+> 384px — the prompt stays ~1,150 tokens at every size). This does not change the decision; it makes
+> **replay matter more**, because the rehearsed photos are exactly the ones that must not cost nine
+> seconds on stage. See ADR 0006, *Correction*.
+>
+> **Most of this sprint is subtraction.** Defects 29 and 5 close by **deleting** the pose stack, not
+> porting it: 33 landmark coordinates do not describe a crime, and the path has never once executed.
+> Defect 30 closes because a VLM has no fixed vocabulary to be short of.
+>
+> ✅ **First detection evidence, 10 October.** Four staged positives tested: **4 of 4 detected with
+> the correct category, 0 false accusations** on the benign pair. Getting there needed a fix — the
+> original five cues caught only one of the four, and **the models were not at fault.** They
+> described a car fuel cap being forced, goods going into a bag, and two people pulling one bag,
+> all accurately; no cue covered any of them. That is the **same vocabulary gap this sprint was
+> written to close**, reproduced at smaller scale in our own question list. Now seven cues, and
+> only `fraud` is beyond a photograph.
+>
+> ⚠️ Six images is still a small set, and all four positives are **staged stock photos** (watermarked
+> previews — eval use only, not publishable), not real Dhaka street scenes.
 
-- [ ] **Defect 29 — port off `mp.solutions`.** `mediapipe==1.1.0` removed the namespace
-      `pose_detection_service.py` is built on, so the import raises and `pose_service` is left
-      `None`. **Pose analysis has never run**; every response carries `pose_analysis: null` *(S06)*
-- [ ] **Defect 5 — multi-person.** The `PoseLandmarker` port takes `num_poses`, which resolves this
-      at the same time. `analyze_interaction` currently always short-circuits *(S06)*
-- [ ] **Defect 30 — close the vocabulary gap.** The engine scores 21 object signals; YOLOv9c emits
-      COCO's 80 classes and 11 of those signals are not members (`gun`, `blood`, `broken window`,
-      `damaged property`, `graffiti`, `crowbar`, `spray paint`, `money`, `door`, `window`,
-      `building`). **Requires §7.1** *(S06)*
-- [ ] **Defect 13 — persist evidence.** Report photos are analysed and then discarded. D08 needs them
-      as GD attachments, so this is a dependency now, not a nicety *(S06)*
-- [ ] Re-run `scripts/eval_crime_vision.py`, commit a new baseline. **3-of-6 → 6-of-6 is itself a
-      strong Q&A answer** *(S06)*
-- [ ] Grow the eval set enough to make the number meaningful — it holds 2 seed negatives today.
-      30–40 images defends a claim; 60 was the original target *(S06, §9)*
-- [ ] 📱 **Evidence photos surfaced in the report detail screen** *(S07)*
-- [ ] 📱 **The analysis result shown to the reporting user** — what was detected, what it concluded,
-      how confident. The pipeline is the strongest inherited asset in the repo and it is currently
-      invisible to the person using it
-- [ ] 📄 `docs/walkthroughs/D07.md`
+**The seam first — three gaps that each failed silently** *(done)*
+
+- [x] **`replay` spelled `replay:crime_vision_replay.json`.** `chain()` in `app/llm/client.py` drops
+      any entry without a colon with a warning, so a bare `replay` parsed as malformed and **the
+      tier silently would not have existed.** `replay` is now a `PROVIDERS` row with a fixture
+      branch inside `complete()`, so chain-walking stays in one place as ADR 0006 assumes
+- [x] **`Provider.key_prefix` is now `str | None`.** It was a non-optional `str`, and `keys_for()`
+      builds `f"{key_prefix}{feature}_"` — so Ollama, which needs no key, found none and logged *"no
+      key is set — skipping"*. **The local tier would have dropped out and the demo would have
+      quietly run cloud-only.** A keyless provider now yields one sentinel
+- [x] **`complete()` can send an image** — optional `image_data_url` switches the user turn to a
+      parts list, and `complete_with_engine()` returns *which tier answered*. **Verified on both
+      providers:** `response_format: json_schema`, `strict: true` plus an `image_url` part is
+      honoured exactly by Flash Lite *and* Ollama, every run, **no fallback branch needed**. It is
+      the *looser* `json_object` that fails on Ollama — 48 tokens, required fields missing,
+      `scene: "football stadium"` where the enum allows four. **Strict schema is required, not
+      preferred**
+- [x] **`OLLAMA_BASE_URL` is `127.0.0.1` by default and `host.docker.internal` in compose.** A fresh
+      connection per call to `localhost` on Windows cost a flat **2.3s** per request, independent of
+      payload size — IPv6 resolution against an IPv4-bound service. Set in compose's `environment:`
+      rather than `.env`, the same reason Redis is: one value stays correct both inside and outside
+      the container
+- [x] `FEATURE_CRIME` in `KNOWN_FEATURES`, `LLM_CHAIN_CRIME` in `app/core/config.py`, and
+      **`GEMINI_KEY_CRIME_ONE`** on its own account — free quota is per project, and the 2026-10-09
+      probe spent D04's `EXTRACT` quota, which is exactly what the per-feature split exists to
+      prevent. *Named `CRIME`, not ADR 0006's `VISION`, to match the key.* ⚠️ `--force-recreate`,
+      not `restart`: compose reads `.env` at create time
+
+**The pipeline** *(done)*
+
+- [x] `CrimeCues` and the cue prompt — seven cues each `yes` / `no` / `unclear`, plus
+      `people_count`, `scene`, and one sentence capped at 200 characters. **Grouped fine-grained
+      cues, not crime names**: ASK-HINT measures over **20 AUC points** from that choice alone, same
+      model, no training. The cue fields are declared *before* `description` so the model commits to
+      each answer before writing prose that could talk it into a different one
+- [x] **The cue → category mapping, in our code** — `app/vision/mapping.py`. **Only a definite
+      `yes` proposes anything**; `unclear` never does. Three of the eight categories are **not
+      proposable from a photo** and say why: theft (over before the photo exists), fraud (a document,
+      not a scene), robbery (theft plus force — the force is visible, the theft is not, so we propose
+      `assault`, the part that can be seen). Verified across 9 cue combinations
+- [x] Cross-check against the report **text** — agrees / disagrees / silent, English and Bangla.
+      `silent` is its own value because most reports will not mention it, and silence is not
+      disagreement. It never changes the proposal: two independent accounts, and collapsing them
+      would hide the one case worth seeing
+- [x] **Confidence is three bands, not a number.** `strong` means two independent cues agree,
+      `weak` means one. The old card printed figures like `0.73` from weights nobody had validated,
+      and *"what does 73% mean?"* is a fair question with no answer
+- [x] **Defect 30 — `/ai/crime-detection/analyze` rewired.** Dropped `include_pose_analysis`,
+      `include_scene_analysis`, `use_ml_fusion`, `confidence_threshold` and the `model_loaded` 503.
+      Now requires auth (401 without a token) and returns `engine`. `/crime-detection/status` reports
+      which tiers are configured; `/supported-crimes` reports 5 proposable and 3 not, with reasons.
+      **`crime_ai.py`, the unregistered duplicate, is deleted rather than left as a trap**
+- [x] **The replay tier** — `python -m app.agents export-vision-replay` →
+      `data/fixtures/crime_vision_replay.json`, keyed by a content hash of the *prepared* bytes.
+      Stores the **model's own fields only**; the category is re-derived at read time, so changing
+      our rules needs no recapture. Capture runs with the replay tier filtered out of its own chain,
+      or every later capture would re-freeze a stale answer. **Measured: 0.58s with the cloud dead**
+- [x] **`engine: gemini | replay | ollama` on the response**, and stored on the report in
+      `vision_analysis`. D06's loud fallback, D05's *"say what it is"*. ⚠️ **The card's badge
+      shows *live* and *on this device* but is hidden for `replay`** — owner's decision,
+      10 October. Because the badge still appears in the other two cases, its absence on a
+      rehearsed photo reads as live. The stored answers are real model outputs and `engine`
+      is still recorded; it is only off the screen. See ADR 0006, *The replay tier*
+
+**Defect 13 — the evidence photo** *(done)*. There was **no storage write anywhere in this repo**:
+`S3_BUCKET_NAME` / `S3_VIDEO_BUCKET` were settings with no code behind them, and `sos_service.py`
+records a deliberate decision *not* to retain the SOS clip to avoid needing a bucket. D08 needs
+these photos as GD attachments.
+
+- [x] `migrations/versions/20261009120000__report_evidence_photo.sql` — `evidence_photo_path` and
+      `vision_analysis` on `crime_reports`, which had **no image column at all**, plus a partial
+      index for D08's lookup. Applied and verified
+- [x] **Private `report-evidence` bucket**, JPEG only, 10 MB cap. Reads go through
+      `/ai/crime-detection/evidence-url`, which signs for an hour **and checks the path belongs to
+      the caller** — the service-role key bypasses row security, so without that check any logged-in
+      user could sign any path they guessed. Verified: round-trip returns identical bytes, unsigned
+      URL refused, another user's path **403**
+- [x] **The backend uploads, not the app.** `prepare()` resizes to ≤1024px and re-encodes, which is
+      what strips EXIF — including the phone's GPS tags. Those bytes only exist server-side, so an
+      app-side upload would have stored the original *with* the coordinates we deliberately did not
+      ask for
+- [x] **The filed category is stored alongside the proposed one.** The case where the machine was
+      wrong and a human caught it is the one most worth being able to look back at
+- [x] 📱 **Evidence photo on the report detail screen**, with the sentence and the engine *(S07)*
+
+**Subtraction, and the measurement** *(done)*
+
+- [x] **Deleted 2,658 lines across 8 files** — `crime_vision_service.py` (771),
+      `crime_decision_engine.py` (755), `pose_detection_service.py` (390),
+      `scene_classification_service.py` (341), `crime_ai.py` (227), `train_crime_model.py`,
+      `download_models.py`, `test_crime_vision.py`. Plus **491 lines of pose/scene/fusion UI and 51
+      dead styles** from `AddReportScreen.tsx`
+- [x] **Dropped from `requirements/ai.txt`:** `ultralytics`, `torch`, `torchvision`, `mediapipe`,
+      `transformers`, `safetensors`, `onnxruntime`, `opencv-python`, `scipy`, `pandas`. Vision needs
+      nothing beyond `Pillow`, already in `base.txt`. **This is what makes the backend deployable on
+      a free tier at all.** ⚠️ The image keeps them until `docker compose build api`
+- [x] **YOLOv9c dropped entirely, not kept behind a flag** — a decision taken during the sprint,
+      against this plan's earlier wording. The VLM already returns `people_count`, and in
+      measurement both models got it exactly right (2 and 4). Keeping it meant ~700 MB of weights
+      and 2 GB of dependencies for a number we already have, plus a second code path to debug
+- [x] **Reachability table retired from `scripts/eval_crime_vision.py`.** "6 of 6 reachable" is
+      trivially true once a VLM can name any category — a gate that cannot fail is worse than no
+      gate. Replaced with **false-accusation rate** ← *the Q&A number* — plus abstention rate,
+      detection rate, and the descriptions printed for a human to read. Runs with the replay tier
+      **excluded**, so a rehearsed photo can never answer its own exam. Baseline committed;
+      `--compare` exits non-zero on a regression
+- [x] 📱 **Result card rewritten** — the sentence, all seven cues *including the `no`s* (showing only
+      the hits would make an abstention look like a crash), the suggested category with its reason,
+      the engine badge, and confirm / override. Auto-fill only fires when our rules proposed
+      something, and never overwrites a description already typed
+- [x] 📄 [`docs/walkthroughs/D07.md`](docs/walkthroughs/D07.md) — written, with everything verified
+      without a device recorded in it
+
+**Found on the device, 9–10 October, and fixed**
+
+- [x] **The first five cues caught only one of four staged photos — and the models were right.**
+      They described a car fuel cap being forced, goods going into a bag, and two people pulling
+      one bag, all accurately. No cue covered any of them. Widened `forced_entry` past building
+      openings and added `struggle_over_property` and `goods_concealed`; **theft and robbery became
+      proposable at `weak` confidence.** 4 of 4 after the change
+- [x] **The abstention nudge in the prompt was costing the local tier.** *"Use `unclear` whenever
+      you are not sure"* was obeyed literally by the 4B model, which answered `unclear` to all seven
+      cues on three scenes it had just described correctly. Rebalanced so each answer has a job:
+      local 2 of 4 → 3 of 4, cloud unchanged, 0 false accusations either way
+- [x] **A dead network cost ~70s before the offline tier was reached.** The OpenAI SDK retries
+      connection errors twice by default and our chain is already the retry, so one Gemini attempt
+      became three hangs — past the app's 60s limit, so the phone gave up on answers the backend
+      went on to produce correctly. `max_retries=0`, and a per-provider timeout because a cloud call
+      and a laptop GPU want opposite things: **cloud 15s, ollama 120s.** Measured 70s → 15s
+- [x] **`scripts/run.ps1` pinned a stale LAN IP.** It read `$env:HOST_LAN_IP` before detecting, and
+      wrote that same variable itself — and `$env:` persists for the whole PowerShell session, so a
+      second run in the same window reused the first run's address and never looked at the network
+      again. Moving from a router to a phone hotspot then left the app calling an IP that no longer
+      existed while **Metro printed the correct one**, because Metro detects its own. Now detects
+      first, rejects any override naming an address this machine does not hold, and says so
+
+**Still open**
+
+- [ ] ⚠️ **Finish the walkthrough on a device.** Steps 1–8 are done — analysis, the card, storage
+      and the detail screen all ran on a real phone. Steps 9–10, the offline beats, have been
+      exercised but not signed off as a clean run. Per §0 a sprint with no device run has not ended
+- [ ] ⚠️ **The replay tier cannot match a photo that came through the phone.** `expo-image-picker`
+      runs at `quality: 0.8` with `allowsEditing: true`, so every pick is re-encoded and croppable
+      and the content hash never equals the one captured from the file on disk. Replay therefore
+      serves server-side analysis only. **Left as-is deliberately** — the local tier is fast and
+      correct now, so replay is belt-and-braces rather than load-bearing. The fix, if it is ever
+      wanted, is to capture from the real request path instead of from disk
+- [ ] ⚠️ **Grow the eval set to 30–40 images.** Now 6 — 2 benign, 4 staged positives — reading
+      **0% false accusations, 100% detection, 100% correct category**. Real numbers at last, but a
+      small set of watermarked stock photos: eval use only, not publishable. §9.3, and still the gate
+- [ ] ⚠️ **The local tier is weaker than cloud**: 3 of 4 on the same positives, and it misread one
+      outdoor scene as indoor and a bag strap as *"possibly a weapon"*. Fine as the offline
+      fallback; do not describe the two tiers as equivalent on stage
+- [ ] ⚠️ **Run the staged photos through the cloud tier by 17 October.** Gemini's safety filter
+      **cannot be disabled** through the OpenAI-compatible endpoint, so it **may refuse** a staged
+      violent photo. The knife photo has now gone through it without refusal, which is encouraging
+      and not conclusive
+- [ ] ⚠️ **`npx expo start` wants the network for account checks**, so the app will not start once
+      the internet is off. Start Expo *before* killing it, or use `npx expo start --offline`. Worth
+      a `-Offline` switch on `run.ps1` before D10
+- [ ] Re-capture the replay fixture **after the final rehearsal** —
+      `python -m app.agents export-vision-replay`. The four photos in it now are test images, not
+      signed-off demo ones
+- [ ] `docker compose build api` to actually reclaim the dropped gigabytes
 
 ---
 
@@ -749,8 +920,8 @@ sprint that ships a feature.**
 - [ ] **Failure drills:** kill the network, kill Redis, kill the LLM key. The demo should degrade to
       the seeded surface and keep going. Rehearse the sentence you say while it does
 - [ ] Decide and document the police-routing position — §7.2 *(S05)*
-- [ ] Q&A numbers ready: geolocation accuracy (D03), flag precision (D05), vision reachability (D07),
-      time-from-incident-to-alert (D04)
+- [ ] Q&A numbers ready: geolocation accuracy (D03), flag precision (D05), **vision
+      false-accusation rate (D07)**, time-from-incident-to-alert (D04)
 - [ ] **Write down what was cut**, and the honest one-line answer for each. Judges ask; a prepared
       "measured, scheduled, here is the figure" beats improvisation every time
 - [ ] Impact presentation, against concept document §10 success metrics
@@ -853,19 +1024,34 @@ a live security incident, and because deferring it has already cost more than do
 
 # 7. Open decisions
 
-Two, and the first one blocks a demo sprint.
+One left. The first is closed.
 
-**7.1 — The reasoning layer for image analysis. Blocks D07. Needs a decision by 17 October.**
+**7.1 — The reasoning layer for image analysis. ✅ RESOLVED 2026-10-09 —
+[ADR 0006](docs/adr/0006-d07-vision-pipeline.md), accepted.**
 
-`PROGRESS.md` records this as deliberately deferred pending an Arafat–Nakib conversation: local-only,
-local plus Claude vision, or Claude-only. Defect 30 cannot be closed without choosing, because the
-vocabulary gap *is* the decision.
+**Cues, not categories.** A vision-language model reports which fine-grained physical cues are
+visible; **our code** maps cues to a candidate category; **the reporter confirms**, so the filed
+category is always human. Three tiers behind one chain, all measured on 2026-10-09:
+`gemini:gemini-3.5-flash-lite` (**≈2.0s**) → `replay:vision_replay.json` (deterministic, offline) →
+`ollama:qwen3-vl:4b-instruct-q4_K_M` (**≈8–9s** on an unseen photo, offline, no safety filter).
 
-*Recommendation: **local detection plus Claude vision as the reasoning layer.*** YOLOv9c keeps doing
-what it is good at — fast, free, local object and person detection — and its detections plus the
-image go to Claude for the classification judgment. This closes the 11-signal vocabulary gap
-immediately without training anything or swapping detectors, which is the only option that fits
-inside two days. Costs an API call per analysis, and the key is already configured.
+> **The earlier recommendation here was "local detection plus Claude vision". It was wrong on both
+> halves**, and the reasons are worth keeping because they are the argument to a judge.
+>
+> *Claude vision* — **there is no Anthropic key.** The option was never available.
+>
+> *Local detection as the base* — the vocabulary gap is **not closeable by adding a reasoning layer
+> on top.** 11 of the engine's 21 object signals are not COCO classes, so YOLOv9c can never emit
+> them; feeding its detections to any model forwards a vocabulary that is already missing the
+> evidence. The fix was to stop asking a detector to name crimes at all.
+>
+> It also mistook the real limit. **A photo cannot establish a crime** — not intent, not consent, not
+> who started it, not whether it is a film shoot. The inherited design decided anyway and hid it
+> behind arithmetic. Replacing the arithmetic with a better model would have kept the error.
+>
+> And the surprise: a **frozen** VLM is state of the art. ASK-HINT (WACV 2026) trains nothing and
+> beats the best fine-tuned method on UCF-Crime, with **over 20 AUC points** coming from prompt
+> design alone. "Use a VLM and prompt it well" is the frontier, not the shortcut.
 
 **7.2 — Police routing. Decide in D10.**
 
@@ -886,7 +1072,7 @@ Stated now so they are recognised rather than discovered.
 | **Live ingestion is unreliable on the day.** Scrapers break, sites block, networks fail. | Beat 1 depends on D04 working at a specific minute in a specific room. | D02's fixture plus D04's replayable cache. D04's gate requires a successful run **with the network off**. |
 | **The gazetteer and the OSRM graph are long poles.** Manual and slow, neither compressible by an agent. | The concept document names the gazetteer the primary technical risk; the OSRM graph is a multi-gigabyte download plus preprocessing. | Both are §9 background work, started **now**, off the baton, during D01–D02. |
 | **Bangla output is subtly wrong, or renders as boxes.** | Formal legal Bangla is not validatable by eye the night before, and PDF base fonts have no Bengali glyphs. | Native-speaker sign-off is a D08 *gate*. The font is an explicit D08 task. Arrange the reviewer in §9. |
-| **D07 overruns.** Three defects in a stack whose pose path has never executed. | There is no prior run to regress against. | Take §7.1 by the 17th. If D07 slips, cut beat 6 to "report and persist" and drop the classifier claim. |
+| **D07 overruns.** | §7.1 is taken, and most of the sprint is deletion — but **the evidence photo is the first storage write in the codebase** (no bucket, no image column, no precedent), and **neither model has been shown a photo that should flag.** Those are the two unestimated pieces. | Three tiers, so no single failure kills beat 6 (ADR 0006's failure matrix). The eval set is §9.3, started now and off the baton. If D07 slips, cut to **"describe and persist"** — drop the proposed category, keep the description and the stored photo. The honest version is still showable. |
 | **A judge asks about something the demo quietly avoids.** | Honest answers exist for every gap, but only if prepared. | D10's cut list and Q&A numbers. "Measured, scheduled, here is the figure" beats improvisation. |
 
 ---
@@ -902,7 +1088,12 @@ critical path and none can be accelerated by a coding agent later.**
    `osrm-partition` / `osrm-customize` into `osrm-data/`. The compose service is already written and
    waiting for the file. Multi-gigabyte download, long preprocessing, no code, no baton — and D06
    assumes it is done.
-3. **The eval set — D07.** 30–40 images. Currently 2.
+3. **The eval set — D07.** 30–40 images. Currently 2, **and both are benign** — so today's numbers
+   measure abstention and nothing about detection. **This is now the single hardest D07 gate**, and
+   the only thing that will say whether either model recognises a real confrontation. Extract frames
+   from UCF-Crime or SCVD **at full resolution** — the convenient pre-extracted Kaggle frames are
+   64×64 and useless to a VLM — and record the licence: **CC BY-NC-SA is non-commercial**, fine for a
+   hackathon eval set with attribution, not if Meridian ships.
 4. **Line up a native Bangla speaker for D08**, for the 20th or 21st. It is a gate on that sprint and
    it depends on someone else's calendar.
 

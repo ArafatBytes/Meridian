@@ -1,138 +1,102 @@
 {
-  "saved_at": "2026-10-07T01:56:19",
-  "capability": {
-    "coco_classes": 80,
-    "signals_wanted": 21,
-    "signals_reachable": [
-      "backpack",
-      "baseball bat",
-      "bicycle",
-      "car",
-      "cell phone",
-      "handbag",
-      "knife",
-      "laptop",
-      "person",
-      "thrown object"
-    ],
-    "signals_impossible": [
-      "blood",
-      "broken window",
-      "building",
-      "crowbar",
-      "damaged property",
-      "door",
-      "graffiti",
-      "gun",
-      "money",
-      "spray paint",
-      "window"
-    ],
-    "pose_analysis_live": false,
-    "scene_analysis_live": true,
-    "gates": {
-      "assault": {
-        "reachable": true,
-        "reasons": [
-          "pose dead -> requires a visible baseball bat/knife"
-        ]
-      },
-      "robbery": {
-        "reachable": true,
-        "reasons": [
-          "pose dead -> requires a visible knife"
-        ]
-      },
-      "theft": {
-        "reachable": false,
-        "reasons": [
-          "needs a pose action, pose analysis is not running"
-        ]
-      },
-      "burglary": {
-        "reachable": true,
-        "reasons": [
-          "entry signs unreachable -> only detectable at night"
-        ]
-      },
-      "harassment": {
-        "reachable": false,
-        "reasons": [
-          "needs pose interaction, pose analysis is not running"
-        ]
-      },
-      "vandalism": {
-        "reachable": false,
-        "reasons": [
-          "needs damage evidence ['broken window', 'damaged property', 'graffiti'] - none emittable"
-        ]
-      }
-    },
-    "structurally_unreachable_classes": [
-      "harassment",
-      "theft",
-      "vandalism"
-    ]
+ "captured_at": "2026-10-09 18:33:08",
+ "chain": "gemini:gemini-3.5-flash-lite,ollama:qwen3-vl:4b-instruct-q4_K_M",
+ "totals": {
+  "images": 6,
+  "analysed": 6,
+  "errors": 0,
+  "benign_images": 2,
+  "positive_images": 4,
+  "false_accusation_rate": 0.0,
+  "abstention_rate": 1.0,
+  "detection_rate": 1.0,
+  "correct_category_rate": 1.0,
+  "engines": {
+   "gemini": 6
   },
-  "summary": {
-    "n": 2,
-    "accuracy": 1.0,
-    "per_class": {
-      "none": {
-        "support": 2,
-        "tp": 2,
-        "fp": 0,
-        "fn": 0,
-        "precision": 1.0,
-        "recall": 1.0,
-        "f1": 1.0
-      }
-    },
-    "confusion": {
-      "none": {
-        "none": 2
-      }
-    },
-    "failures": {},
-    "mean_seconds": 0.46,
-    "pose_null_rate": 1.0
+  "mean_seconds": 2.09
+ },
+ "rows": [
+  {
+   "image": "seed-bus-pedestrians.jpg",
+   "expected": "none",
+   "proposed": null,
+   "confidence": "none",
+   "cues_fired": [],
+   "people_count": 4,
+   "scene": "street",
+   "description": "Several people stand and walk on a city sidewalk near a parked electric bus.",
+   "engine": "gemini",
+   "seconds": 2.63
   },
-  "records": [
-    {
-      "image": "seed-bus-pedestrians.jpg",
-      "expected": "none",
-      "predicted": null,
-      "correct": true,
-      "confidence": 0.0,
-      "failure": "correct",
-      "objects": [
-        "person",
-        "car"
-      ],
-      "person_count": 0,
-      "poses_detected": 0,
-      "scene_type": "public transport",
-      "scene_confidence": 0.944,
-      "seconds": 0.52,
-      "notes": "SEED. Negative. Several small/distant pedestrians by a bus - tests whether MediaPipe returns any pose for figures that are not frame-filling."
-    },
-    {
-      "image": "seed-two-people-close.jpg",
-      "expected": "none",
-      "predicted": null,
-      "correct": true,
-      "confidence": 0.0,
-      "failure": "correct",
-      "objects": [
-        "person",
-        "tie"
-      ],
-      "person_count": 0,
-      "poses_detected": 0,
-      "scene_type": "public transport",
-      "scene_confidence": 0.577,
-      "seconds": 0.39,
-      "notes": "SEED. Negative. Two people close together, upper body - the exact shape of input the multi-person interaction path was written for, and which defect 5 prevents reaching."
-    }
-  ]
+  {
+   "image": "seed-two-people-close.jpg",
+   "expected": "none",
+   "proposed": null,
+   "confidence": "none",
+   "cues_fired": [],
+   "people_count": 2,
+   "scene": "other",
+   "description": "Two men in suits stand indoors with one pointing and shouting.",
+   "engine": "gemini",
+   "seconds": 2.28
+  },
+  {
+   "image": "staged-vehicle-lock.jpg",
+   "expected": "burglary",
+   "proposed": "burglary",
+   "confidence": "weak",
+   "cues_fired": [
+    "forced_entry"
+   ],
+   "people_count": 1,
+   "scene": "street",
+   "description": "A person in a black hooded jacket is handling the fuel cap of a car.",
+   "engine": "gemini",
+   "seconds": 1.74
+  },
+  {
+   "image": "staged-shop-concealment.jpg",
+   "expected": "theft",
+   "proposed": "theft",
+   "confidence": "weak",
+   "cues_fired": [
+    "goods_concealed"
+   ],
+   "people_count": 2,
+   "scene": "indoor",
+   "description": "A man places items into a black bag while standing in the aisle of a store.",
+   "engine": "gemini",
+   "seconds": 1.91
+  },
+  {
+   "image": "staged-knife-confrontation.jpg",
+   "expected": "assault",
+   "proposed": "assault",
+   "confidence": "strong",
+   "cues_fired": [
+    "physical_confrontation",
+    "weapon_visible"
+   ],
+   "people_count": 2,
+   "scene": "street",
+   "description": "Two individuals are in close physical contact while one holds a knife near the other person.",
+   "engine": "gemini",
+   "seconds": 2.08
+  },
+  {
+   "image": "staged-bag-struggle.jpg",
+   "expected": "robbery",
+   "proposed": "robbery",
+   "confidence": "weak",
+   "cues_fired": [
+    "struggle_over_property"
+   ],
+   "people_count": 2,
+   "scene": "street",
+   "description": "Two people are holding onto the same bag outside a building.",
+   "engine": "gemini",
+   "seconds": 1.89
+  }
+ ]
 }

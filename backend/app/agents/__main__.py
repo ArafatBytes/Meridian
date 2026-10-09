@@ -2,6 +2,7 @@
 python -m app.agents run live_risk            one real run, recorded in agent_runs
 python -m app.agents run live_risk --dry-run  fetch and extract, write nothing
 python -m app.agents export-replay            capture the offline demo's news flags
+python -m app.agents export-vision-replay     D07: capture the rehearsed report photos
 python -m app.agents promote-demo             D05: scripted promotion, for the stage
 python -m app.agents promote-demo --reset     put it back, to rehearse again
 """
@@ -14,10 +15,12 @@ import io
 import logging
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 
 from app.agents.live_risk import export_replay
 from app.agents.promote_demo import promote_one, reset
 from app.agents.registry import agents, run_agent
+from app.vision.replay import export_vision_replay
 from app.core.database import AsyncSessionLocal, engine
 
 
@@ -68,6 +71,20 @@ async def _main(args: argparse.Namespace) -> int:
                 )
             return 0
 
+        if args.command == "export-vision-replay":
+            # No database: the photos are files and the answers go to a fixture.
+            count = await export_vision_replay(
+                Path(args.photo_dir) if args.photo_dir else None
+            )
+            sys.stdout.write(f"captured {count} photo(s) to the vision replay fixture\n")
+            if count:
+                sys.stdout.write(
+                    "Run this AFTER the final rehearsal. It freezes what the models "
+                    "say now, and `engine: replay` is shown on the card so a "
+                    "replayed answer is never passed off as a live one.\n"
+                )
+            return 0 if count else 1
+
         async with AsyncSessionLocal() as db:
             count = await export_replay(db, datetime.now(UTC))
         sys.stdout.write(f"exported {count} live flag(s) to the replay fixture\n")
@@ -87,6 +104,17 @@ def main() -> int:
     run.add_argument("agent", choices=sorted(agents()))
     run.add_argument("--dry-run", action="store_true", help="write nothing, not even agent_runs")
     sub.add_parser("export-replay", help="write the live flags to data/fixtures/live_replay.json")
+    vision = sub.add_parser(
+        "export-vision-replay",
+        help="D07: analyse the staged demo photos for real and freeze the answers, "
+        "so the rehearsed beat is identical with the network off",
+    )
+    vision.add_argument(
+        "photo_dir",
+        nargs="?",
+        default=None,
+        help="directory of staged photos (default: backend/data/demo/vision)",
+    )
     promote = sub.add_parser(
         "promote-demo",
         help="D05: add a labelled synthetic second source to one unconfirmed flag, "

@@ -356,7 +356,33 @@ class Settings(BaseSettings):
     # picks them up — nothing is lost by waiting.
     LLM_CHAIN_EXTRACT: str = "gemini:gemini-3.5-flash-lite"
 
-    
+    # D07: reading cues out of a report photo. Three tiers, and the order is the
+    # decision (ADR 0006):
+    #
+    #   gemini  — ~2s, best phrasing, needs network, and its safety filter
+    #             cannot be disabled through the OpenAI-compatible endpoint, so
+    #             it may refuse a staged violent photo.
+    #   replay  — the rehearsed photos, captured after the final rehearsal. The
+    #             only tier that *guarantees* its answer: Google can change what
+    #             sits behind a model name, and temperature 0 constrains
+    #             sampling, not the model version. Sits above local on purpose.
+    #   ollama  — offline, no filter, ~8-9s on a photo it has not seen (4.8s of
+    #             that is vision-encoder prefill and does not shrink when you
+    #             shrink the image). The only tier that answers a new photo with
+    #             the network down.
+    LLM_CHAIN_CRIME: str = (
+        "gemini:gemini-3.5-flash-lite"
+        ",replay:crime_vision_replay.json"
+        ",ollama:qwen3-vl:4b-instruct-q4_K_M"
+    )
+
+    # Where the local tier lives. 127.0.0.1 rather than localhost is deliberate:
+    # measured 2026-10-09, resolving "localhost" on Windows against an
+    # IPv4-bound Ollama cost a flat 2.3s per call. From inside Docker the host
+    # is host.docker.internal, which is what .env sets.
+    OLLAMA_BASE_URL: str = "http://127.0.0.1:11434/v1"
+
+
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60
     RATE_LIMIT_PER_HOUR: int = 1000

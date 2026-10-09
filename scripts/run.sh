@@ -70,6 +70,12 @@ esac
 # 2. LAN IP
 # -----------------------------------------------------------------------------
 step "Network"
+# HOST_LAN_IP is honoured when you set it, and detection runs otherwise.
+#
+# The PowerShell twin needs extra care here and this does not: `export` lives in
+# this subshell and dies with it, so a second run cannot inherit the first run's
+# address. In PowerShell `$env:` changes persist for the whole session, which
+# made re-running it in the same window pin a stale IP. See run.ps1.
 LAN_IP="${HOST_LAN_IP:-}"
 if [ -z "$LAN_IP" ]; then
   if [ "$(uname)" = "Darwin" ]; then
@@ -84,6 +90,10 @@ if [ -z "$LAN_IP" ]; then
   LAN_IP=127.0.0.1
 else
   ok "LAN IP: $LAN_IP"
+  # EXPO_PUBLIC_* values are inlined into the bundle at build time, so a cached
+  # Metro bundle keeps calling the previous address however many times you
+  # restart or rescan the QR. Switching networks needs the cache cleared.
+  printf '        if you changed networks since the last run: cd frontend && npx expo start -c\n'
 fi
 export HOST_LAN_IP="$LAN_IP"
 export EXPO_PUBLIC_API_BASE_URL="http://${LAN_IP}:8000/api/v1"

@@ -1,33 +1,44 @@
 # =============================================================================
-# ai — the vision stack
+# ai — speech, and the little that vision still needs
 # =============================================================================
-# Object detection, pose, scene classification and speech. Several gigabytes, and
-# the slowest part of any environment build, which is exactly why it is its own
-# file: a machine that only runs the API or the tests does not need it.
+# This file used to carry several gigabytes of vision stack. D07 deleted it.
 #
 #   pip install -r requirements/base.txt -r requirements/ai.txt
 #
-# D07 is the sprint that rewrites what sits on top of these. Note the mediapipe
-# situation before pinning anything here (defect 29): the version installed
-# removed the `mp.solutions` namespace that pose_detection_service.py is built on,
-# so the import raises and pose analysis has never run.
+# What went, and why (ADR 0006):
+#
+#   ultralytics / torch / torchvision  YOLOv9c detected COCO's 80 classes, and
+#       11 of the 21 object signals the old decision engine scored against were
+#       not among them -- so `harassment`, `theft` and `vandalism` could never
+#       be produced by any photograph. A vocabulary gap is not closeable by
+#       adding signals. The vision-language model has no fixed vocabulary, and
+#       it returns people_count too, which was the last thing YOLO was for.
+#
+#   mediapipe       The pose path never executed once: the installed version
+#       removed the `mp.solutions` namespace it was built on, so the import
+#       raised and every response carried `pose_analysis: null` (defects 29, 5).
+#       Porting it was the plan until the obvious question -- 33 landmark
+#       coordinates do not describe a crime.
+#
+#   transformers / safetensors   A ~600 MB CLIP scene classifier, replaced by
+#       one field of the model's answer.
+#
+#   onnxruntime / scipy / opencv-python / pandas   Only ever here to serve the
+#       above, or the eval harness that scored it.
+#
+# Dropping them is what makes the backend deployable on a free tier at all:
+# the image no longer carries a multi-gigabyte ML runtime for a feature that is
+# now one HTTPS call, or one call to Ollama on the same machine.
+#
+# Vision needs nothing here. `Pillow` resizes and strips EXIF and is in
+# base.txt; the models are reached over the OpenAI wire format through
+# app/llm/client.py.
 # =============================================================================
 
-ultralytics>=8.3.0  # 8.1.x breaks on torch>=2.6: torch.load now defaults to
-                    # weights_only=True and the YOLO checkpoint carries pickled
-                    # ultralytics objects -> 'Weights only load failed'
-torch
-torchvision
-numpy
-onnxruntime
-mediapipe           # D07: the PoseLandmarker port, defects 29 and 5
-opencv-python
-scipy
-transformers        # CLIP, for scene classification
-safetensors         # required by transformers
-pandas              # scripts/train_crime_model.py and the eval harness
-
 # ---- speech ------------------------------------------------------------------
+# Not D07's. The hot-word path is still a stub -- voice.py returns an empty
+# transcript, so no hot word can ever match -- and these are what a real
+# implementation would use.
 google-cloud-speech
 google-cloud-storage
 pydub               # NOTE: its import in speech_service.py is commented out, so

@@ -2,13 +2,24 @@
 AI and NLP API Endpoints
 Speech-to-Text, Crime Detection, and other AI services
 """
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form, status
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form, status, Depends
 from fastapi.responses import JSONResponse
 from typing import Optional
 import logging
 
+from PIL import UnidentifiedImageError
+
+from app.core.security import get_current_user
+from app.llm.client import FEATURE_CRIME, LLMUnavailable, chain, keys_for
 from app.services.ai.speech_service import speech_service
-from app.services.ai.crime_vision_service import get_crime_vision_service
+from app.vision.analyze import analyze_photo
+from app.vision.mapping import (
+    CUE_FIELDS,
+    PROPOSABLE_FROM_PHOTO,
+    UNREACHABLE_FROM_PHOTO,
+)
+from app.vision.replay import FIXTURE_PATH as REPLAY_FIXTURE
+from app.vision.storage import signed_url, store_evidence
 
 logger = logging.getLogger(__name__)
 
@@ -176,259 +187,236 @@ async def ai_service_health():
 
 @router.post("/crime-detection/analyze", response_model=dict)
 async def analyze_crime_image(
-    file: UploadFile = File(..., description="Crime scene image to analyze"),
-    confidence_threshold: float = 0.25,
-    include_pose_analysis: bool = True,
-    include_scene_analysis: bool = True,
-    use_ml_fusion: bool = True
+    file: UploadFile = File(..., description="Report photo to analyse"),
+    report_text: Optional[str] = Form(
+        default=None,
+        description="What the reporter wrote, for the corroboration cross-check.",
+    ),
+    current_user: dict = Depends(get_current_user),
 ):
     """
-    Analyze an image for crime detection using AI (Multi-Phase System).
-    
-    **Phase 1: Object Detection**
-    - YOLOv9 for detecting persons, weapons, vehicles, etc.
-    - Rule-based crime classification
-    
-    **Phase 2: Pose & Action Analysis**
-    - MediaPipe pose estimation
-    - Action recognition (punching, kicking, running, etc.)
-    - Threat level assessment
-    - Multi-person interaction analysis
-    
-    **Phase 3: Scene Classification**
-    - CLIP-based scene understanding
-    - Environmental context (lighting, crowd, location type)
-    - Risk level assessment
-    
-    **Phase 4: ML Fusion Engine (NEW!)**
-    - Intelligent multi-signal integration
-    - Weighted decision fusion
-    - Confidence calibration
-    - Cross-validation rules
-    
-    **Supported Crime Types:**
-    - Assault (weapons, fighting)
-    - Robbery (armed theft)
-    - Theft (stolen items, pickpocketing)
-    - Burglary (break-in)
-    - Harassment (threatening behavior)
-    - Vandalism (property damage)
-    
-    **Parameters:**
-    - file: Image file (JPEG, PNG, etc.)
-    - confidence_threshold: Detection confidence (0.0-1.0, default 0.25)
-    - include_pose_analysis: Enable Phase 2 pose detection (default True)
-    - include_scene_analysis: Enable Phase 3 scene classification (default True)
-    - use_ml_fusion: Enable Phase 4 ML fusion engine (default True)
-    
-    **Returns:**
-    - crime_type: Detected crime category
-    - confidence: Classification confidence (0-1)
-    - title: Auto-generated report title
-    - description: Auto-generated report description
-    - details: Object detection details
-    - pose_analysis: Pose and action data (Phase 2)
-    - scene_analysis: Environmental context (Phase 3)
-    - decision_engine: Engine used ("ml_fusion_v1" or "rule_based")
-    - fusion_signals: Signal breakdown (Phase 4)
-    - processing_time: Analysis duration in seconds
-    - model_version: AI models used
-    
-    **Example:**
-    ```python
-    files = {'file': open('crime_scene.jpg', 'rb')}
-    response = requests.post(
-        'http://localhost:8000/api/v1/ai/crime-detection/analyze',
-        files=files,
-        params={
-            'confidence_threshold': 0.3,
-            'include_pose_analysis': True,
-            'include_scene_analysis': True,
-            'use_ml_fusion': True
-        }
-    )
-    ```
+    Read the visible cues out of a report photo. D07, ADR 0006.
+
+    **The model does not name a crime, and this endpoint does not file one.** It
+    answers five questions about what is physically visible; our own code
+    (`app/vision/mapping.py`) turns those into at most a *candidate* category;
+    the reporter confirms or overrides it. The category that gets filed is
+    always a human's.
+
+    `engine` says which tier answered -- `gemini`, `replay` or `ollama`. It is
+    returned so the screen can show it: a cached or locally-computed answer is
+    labelled rather than passed off as a live cloud call.
+
+    `proposed_category` is `null` whenever no cue came back a definite `yes`,
+    which is the normal result for a benign photo. `unreachable_from_photo`
+    lists the categories a photograph cannot establish at all.
+
+    The old `include_pose_analysis`, `include_scene_analysis`, `use_ml_fusion`
+    and `confidence_threshold` parameters are gone. The pose path never once
+    executed, the scene classifier is replaced by one field of the model's
+    answer, and the fusion weights produced numbers nobody had validated.
     """
-    logger.info(f"🔍 Crime detection request: {file.filename}")
-    
-    # Validate file type
-    if not file.content_type or not file.content_type.startswith('image/'):
+    if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid file type: {file.content_type}. Please upload an image."
+            detail=f"Invalid file type: {file.content_type}. Please upload an image.",
         )
-    
-    # Validate confidence threshold
-    if not 0.0 <= confidence_threshold <= 1.0:
+
+    image_data = await file.read()
+    if not image_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="confidence_threshold must be between 0.0 and 1.0"
+            detail="Empty file received",
         )
-    
+
     try:
-        # Get crime vision service
-        service = get_crime_vision_service()
-        
-        if not service.model_loaded:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="AI models not loaded. Run 'python scripts/download_models.py' first, or contact administrator."
-            )
-        
-        # Read image data
-        image_data = await file.read()
-        
-        if len(image_data) == 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Empty file received"
-            )
-        
-        # Analyze image
-        result = await service.analyze_crime_image(
-            image_data=image_data,
-            confidence_threshold=confidence_threshold,
-            include_pose_analysis=include_pose_analysis,
-            include_scene_analysis=include_scene_analysis,
-            use_ml_fusion=use_ml_fusion
-        )
-        
-        # Log result
-        if result["success"]:
-            logger.info(
-                f"✅ Detection successful: {result['crime_type']} "
-                f"({result['confidence']:.1%}) in {result['processing_time']:.2f}s"
-            )
-        else:
-            logger.warning(f"⚠️  Detection unsuccessful: {result.get('message')}")
-        
-        return JSONResponse(
-            status_code=200 if result["success"] else 400,
-            content={
-                "success": result["success"],
-                "data": result if result["success"] else {
-                    # Include detected_objects and analysis data even when no crime detected
-                    "detected_objects": result.get("detected_objects", []),
-                    "pose_analysis": result.get("pose_analysis"),
-                    "scene_analysis": result.get("scene_analysis"),
-                    "processing_time": result.get("processing_time"),
-                },
-                "message": result.get("message", "Crime analysis completed" if result["success"] else "Analysis failed")
-            }
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Error analyzing crime image: {str(e)}", exc_info=True)
+        result = await analyze_photo(image_data, report_text=report_text)
+    except UnidentifiedImageError:
+        # Claimed to be an image and is not. A 400, not a 500: the caller sent it.
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error analyzing image: {str(e)}"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="That file could not be read as an image.",
         )
+    except LLMUnavailable as exhausted:
+        # Every tier is gone. Say so plainly rather than inventing a result --
+        # the photo is still evidence and the caller stores it either way.
+        logger.warning("crime vision unavailable: %s", exhausted)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": False,
+                "data": {"engine": "none", "proposed_category": None},
+                "message": (
+                    "Could not analyse this photo right now. It will still be "
+                    "attached to your report."
+                ),
+            },
+        )
+
+    # Store the EXIF-stripped bytes, not the upload. A failure here is logged and
+    # returns None: the analysis still goes back and the report is still filable.
+    photo_path = await store_evidence(
+        current_user["user_id"], result.prepared_jpeg, result.image_sha256
+    )
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": {
+                "evidence_photo_path": photo_path,
+                "engine": result.engine,
+                "elapsed_seconds": result.elapsed_seconds,
+                "image_sha256": result.image_sha256,
+                "description": result.cues.description,
+                "people_count": result.cues.people_count,
+                "scene": result.cues.scene,
+                "cues": result.cues.model_dump(
+                    exclude={"description", "people_count", "scene"}
+                ),
+                "cues_fired": list(result.cues_fired),
+                "proposed_category": result.proposed_category,
+                "confidence": result.confidence,
+                "reason": result.reason,
+                "agreement": result.agreement,
+                "unreachable_from_photo": list(UNREACHABLE_FROM_PHOTO),
+            },
+            "message": (
+                f"Analysed by {result.engine} in {result.elapsed_seconds}s."
+                if result.proposed_category
+                else f"Nothing specific found. Analysed by {result.engine}."
+            ),
+        },
+    )
+
+
+@router.get("/crime-detection/evidence-url", response_model=dict)
+async def evidence_photo_url(
+    path: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    A short-lived URL for one stored evidence photo. D07.
+
+    The bucket is private, so there is no permanent link to hand out. This mints
+    a signed URL valid for an hour.
+
+    **A caller may only sign their own photos.** Object paths begin with the
+    owner's user id, so the check is a prefix comparison -- but it has to be
+    here, because the service-role key the signing call uses bypasses row
+    security entirely. Without this, any logged-in user could sign any path they
+    could guess.
+    """
+    owner_prefix = f"{current_user['user_id']}/"
+    if not path.startswith(owner_prefix):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="That photo belongs to another report.",
+        )
+
+    url = await signed_url(path)
+    if url is None:
+        # Deleted from the bucket, or storage is unreachable. Either way the
+        # screen shows "photo unavailable", which is the truth.
+        return {
+            "success": False,
+            "data": {"url": None},
+            "message": "That photo is no longer available.",
+        }
+    return {"success": True, "data": {"url": url}, "message": "Signed."}
 
 
 @router.get("/crime-detection/status", response_model=dict)
 async def get_crime_detection_status():
     """
-    Get the status of crime detection AI models.
-    
-    **Returns:**
-    - Model loading status
-    - Model version information
-    - Readiness for inference
+    What the vision chain is configured to use, and which tiers can answer.
+
+    Rewritten in D07. It used to report whether the YOLOv9c weights had loaded;
+    there are no weights now. What matters instead is which tiers of
+    `LLM_CHAIN_CRIME` are actually usable, because a missing key or a stopped
+    Ollama is the failure that would otherwise only show up on stage.
+
+    `configured` is not `reachable`: this does not call anything. A tier listed
+    here can still fail, and the chain falls through when it does.
     """
-    try:
-        service = get_crime_vision_service()
-        
-        if service.model_loaded:
-            return {
-                "success": True,
-                "data": {
-                    "loaded": True,
-                    "model_name": "YOLOv9c",
-                    "model_version": "9.0",
-                    "status": "ready",
-                    "provider": "Ultralytics YOLO",
-                    "phase": "1 - MVP"
-                },
-                "message": "Crime detection models are ready"
-            }
-        else:
-            # Try to load models
-            logger.info("Attempting to load crime detection models...")
-            success = service.load_models()
-            
-            if success:
-                return {
-                    "success": True,
-                    "data": {
-                        "loaded": True,
-                        "model_name": "YOLOv9c",
-                        "status": "ready"
-                    },
-                    "message": "Models loaded successfully"
-                }
-            else:
-                return {
-                    "success": False,
-                    "data": {
-                        "loaded": False,
-                        "model_name": "YOLOv9c",
-                        "status": "failed"
-                    },
-                    "message": "Failed to load models. Run 'python scripts/download_models.py' first."
-                }
-    
-    except Exception as e:
-        logger.error(f"Error checking model status: {str(e)}")
-        return {
-            "success": False,
-            "data": {
-                "loaded": False,
-                "status": "error",
-                "error": str(e)
-            },
-            "message": f"Error checking model status: {str(e)}"
-        }
+    tiers = []
+    for provider, model in chain(FEATURE_CRIME):
+        if provider == "replay":
+            captured = REPLAY_FIXTURE.is_file()
+            tiers.append({
+                "provider": provider,
+                "model": model,
+                "configured": captured,
+                "note": (
+                    "rehearsed photos captured"
+                    if captured
+                    else "no capture yet - run `python -m app.agents export-vision-replay`"
+                ),
+            })
+            continue
+        has_key = bool(keys_for(provider, FEATURE_CRIME))
+        tiers.append({
+            "provider": provider,
+            "model": model,
+            "configured": has_key,
+            "note": (
+                "ready" if has_key
+                else f"no {provider.upper()}_KEY_{FEATURE_CRIME}_* key set"
+            ),
+        })
+
+    usable = [t for t in tiers if t["configured"]]
+    return {
+        "success": bool(usable),
+        "data": {
+            "chain": tiers,
+            "tiers_configured": len(usable),
+            "approach": (
+                "A vision-language model reports which physical cues are visible. "
+                "Our own code maps cues to a candidate category. The reporter "
+                "confirms it, so the filed category is always a human's."
+            ),
+        },
+        "message": (
+            f"{len(usable)} of {len(tiers)} tier(s) configured."
+            if usable
+            else "No tier is configured - photo analysis will be unavailable."
+        ),
+    }
 
 
 @router.get("/crime-detection/supported-crimes", response_model=dict)
 async def get_supported_crime_types():
     """
-    Get list of crime types that can be detected.
-    
-    **Returns:**
-    - List of supported crime types
-    - Severity levels
-    - Required objects for detection
-    """
-    try:
-        service = get_crime_vision_service()
-        
-        supported = []
-        for crime_type, rules in service.CRIME_RULES.items():
-            supported.append({
-                "crime_type": crime_type,
-                "severity": rules["severity"],
-                "required_objects": rules["objects"][:3],  # First 3 objects
-                "min_persons": rules.get("min_persons", 0),
-                "description": f"Detects {crime_type} based on: {', '.join(rules['objects'][:3])}"
-            })
-        
-        return {
-            "success": True,
-            "data": {
-                "supported_crimes": supported,
-                "total": len(supported),
-                "phase": "1 - MVP"
-            },
-            "message": "Supported crime types retrieved successfully"
-        }
-    
-    except Exception as e:
-        logger.error(f"Error getting supported crimes: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error retrieving supported crimes: {str(e)}"
-        )
+    Which categories a photograph can support, and which it cannot.
 
+    It used to be impossible to answer honestly: the old endpoint enumerated
+    object-detection rules whose required objects (`gun`, `blood`, `broken
+    window`) were not in the detector's vocabulary at all, so it advertised
+    categories nothing could ever produce.
+
+    Only `fraud` is beyond a photograph now. Theft and robbery were on that list
+    until 2026-10-10, on the reasoning that a photo cannot show ownership or who
+    took what -- true, but the wrong conclusion. A photo *can* show goods going
+    into a bag, or two people pulling one bag. Those propose at `weak`
+    confidence and the reporter confirms, which is what the whole design is for.
+    """
+    return {
+        "success": True,
+        "data": {
+            "proposable": sorted(PROPOSABLE_FROM_PHOTO),
+            "not_proposable": sorted(UNREACHABLE_FROM_PHOTO),
+            "why_not": {
+                "fraud": "A document or a conversation, not a scene.",
+            },
+            "cues": sorted(CUE_FIELDS),
+            "note": (
+                "A photo cannot establish intent, consent, who started it, or "
+                "whether a scene is staged. Categories are proposed, never filed."
+            ),
+        },
+        "message": (
+            f"{len(PROPOSABLE_FROM_PHOTO)} categories can be proposed from a photo, "
+            f"{len(UNREACHABLE_FROM_PHOTO)} cannot."
+        ),
+    }

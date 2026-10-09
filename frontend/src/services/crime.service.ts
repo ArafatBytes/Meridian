@@ -10,57 +10,70 @@ export interface CrimeReportData {
   longitude: string;
   location_name?: string;
   created_at?: string; // ISO string - manual timestamp
+  /** Object path in the private evidence bucket, from analyzeCrimeImage. D07. */
+  evidence_photo_path?: string | null;
+  /**
+   * What D07 read out of the photo, kept verbatim.
+   *
+   * Stored even when the reporter overrides the suggested category -- that is
+   * the case most worth being able to look back at, because it is the record of
+   * the machine being wrong and a human catching it.
+   */
+  vision_analysis?: Record<string, any> | null;
 }
 
+/** One of `yes` / `no` / `unclear`, per cue. `unclear` is a real answer, not a failure. */
+export type Cue = 'yes' | 'no' | 'unclear';
+
+export interface CrimeCues {
+  physical_confrontation: Cue;
+  weapon_visible: Cue;
+  property_damage: Cue;
+  /** Widened past building openings on 2026-10-10: a vehicle or a lock counts. */
+  forced_entry: Cue;
+  unwanted_pursuit: Cue;
+  /** Two people pulling the same bag. They need not be touching each other. */
+  struggle_over_property: Cue;
+  /** Goods going into a bag or pocket in a shop. */
+  goods_concealed: Cue;
+}
+
+/**
+ * What D07 read out of a report photo. See docs/adr/0006-d07-vision-pipeline.md.
+ *
+ * The model answers the five cues; the backend's own code proposes a category
+ * from them; the reporter confirms it. So `proposed_category` is a suggestion
+ * and nothing more -- it is null whenever no cue came back a definite `yes`,
+ * which is the normal result for a benign photo.
+ *
+ * `confidence` is three bands, not a percentage. The old pipeline printed
+ * figures like 0.73 that came out of weights nobody had validated, and a judge
+ * asking what 73% means deserves an answer.
+ */
 export interface CrimeAnalysisResult {
   success: boolean;
-  crime_type?: string;
-  confidence?: number;
-  title?: string;
+  /** Which tier answered: `gemini` (live), `replay` (rehearsed), `ollama` (offline). Shown on the card. */
+  engine?: 'gemini' | 'replay' | 'ollama' | 'none';
+  elapsed_seconds?: number;
+  /** One plain sentence of what is visibly happening. The part we stand behind. */
   description?: string;
-  severity?: string;
-  details?: {
-    detected_objects: string[];
-    person_count: number;
-    total_detections: number;
-    matched_objects: string[];
-  };
-  pose_analysis?: {
-    poses_detected: number;
-    actions: string[];
-    threat_levels: string[];
-    interaction?: {
-      interaction_type: string;
-      risk_level: string;
-      proximity: string;
-      involving_high_threat?: boolean;
-    };
-  };
-  scene_analysis?: {
-    scene_type: string;
-    scene_confidence: number;
-    lighting_condition: string;
-    lighting_confidence: number;
-    crowd_density: string;
-    crowd_confidence: number;
-    risk_level: string;
-    time_of_day: string;
-    isolation_level: string;
-  };
-  decision_engine?: string; // Phase 4: "ml_fusion_v1" or "rule_based"
-  fusion_signals?: {
-    // Phase 4: Signal breakdown
-    object_score: number;
-    pose_score: number;
-    scene_score: number;
-    weighted_score: number;
-    signals_used: number;
-    weights_applied: {
-      [key: string]: number;
-    };
-  };
-  processing_time?: number;
-  model_version?: string;
+  people_count?: number;
+  scene?: 'street' | 'indoor' | 'vehicle' | 'other';
+  cues?: CrimeCues;
+  /** The cue names that came back `yes`. Empty when the photo shows nothing specific. */
+  cues_fired?: string[];
+  /** A suggestion for the category field. Null means "propose nothing". */
+  proposed_category?: string | null;
+  confidence?: 'strong' | 'weak' | 'none';
+  /** Why that category, in words, e.g. "a weapon is visible and people are in forceful contact". */
+  reason?: string;
+  /** Does what the reporter wrote line up with the photo? `silent` is the common answer. */
+  agreement?: 'agrees' | 'disagrees' | 'silent';
+  /** Categories a photograph cannot establish at all. Only `fraud` now. */
+  unreachable_from_photo?: string[];
+  /** Object path in the private evidence bucket, to save on the report row. */
+  evidence_photo_path?: string | null;
+  image_sha256?: string;
   message?: string;
 }
 
@@ -93,6 +106,8 @@ class CrimeService {
             status: 'pending',
             verified: false,
             created_at: reportData.created_at, // Override Supabase auto timestamp
+            evidence_photo_path: reportData.evidence_photo_path ?? null,
+            vision_analysis: reportData.vision_analysis ?? null,
           },
         ])
         .select()
@@ -162,123 +177,90 @@ class CrimeService {
   }
 
   /**
-   * Analyze crime image using AI to auto-detect crime type and generate report content.
-   * @param imageUri - Local URI of the image to analyze
-   * @param confidenceThreshold - Minimum confidence threshold (0.0-1.0)
-   * @returns Analysis result with crime type, title, description, and confidence
+   * Read the visible cues out of a report photo.
+   *
+   * `reportText` is optional and only feeds the corroboration cross-check --
+   * whether what the reporter wrote lines up with what the photo showed.
+   *
+   * The 60s timeout is sized for the slowest tier, not the fastest: with the
+   * network down the local model takes about 9s on a photo it has not seen,
+   * plus the upload, and a cold model load adds ~5s more on top of that.
    */
   async analyzeCrimeImage(
     imageUri: string,
-    confidenceThreshold: number = 0.25,
+    reportText?: string,
   ): Promise<CrimeAnalysisResult> {
     try {
-      // Create form data
       const formData = new FormData();
 
-      // Extract file name from URI
-      const fileName = imageUri.split('/').pop() || 'crime_image.jpg';
+      const fileName = imageUri.split('/').pop() || 'report_photo.jpg';
       const fileType = fileName.split('.').pop()?.toLowerCase() || 'jpg';
       const mimeType = fileType === 'png' ? 'image/png' : 'image/jpeg';
 
-      // Add image file
       formData.append('file', {
         uri: imageUri,
         name: fileName,
         type: mimeType,
       } as any);
 
-      // Make API request
-      // apiService returns a shaped response; keep 'any' here to avoid strict typing errors
+      if (reportText && reportText.trim()) {
+        formData.append('report_text', reportText.trim());
+      }
+
       const response = await apiService.post<any>(
-        `/ai/crime-detection/analyze?confidence_threshold=${confidenceThreshold}`,
+        '/ai/crime-detection/analyze',
         formData,
         {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          timeout: 30000, // 30 seconds for AI processing
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 60000,
         },
       );
 
-      if (response.success && response.data) {
-        return {
-          success: true,
-          crime_type: response.data.crime_type,
-          confidence: response.data.confidence,
-          title: response.data.title,
-          description: response.data.description,
-          severity: response.data.severity,
-          details: response.data.details,
-          pose_analysis: response.data.pose_analysis, // Phase 2: Include pose data
-          scene_analysis: response.data.scene_analysis, // Phase 3: Include scene data
-          decision_engine: response.data.decision_engine, // Phase 4: Include decision engine
-          fusion_signals: response.data.fusion_signals, // Phase 4: Include fusion signals
-          processing_time: response.data.processing_time,
-          model_version: response.data.model_version,
-        };
-      } else {
-        // No crime detected but returned as 200 response
+      // The endpoint answers 200 either way. `success: false` means every tier
+      // was unavailable -- not "nothing was found", which is a successful
+      // result with proposed_category null.
+      if (!response.success) {
         return {
           success: false,
-          message: response.message || 'Analysis failed',
-          // Include detected_objects and analysis data even when no crime detected
-          details: response.data?.detected_objects
-            ? {
-                detected_objects: response.data.detected_objects,
-                person_count: 0,
-                total_detections: response.data.detected_objects.length,
-                matched_objects: [],
-              }
-            : undefined,
-          pose_analysis: response.data?.pose_analysis,
-          scene_analysis: response.data?.scene_analysis,
-          processing_time: response.data?.processing_time,
+          engine: 'none',
+          proposed_category: null,
+          message: response.message || 'Could not analyse this photo.',
         };
       }
+
+      return { success: true, ...response.data };
     } catch (error: any) {
-      // Extract error message and status code
-      const errorMessage =
-        error.message || // ApiError or general error
-        error.response?.data?.message || // Raw axios error
-        'Failed to analyze image. Please try again.';
-
-      const statusCode = error.statusCode || error.response?.status;
-
-      // Check if this is a 400 "no crime detected" response (not a real error)
-      const isNoCrimeDetected =
-        statusCode === 400 &&
-        (errorMessage.toLowerCase().includes('no crime') ||
-          errorMessage.toLowerCase().includes('crime indicators') ||
-          errorMessage.toLowerCase().includes('validation_failed') ||
-          errorMessage.toLowerCase().includes('no relevant objects') ||
-          errorMessage.toLowerCase() === 'validation failed');
-
-      // Only log actual errors, not "no crime detected" scenarios
-      if (!isNoCrimeDetected) {
-        console.error('Crime image analysis error:', error);
-      } else {
-        console.log('No crime detected in image:', errorMessage);
-      }
-
-      // Extract data from error response (for 400 "no crime detected" scenarios)
-      const errorData = error.response?.data?.data || {};
-
+      const message =
+        error.message ||
+        error.response?.data?.detail ||
+        'Could not analyse this photo. It can still be attached to your report.';
+      console.log('Photo analysis unavailable:', message);
       return {
         success: false,
-        message: errorMessage,
-        // Include detected_objects and analysis data even when no crime detected
-        details: errorData.detected_objects
-          ? {
-              detected_objects: errorData.detected_objects,
-              person_count: 0,
-              total_detections: errorData.detected_objects.length,
-              matched_objects: [],
-            }
-          : undefined,
-        pose_analysis: errorData.pose_analysis,
-        scene_analysis: errorData.scene_analysis,
-        processing_time: errorData.processing_time,
+        engine: 'none',
+        proposed_category: null,
+        message,
       };
+    }
+  }
+
+  /**
+   * A short-lived URL for a stored evidence photo, or null.
+   *
+   * The evidence bucket is private, so there is no permanent link: the backend
+   * signs one per request. Null means the photo is gone or storage is
+   * unreachable, and the screen says "photo unavailable" rather than showing a
+   * broken image.
+   */
+  async getEvidencePhotoUrl(path: string): Promise<string | null> {
+    try {
+      const response = await apiService.get<any>(
+        `/ai/crime-detection/evidence-url?path=${encodeURIComponent(path)}`,
+      );
+      return response?.data?.url ?? null;
+    } catch (error: any) {
+      console.log('Evidence photo unavailable:', error.message);
+      return null;
     }
   }
 
