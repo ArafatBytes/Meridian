@@ -28,6 +28,46 @@ import { DEFAULT_MAP_REGION } from '../../constants';
 import { crimeService, CrimeAnalysisResult } from '../../services';
 import { geoService } from '../../services/geo.service';
 
+/**
+ * Which tier answered, in words a judge can read off the screen.
+ *
+ * Shown for `gemini` and `ollama`, and **not** for `replay` -- the owner's call
+ * on 2026-10-10. D06 labels a fallback route and D05 labels its synthetic
+ * source; this is the one place that rule is not followed, so it is written
+ * down rather than left to be inferred from a missing element.
+ */
+const ENGINE_LABEL: Record<string, string> = {
+  gemini: 'live',
+  replay: 'rehearsed',
+  ollama: 'on this device',
+  none: 'unavailable',
+};
+
+/** The seven cues, in the order the model answers them. */
+const CUE_ORDER: Array<[string, string]> = [
+  ['physical_confrontation', 'Physical confrontation'],
+  ['weapon_visible', 'Weapon visible'],
+  ['property_damage', 'Property damage'],
+  ['forced_entry', 'Forced entry'],
+  ['unwanted_pursuit', 'Unwanted pursuit'],
+  ['struggle_over_property', 'Struggle over property'],
+  ['goods_concealed', 'Goods concealed'],
+];
+
+const CUE_ICON: Record<string, any> = {
+  yes: 'alert-circle',
+  no: 'minus-circle-outline',
+  unclear: 'help-circle-outline',
+};
+
+// `unclear` is amber rather than grey: it is a real answer the model gave, not a
+// missing one, and it is the honest result for most ambiguous photos.
+const CUE_COLOUR: Record<string, string> = {
+  yes: colors.danger,
+  no: colors.textSecondary,
+  unclear: colors.warning,
+};
+
 interface AddReportScreenProps {
   navigation: any;
 }
@@ -353,58 +393,42 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
     setShowAIResults(false);
 
     try {
-      const result = await crimeService.analyzeCrimeImage(imageUri, 0.25);
+      // The description the reporter has typed so far feeds the corroboration
+      // cross-check. Empty is fine and common.
+      const result = await crimeService.analyzeCrimeImage(imageUri, description);
 
-      if (result.success) {
-        setAnalysisResult(result);
-        setShowAIResults(true);
-
-        // Auto-fill form with AI suggestions
-        if (result.crime_type) {
-          setSelectedCategory(result.crime_type);
-        }
-        if (result.title) {
-          setTitle(result.title);
-        }
-        if (result.description) {
-          setDescription(result.description);
-        }
-
+      if (!result.success) {
+        setShowAIResults(false);
         Alert.alert(
-          'AI Analysis Complete! 🤖',
-          `Detected: ${result.crime_type}\nConfidence: ${(result.confidence! * 100).toFixed(1)}%\n\nThe form has been auto-filled. Please review and submit.`,
+          'Could not analyse the photo',
+          (result.message || 'No analysis is available right now.') +
+            '\n\nYour photo will still be attached. Please fill the form in yourself.',
           [{ text: 'OK' }],
         );
-      } else {
-        setShowAIResults(false);
+        return;
+      }
 
-        // Check if it's a "no crime detected" scenario vs actual error
-        const message = result.message || '';
-        const isNoCrime =
-          message.toLowerCase().includes('no crime') ||
-          message.toLowerCase().includes('crime indicators') ||
-          message.toLowerCase().includes('validation_failed') ||
-          message.toLowerCase().includes('no relevant objects') ||
-          message.toLowerCase() === 'validation failed';
+      setAnalysisResult(result);
+      setShowAIResults(true);
 
-        if (isNoCrime) {
-          Alert.alert(
-            'No Crime Detected ✅',
-            'The AI did not detect any crime indicators in this image. This appears to be a normal scene.\n\nIf you still want to report an incident, please fill the form manually.',
-            [{ text: 'OK' }],
-          );
-        } else {
-          Alert.alert(
-            'Analysis Failed',
-            message ||
-              'Could not analyze the image. Please fill the form manually.',
-            [{ text: 'OK' }],
-          );
-        }
+      // Only ever a suggestion, and only when our own rules proposed one. The
+      // category that gets filed is whatever the reporter leaves in the form.
+      if (result.proposed_category) {
+        setSelectedCategory(result.proposed_category);
+      }
+      // The model's sentence is a starting point for the description, never a
+      // replacement for what the reporter already wrote.
+      if (result.description && !description.trim()) {
+        setDescription(result.description);
       }
     } catch (error: any) {
       setShowAIResults(false);
-      Alert.alert('Error', 'Failed to analyze image: ' + error.message);
+      Alert.alert(
+        'Could not analyse the photo',
+        (error.message || 'Something went wrong.') +
+          '\n\nYour photo will still be attached.',
+        [{ text: 'OK' }],
+      );
     } finally {
       setIsAnalyzing(false);
     }
@@ -501,6 +525,27 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
         longitude: selectedLocation.longitude.toString(),
         location_name: locationName || undefined,
         created_at: createdAtString, // Manual timestamp in local time
+        // D07: the photo was uploaded during analysis, so only the path travels
+        // here. Both are null when there was no photo, or when no tier answered.
+        evidence_photo_path: analysisResult?.evidence_photo_path ?? null,
+        vision_analysis: analysisResult?.success
+          ? {
+              engine: analysisResult.engine,
+              description: analysisResult.description,
+              people_count: analysisResult.people_count,
+              scene: analysisResult.scene,
+              cues: analysisResult.cues,
+              cues_fired: analysisResult.cues_fired,
+              proposed_category: analysisResult.proposed_category,
+              confidence: analysisResult.confidence,
+              reason: analysisResult.reason,
+              agreement: analysisResult.agreement,
+              // What the reporter actually chose. The whole point of the review
+              // gate is that this can differ from proposed_category.
+              filed_category: selectedCategory,
+              elapsed_seconds: analysisResult.elapsed_seconds,
+            }
+          : null,
       });
 
       Alert.alert('Success', 'Your report has been submitted successfully', [
@@ -677,482 +722,110 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
           </View>
         </View>
 
-        {/* AI Analysis Results - Separate Section */}
+        {/* What was seen in the photo. D07, ADR 0006. */}
         {showAIResults && analysisResult && (
           <View style={styles.aiResultsContainer}>
             <View style={styles.aiResultsCard}>
+              {/* Which tier answered. A replayed or offline answer is labelled
+                  rather than passed off as a live one -- same rule as D06's
+                  route engine badge and D05's synthetic source. */}
               <View style={styles.aiResultsHeader}>
                 <MaterialCommunityIcons
-                  name="check-circle"
-                  size={24}
-                  color={colors.success}
+                  name="image-search-outline"
+                  size={22}
+                  color={colors.primary}
                 />
-                <Text style={styles.aiResultsTitle}>AI Analysis Complete</Text>
+                <Text style={styles.aiResultsTitle}>What the photo shows</Text>
+                {/* Owner's call, 2026-10-10: no badge when the answer came from
+                    the rehearsal cache. Note what that means — the card still
+                    says "live" and "on this device" in the other two cases, so
+                    on a replayed photo its silence reads as live. `engine` is
+                    still on the API response and still saved into
+                    `vision_analysis` on the report, so the record remains
+                    accurate even though the screen no longer shows it. */}
+                {analysisResult.engine !== 'replay' && (
+                  <View style={styles.engineBadge}>
+                    <Text style={styles.engineBadgeText}>
+                      {ENGINE_LABEL[analysisResult.engine || 'none']}
+                    </Text>
+                  </View>
+                )}
               </View>
 
+              {/* The description is the part we stand behind. */}
+              {!!analysisResult.description && (
+                <Text style={styles.visionDescription}>
+                  {analysisResult.description}
+                </Text>
+              )}
+
               <View style={styles.aiResultRow}>
-                <Text style={styles.aiResultLabel}>Detected Crime:</Text>
+                <Text style={styles.aiResultLabel}>People visible</Text>
                 <Text style={styles.aiResultValue}>
-                  {analysisResult.crime_type?.toUpperCase()}
+                  {analysisResult.people_count ?? 0}
+                  {analysisResult.scene ? '  ·  ' + analysisResult.scene : ''}
                 </Text>
               </View>
 
-              <View style={styles.aiResultRow}>
-                <Text style={styles.aiResultLabel}>Confidence:</Text>
-                <View style={styles.confidenceContainer}>
-                  <View
-                    style={[
-                      styles.confidenceBar,
-                      { width: `${(analysisResult.confidence || 0) * 100}%` },
-                    ]}
-                  />
-                  <Text style={styles.confidenceText}>
-                    {((analysisResult.confidence || 0) * 100).toFixed(1)}%
-                  </Text>
-                </View>
-              </View>
-
-              {analysisResult.details && (
-                <View style={styles.aiResultRow}>
-                  <Text style={styles.aiResultLabel}>Detected Objects:</Text>
-                  <Text style={styles.aiResultValue}>
-                    {analysisResult.details.detected_objects?.join(', ')}
-                  </Text>
+              {/* Every cue, including the ones that came back no. Showing only
+                  the hits would make an abstention look like a failure to run. */}
+              {!!analysisResult.cues && (
+                <View style={styles.cueList}>
+                  {CUE_ORDER.map(([key, label]) => {
+                    const answer = (analysisResult.cues as any)?.[key] || 'unclear';
+                    return (
+                      <View key={key} style={styles.cueRow}>
+                        <MaterialCommunityIcons
+                          name={CUE_ICON[answer]}
+                          size={16}
+                          color={CUE_COLOUR[answer]}
+                        />
+                        <Text style={styles.cueLabel}>{label}</Text>
+                        <Text
+                          style={[styles.cueAnswer, { color: CUE_COLOUR[answer] }]}
+                        >
+                          {answer}
+                        </Text>
+                      </View>
+                    );
+                  })}
                 </View>
               )}
 
-              {/* Phase 2: Pose Analysis Display */}
-              {analysisResult.pose_analysis &&
-                analysisResult.pose_analysis.poses_detected > 0 && (
-                  <View style={styles.poseAnalysisSection}>
-                    <View style={styles.poseAnalysisHeader}>
-                      <MaterialCommunityIcons
-                        name="human-handsup"
-                        size={20}
-                        color={colors.primary}
-                      />
-                      <Text style={styles.poseAnalysisTitle}>
-                        Pose & Action Analysis
-                      </Text>
-                    </View>
-
-                    {/* Person Count */}
-                    <View style={styles.aiResultRow}>
-                      <Text style={styles.aiResultLabel}>
-                        Persons Detected:
-                      </Text>
-                      <Text style={styles.aiResultValue}>
-                        {analysisResult.details?.person_count ||
-                          analysisResult.pose_analysis.poses_detected}
-                      </Text>
-                    </View>
-
-                    {/* Action Badges */}
-                    {analysisResult.pose_analysis.actions &&
-                      analysisResult.pose_analysis.actions.length > 0 && (
-                        <View style={styles.actionsContainer}>
-                          <Text style={styles.aiResultLabel}>
-                            Detected Actions:
-                          </Text>
-                          <View style={styles.actionBadgesContainer}>
-                            {analysisResult.pose_analysis.actions.map(
-                              (action: string, index: number) => {
-                                const actionEmoji =
-                                  {
-                                    punching: '🥊',
-                                    kicking: '🦵',
-                                    hands_raised: '🙌',
-                                    reaching: '👐',
-                                    running: '🏃',
-                                    fallen: '🤕',
-                                    crouching: '🧎',
-                                    standing: '🧍',
-                                  }[action] || '👤';
-
-                                return (
-                                  <View key={index} style={styles.actionBadge}>
-                                    <Text style={styles.actionBadgeText}>
-                                      {actionEmoji} {action.replace('_', ' ')}
-                                    </Text>
-                                  </View>
-                                );
-                              },
-                            )}
-                          </View>
-                        </View>
-                      )}
-
-                    {/* Threat Level Indicators */}
-                    {analysisResult.pose_analysis.threat_levels &&
-                      analysisResult.pose_analysis.threat_levels.length > 0 && (
-                        <View style={styles.threatLevelContainer}>
-                          <Text style={styles.aiResultLabel}>
-                            Threat Assessment:
-                          </Text>
-                          <View style={styles.threatBadgesContainer}>
-                            {(() => {
-                              const threats =
-                                analysisResult.pose_analysis.threat_levels;
-                              const highCount = threats.filter(
-                                (t: string) => t === 'high',
-                              ).length;
-                              const mediumCount = threats.filter(
-                                (t: string) => t === 'medium',
-                              ).length;
-                              const lowCount = threats.filter(
-                                (t: string) => t === 'low',
-                              ).length;
-
-                              return (
-                                <>
-                                  {highCount > 0 && (
-                                    <View
-                                      style={[
-                                        styles.threatBadge,
-                                        styles.threatHigh,
-                                      ]}
-                                    >
-                                      <Text style={styles.threatBadgeText}>
-                                        ⚠️ High Threat ({highCount})
-                                      </Text>
-                                    </View>
-                                  )}
-                                  {mediumCount > 0 && (
-                                    <View
-                                      style={[
-                                        styles.threatBadge,
-                                        styles.threatMedium,
-                                      ]}
-                                    >
-                                      <Text style={styles.threatBadgeText}>
-                                        ⚡ Medium Threat ({mediumCount})
-                                      </Text>
-                                    </View>
-                                  )}
-                                  {lowCount > 0 && (
-                                    <View
-                                      style={[
-                                        styles.threatBadge,
-                                        styles.threatLow,
-                                      ]}
-                                    >
-                                      <Text style={styles.threatBadgeText}>
-                                        ✓ Low Threat ({lowCount})
-                                      </Text>
-                                    </View>
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </View>
-                        </View>
-                      )}
-
-                    {/* Interaction Analysis */}
-                    {analysisResult.pose_analysis.interaction && (
-                      <View style={styles.interactionContainer}>
-                        <Text style={styles.aiResultLabel}>Interaction:</Text>
-                        <View style={styles.interactionBox}>
-                          <View style={styles.interactionRow}>
-                            <Text style={styles.interactionLabel}>Type:</Text>
-                            <Text style={styles.interactionValue}>
-                              {analysisResult.pose_analysis.interaction.interaction_type.replace(
-                                /_/g,
-                                ' ',
-                              )}
-                            </Text>
-                          </View>
-                          <View style={styles.interactionRow}>
-                            <Text style={styles.interactionLabel}>Risk:</Text>
-                            <Text
-                              style={[
-                                styles.interactionValue,
-                                analysisResult.pose_analysis.interaction
-                                  .risk_level === 'high' && styles.riskHigh,
-                                analysisResult.pose_analysis.interaction
-                                  .risk_level === 'medium' && styles.riskMedium,
-                              ]}
-                            >
-                              {analysisResult.pose_analysis.interaction.risk_level.toUpperCase()}
-                            </Text>
-                          </View>
-                          <View style={styles.interactionRow}>
-                            <Text style={styles.interactionLabel}>
-                              Proximity:
-                            </Text>
-                            <Text style={styles.interactionValue}>
-                              {
-                                analysisResult.pose_analysis.interaction
-                                  .proximity
-                              }
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                )}
-
-              {/* Phase 3: Scene Analysis Display */}
-              {analysisResult.scene_analysis && (
-                <View style={styles.sceneAnalysisSection}>
-                  <View style={styles.sceneAnalysisHeader}>
-                    <MaterialCommunityIcons
-                      name="city-variant"
-                      size={20}
-                      color={colors.primary}
-                    />
-                    <Text style={styles.sceneAnalysisTitle}>
-                      Scene & Environment
+              {/* A suggestion, not a verdict. Null is the normal answer. */}
+              {analysisResult.proposed_category ? (
+                <View style={styles.proposalBox}>
+                  <Text style={styles.proposalLabel}>
+                    Suggested category ({analysisResult.confidence})
+                  </Text>
+                  <Text style={styles.proposalValue}>
+                    {analysisResult.proposed_category.toUpperCase()}
+                  </Text>
+                  <Text style={styles.proposalReason}>
+                    Because {analysisResult.reason}.
+                  </Text>
+                  {analysisResult.agreement === 'agrees' && (
+                    <Text style={styles.agreeText}>
+                      Matches what you wrote
                     </Text>
-                  </View>
-
-                  {/* Scene Type */}
-                  <View style={styles.aiResultRow}>
-                    <Text style={styles.aiResultLabel}>Location Type:</Text>
-                    <Text style={styles.aiResultValue}>
-                      🏙️{' '}
-                      {analysisResult.scene_analysis.scene_type
-                        .replace(/_/g, ' ')
-                        .replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                  )}
+                  {analysisResult.agreement === 'disagrees' && (
+                    <Text style={styles.disagreeText}>
+                      Your description mentions something different — worth a
+                      second look
                     </Text>
-                  </View>
-
-                  {/* Lighting Condition */}
-                  <View style={styles.aiResultRow}>
-                    <Text style={styles.aiResultLabel}>Lighting:</Text>
-                    <Text style={styles.aiResultValue}>
-                      💡{' '}
-                      {analysisResult.scene_analysis.lighting_condition
-                        .replace(/_/g, ' ')
-                        .replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                    </Text>
-                  </View>
-
-                  {/* Crowd Density */}
-                  <View style={styles.aiResultRow}>
-                    <Text style={styles.aiResultLabel}>Crowd Density:</Text>
-                    <Text style={styles.aiResultValue}>
-                      👥{' '}
-                      {analysisResult.scene_analysis.crowd_density
-                        .replace(/_/g, ' ')
-                        .replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                    </Text>
-                  </View>
-
-                  {/* Time of Day */}
-                  <View style={styles.aiResultRow}>
-                    <Text style={styles.aiResultLabel}>Time of Day:</Text>
-                    <Text style={styles.aiResultValue}>
-                      🕐{' '}
-                      {analysisResult.scene_analysis.time_of_day
-                        .replace(/_/g, ' ')
-                        .replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                    </Text>
-                  </View>
-
-                  {/* Isolation Level */}
-                  <View style={styles.aiResultRow}>
-                    <Text style={styles.aiResultLabel}>Isolation:</Text>
-                    <Text style={styles.aiResultValue}>
-                      🏝️{' '}
-                      {analysisResult.scene_analysis.isolation_level
-                        .replace(/_/g, ' ')
-                        .replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                    </Text>
-                  </View>
-
-                  {/* Environmental Risk Badge */}
-                  {analysisResult.scene_analysis.risk_level !== 'low' && (
-                    <View style={styles.environmentalRiskContainer}>
-                      <View
-                        style={[
-                          styles.environmentalRiskBadge,
-                          analysisResult.scene_analysis.risk_level === 'high'
-                            ? styles.envRiskHigh
-                            : styles.envRiskMedium,
-                        ]}
-                      >
-                        <Text style={styles.environmentalRiskText}>
-                          ⚠️{' '}
-                          {analysisResult.scene_analysis.risk_level.toUpperCase()}{' '}
-                          RISK ENVIRONMENT
-                        </Text>
-                      </View>
-                    </View>
                   )}
                 </View>
+              ) : (
+                <View style={styles.proposalBox}>
+                  <Text style={styles.proposalLabel}>No category suggested</Text>
+                  <Text style={styles.proposalReason}>
+                    Nothing in this photo points to a specific category. A
+                    photograph cannot show intent or who started something, so
+                    please choose the category yourself.
+                  </Text>
+                </View>
               )}
-
-              {/* Phase 4: ML Fusion Decision Engine Display */}
-              {analysisResult.decision_engine &&
-                analysisResult.fusion_signals && (
-                  <View style={styles.decisionEngineSection}>
-                    <View style={styles.decisionEngineHeader}>
-                      <MaterialCommunityIcons
-                        name="brain"
-                        size={20}
-                        color={colors.primary}
-                      />
-                      <Text style={styles.decisionEngineTitle}>
-                        AI Decision Engine
-                      </Text>
-                      <View style={styles.engineBadge}>
-                        <Text style={styles.engineBadgeText}>
-                          {analysisResult.decision_engine === 'ml_fusion_v1'
-                            ? '⚡ ML Fusion'
-                            : '📋 Rule-Based'}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Signal Scores Breakdown */}
-                    <View style={styles.signalScoresContainer}>
-                      <Text style={styles.signalScoresLabel}>
-                        Multi-Signal Analysis:
-                      </Text>
-
-                      {/* Object Detection Score */}
-                      <View style={styles.scoreRow}>
-                        <View style={styles.scoreLabel}>
-                          <Text style={styles.scoreLabelText}>🎯 Objects</Text>
-                          <Text style={styles.scoreValue}>
-                            {analysisResult.fusion_signals.object_score.toFixed(
-                              1,
-                            )}
-                          </Text>
-                        </View>
-                        <View style={styles.scoreBarContainer}>
-                          <View
-                            style={[
-                              styles.scoreBarFill,
-                              {
-                                width: `${Math.min(analysisResult.fusion_signals.object_score, 100)}%`,
-                                backgroundColor:
-                                  analysisResult.fusion_signals.object_score >
-                                  70
-                                    ? colors.success
-                                    : analysisResult.fusion_signals
-                                          .object_score > 40
-                                      ? colors.warning
-                                      : colors.error,
-                              },
-                            ]}
-                          />
-                        </View>
-                      </View>
-
-                      {/* Pose Analysis Score */}
-                      <View style={styles.scoreRow}>
-                        <View style={styles.scoreLabel}>
-                          <Text style={styles.scoreLabelText}>💪 Actions</Text>
-                          <Text style={styles.scoreValue}>
-                            {analysisResult.fusion_signals.pose_score.toFixed(
-                              1,
-                            )}
-                          </Text>
-                        </View>
-                        <View style={styles.scoreBarContainer}>
-                          <View
-                            style={[
-                              styles.scoreBarFill,
-                              {
-                                width: `${Math.min(analysisResult.fusion_signals.pose_score, 100)}%`,
-                                backgroundColor:
-                                  analysisResult.fusion_signals.pose_score > 70
-                                    ? colors.success
-                                    : analysisResult.fusion_signals.pose_score >
-                                        40
-                                      ? colors.warning
-                                      : colors.error,
-                              },
-                            ]}
-                          />
-                        </View>
-                      </View>
-
-                      {/* Scene Analysis Score */}
-                      <View style={styles.scoreRow}>
-                        <View style={styles.scoreLabel}>
-                          <Text style={styles.scoreLabelText}>🏙️ Scene</Text>
-                          <Text style={styles.scoreValue}>
-                            {analysisResult.fusion_signals.scene_score.toFixed(
-                              1,
-                            )}
-                          </Text>
-                        </View>
-                        <View style={styles.scoreBarContainer}>
-                          <View
-                            style={[
-                              styles.scoreBarFill,
-                              {
-                                width: `${Math.min(analysisResult.fusion_signals.scene_score, 100)}%`,
-                                backgroundColor:
-                                  analysisResult.fusion_signals.scene_score > 70
-                                    ? colors.success
-                                    : analysisResult.fusion_signals
-                                          .scene_score > 40
-                                      ? colors.warning
-                                      : colors.error,
-                              },
-                            ]}
-                          />
-                        </View>
-                      </View>
-
-                      {/* Fusion Score - Main Result */}
-                      <View style={styles.fusionScoreContainer}>
-                        <View style={styles.fusionScoreHeader}>
-                          <Text style={styles.fusionScoreLabel}>
-                            ⚡ Weighted Fusion Score
-                          </Text>
-                          <Text style={styles.fusionScoreValue}>
-                            {analysisResult.fusion_signals.weighted_score.toFixed(
-                              1,
-                            )}
-                          </Text>
-                        </View>
-                        <View style={styles.fusionScoreBarContainer}>
-                          <View
-                            style={[
-                              styles.fusionScoreBarFill,
-                              {
-                                width: `${Math.min(analysisResult.fusion_signals.weighted_score, 100)}%`,
-                                backgroundColor:
-                                  analysisResult.fusion_signals.weighted_score >
-                                  75
-                                    ? '#4CAF50'
-                                    : analysisResult.fusion_signals
-                                          .weighted_score > 50
-                                      ? '#FF9800'
-                                      : '#F44336',
-                              },
-                            ]}
-                          />
-                        </View>
-                      </View>
-                    </View>
-
-                    {/* Signals Used Badge */}
-                    <View style={styles.signalsUsedContainer}>
-                      <MaterialCommunityIcons
-                        name="signal"
-                        size={16}
-                        color={
-                          analysisResult.fusion_signals.signals_used === 3
-                            ? colors.success
-                            : analysisResult.fusion_signals.signals_used === 2
-                              ? colors.warning
-                              : colors.info
-                        }
-                      />
-                      <Text style={styles.signalsUsedText}>
-                        Using {analysisResult.fusion_signals.signals_used}/3 AI
-                        signals for decision
-                      </Text>
-                    </View>
-                  </View>
-                )}
 
               <View style={styles.aiInfoBox}>
                 <Ionicons
@@ -1161,8 +834,8 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                   color={colors.info}
                 />
                 <Text style={styles.aiInfoText}>
-                  Form auto-filled with AI suggestions. Please review and edit
-                  if needed.
+                  You decide what gets filed. This is a suggestion from the
+                  photo — change it freely.
                 </Text>
               </View>
             </View>
@@ -1906,28 +1579,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
-  confidenceContainer: {
-    position: 'relative',
-    height: 24,
-    backgroundColor: colors.border,
-    borderRadius: borderRadius.sm,
-    overflow: 'hidden',
-    justifyContent: 'center',
-  },
-  confidenceBar: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: colors.success,
-  },
-  confidenceText: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.text,
-    textAlign: 'center',
-    zIndex: 1,
-  },
   aiInfoBox: {
     flexDirection: 'row',
     backgroundColor: colors.info + '20',
@@ -1943,180 +1594,19 @@ const styles = StyleSheet.create({
   },
 
   // Phase 2: Pose Analysis Styles
-  poseAnalysisSection: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '40',
-  },
-  poseAnalysisHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-    gap: spacing.xs,
-  },
-  poseAnalysisTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.primary,
-  },
 
   // Action Badges
-  actionsContainer: {
-    marginTop: spacing.sm,
-  },
-  actionBadgesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  actionBadge: {
-    backgroundColor: colors.primary + '15',
-    borderWidth: 1,
-    borderColor: colors.primary + '30',
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs / 2,
-  },
-  actionBadgeText: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    fontWeight: '500',
-  },
 
   // Threat Level Badges
-  threatLevelContainer: {
-    marginTop: spacing.sm,
-  },
-  threatBadgesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  threatBadge: {
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderWidth: 1,
-  },
-  threatHigh: {
-    backgroundColor: '#FEE2E2',
-    borderColor: '#EF4444',
-  },
-  threatMedium: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#F59E0B',
-  },
-  threatLow: {
-    backgroundColor: '#D1FAE5',
-    borderColor: '#10B981',
-  },
-  threatBadgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-  },
 
   // Interaction Analysis
-  interactionContainer: {
-    marginTop: spacing.sm,
-  },
-  interactionBox: {
-    backgroundColor: colors.surface + '80',
-    borderRadius: borderRadius.sm,
-    padding: spacing.sm,
-    marginTop: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border + '30',
-  },
-  interactionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xs / 2,
-  },
-  interactionLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  interactionValue: {
-    fontSize: fontSize.xs,
-    color: colors.text,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  riskHigh: {
-    color: '#EF4444',
-  },
-  riskMedium: {
-    color: '#F59E0B',
-  },
 
   // Phase 3: Scene Analysis Styles
-  sceneAnalysisSection: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '40',
-  },
-  sceneAnalysisHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-    gap: spacing.xs,
-  },
-  sceneAnalysisTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.primary,
-  },
 
   // Environmental Risk Badge
-  environmentalRiskContainer: {
-    marginTop: spacing.sm,
-  },
-  environmentalRiskBadge: {
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  envRiskHigh: {
-    backgroundColor: '#FEE2E2',
-    borderColor: '#EF4444',
-  },
-  envRiskMedium: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#F59E0B',
-  },
-  environmentalRiskText: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-    color: colors.text,
-  },
 
-  // Phase 4: ML Fusion Decision Engine Styles
-  decisionEngineSection: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '40',
-  },
-  decisionEngineHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-    gap: spacing.xs,
-  },
-  decisionEngineTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.primary,
-    flex: 1,
-  },
   engineBadge: {
+    marginLeft: 'auto',
     backgroundColor: colors.primary + '20',
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
@@ -2129,97 +1619,69 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.primary,
   },
-
-  // Signal Scores
-  signalScoresContainer: {
-    marginTop: spacing.sm,
+  // --- D07: the cue card ----------------------------------------------------
+  visionDescription: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    lineHeight: 22,
+    marginBottom: spacing.md,
   },
-  signalScoresLabel: {
+  cueList: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    paddingTop: spacing.sm,
+  },
+  cueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    gap: spacing.sm,
+  },
+  cueLabel: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
+  cueAnswer: {
     fontSize: fontSize.sm,
     fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
   },
-  scoreRow: {
-    marginBottom: spacing.sm,
-  },
-  scoreLabel: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  scoreLabelText: {
-    fontSize: fontSize.sm,
-    fontWeight: '500',
-    color: colors.text,
-  },
-  scoreValue: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  scoreBarContainer: {
-    height: 8,
-    backgroundColor: colors.border,
-    borderRadius: borderRadius.sm,
-    overflow: 'hidden',
-  },
-  scoreBarFill: {
-    height: '100%',
-    borderRadius: borderRadius.sm,
-  },
-
-  // Fusion Score (Main Result)
-  fusionScoreContainer: {
-    marginTop: spacing.md,
-    padding: spacing.sm,
-    backgroundColor: colors.primary + '10',
+  proposalBox: {
+    backgroundColor: colors.borderLight,
     borderRadius: borderRadius.md,
-    borderWidth: 2,
-    borderColor: colors.primary + '30',
+    padding: spacing.md,
+    marginBottom: spacing.md,
   },
-  fusionScoreHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  fusionScoreLabel: {
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  fusionScoreValue: {
-    fontSize: fontSize.lg,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  fusionScoreBarContainer: {
-    height: 12,
-    backgroundColor: colors.border,
-    borderRadius: borderRadius.sm,
-    overflow: 'hidden',
-  },
-  fusionScoreBarFill: {
-    height: '100%',
-    borderRadius: borderRadius.sm,
-  },
-
-  // Signals Used
-  signalsUsedContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.sm,
-    padding: spacing.xs,
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.sm,
-    gap: spacing.xs,
-  },
-  signalsUsedText: {
+  proposalLabel: {
     fontSize: fontSize.xs,
     color: colors.textSecondary,
-    fontStyle: 'italic',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  proposalValue: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: colors.text,
+    marginTop: 2,
+  },
+  proposalReason: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    lineHeight: 19,
+  },
+  agreeText: {
+    fontSize: fontSize.sm,
+    color: colors.success,
+    marginTop: spacing.sm,
+  },
+  disagreeText: {
+    fontSize: fontSize.sm,
+    color: colors.warning,
+    marginTop: spacing.sm,
+    lineHeight: 19,
   },
 });
 

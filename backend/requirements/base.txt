@@ -52,7 +52,8 @@ geopy
 pyproj
 
 # ---- media -------------------------------------------------------------------
-Pillow                     # imported as PIL by every service in app/services/ai/
+Pillow                     # D07: resizes report photos and strips their EXIF
+                           # (including GPS) by re-encoding. app/vision/analyze.py
 
 # ---- storage and notification ------------------------------------------------
 boto3

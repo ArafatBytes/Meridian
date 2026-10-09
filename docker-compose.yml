@@ -41,6 +41,13 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       # DATABASE_URL comes from backend/.env and points at Supabase — reachable
       # from the container as an ordinary outbound connection.
+      #
+      # D07's local vision tier runs as a native Windows process, not a service
+      # here, so it sees the GPU without WSL2 passthrough. Same reason as Redis
+      # above: inside the container 127.0.0.1 is the container, so the default in
+      # config.py would reach nothing. Overriding here rather than in backend/.env
+      # keeps one value correct in both places — host scripts get 127.0.0.1.
+      OLLAMA_BASE_URL: http://host.docker.internal:11434/v1
       PYTHONPATH: /app
     ports:
       - "8000:8000"
@@ -57,9 +64,10 @@ services:
       # Data the services read at import time.
       - ./backend/police_stations.csv:/app/police_stations.csv:ro
       - ./backend/bangladesh_crime_data_full.csv:/app/bangladesh_crime_data_full.csv:ro
-      # Model weights. ~700 MB downloads on the first AI request (YOLOv9c 82 MB,
-      # CLIP ~600 MB); this volume is what stops that happening again on every
-      # restart.
+      # Was ~700 MB of model weights (YOLOv9c 82 MB, CLIP ~600 MB), downloaded
+      # on the first AI request. D07 deleted both: nothing in the image loads
+      # local weights any more. Kept only because HF_HOME/TORCH_HOME still point
+      # here and an unset cache dir would write into the container layer.
       - model_cache:/cache
       - ./backend/logs:/app/logs
       - ./backend/uploads:/app/uploads

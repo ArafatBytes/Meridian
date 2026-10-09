@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -38,6 +39,9 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // D07: the evidence bucket is private, so the photo URL is signed on demand
+  // and expires. Null means there is no photo, or it could not be signed.
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchReportDetails();
@@ -49,6 +53,9 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
       setError(null);
       const data = await crimeService.getReportById(reportId);
       setReport(data);
+      if (data?.evidence_photo_path) {
+        setPhotoUrl(await crimeService.getEvidencePhotoUrl(data.evidence_photo_path));
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load report details');
     } finally {
@@ -252,6 +259,52 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
           </View>
           <Text style={styles.contentText}>{report.description}</Text>
         </View>
+
+        {/* Evidence photo and what D07 read out of it. Only shown when the
+            report actually has one -- most do not. */}
+        {!!report.evidence_photo_path && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <MaterialCommunityIcons
+                name="image-outline"
+                size={24}
+                color={colors.primary}
+              />
+              <Text style={styles.sectionTitle}>Evidence photo</Text>
+            </View>
+
+            {photoUrl ? (
+              <Image
+                source={{ uri: photoUrl }}
+                style={styles.evidenceImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.contentText}>
+                Photo unavailable. It may have been removed.
+              </Text>
+            )}
+
+            {!!report.vision_analysis?.description && (
+              <>
+                <Text style={styles.evidenceCaption}>
+                  {report.vision_analysis.description}
+                </Text>
+                <Text style={styles.evidenceMeta}>
+                  Read by {report.vision_analysis.engine}
+                  {report.vision_analysis.proposed_category
+                    ? `  ·  suggested ${report.vision_analysis.proposed_category}`
+                    : '  ·  no category suggested'}
+                  {report.vision_analysis.filed_category &&
+                  report.vision_analysis.filed_category !==
+                    report.vision_analysis.proposed_category
+                    ? `  ·  reporter filed ${report.vision_analysis.filed_category}`
+                    : ''}
+                </Text>
+              </>
+            )}
+          </View>
+        )}
 
         {/* Date & Time Section */}
         <View style={styles.section}>
@@ -489,6 +542,24 @@ const styles = StyleSheet.create({
   timestampValue: {
     fontSize: fontSize.sm,
     color: colors.textPrimary,
+  },
+  // --- D07: evidence photo -------------------------------------------------
+  evidenceImage: {
+    width: '100%',
+    height: 220,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.borderLight,
+  },
+  evidenceCaption: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    lineHeight: 22,
+    marginTop: spacing.md,
+  },
+  evidenceMeta: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
   },
 });
 

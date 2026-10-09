@@ -69,15 +69,16 @@ map screen with a person waiting at it.
 from __future__ import annotations
 
 import itertools
+import json
 import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, TypeVar
+from typing import Any, Final, TypeVar
 
 import openai
 from openai import AsyncOpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.core.config import settings
 
@@ -100,7 +101,16 @@ class LLMUnavailable(RuntimeError):
 @dataclass(frozen=True, slots=True)
 class Provider:
     base_url: str
-    key_prefix: str
+    # None means "this provider needs no key". Ollama serves the same wire format
+    # on a loopback port with no auth at all, and without this it would look to
+    # `keys_for` like a provider whose keys are missing — so the chain would log
+    # "no key is set", skip it, and the offline tier would silently not exist.
+    key_prefix: str | None
+    # Seconds, overriding the caller's `request_timeout` for this provider only.
+    # A cloud tier and a local one want opposite things: the cloud call should
+    # give up quickly so the chain can move on, while a 4B model on a laptop GPU
+    # legitimately needs far longer than any network call would.
+    timeout: float | None = None
 
 
 PROVIDERS: Final[dict[str, Provider]] = {
@@ -112,7 +122,26 @@ PROVIDERS: Final[dict[str, Provider]] = {
         base_url="https://api.groq.com/openai/v1",
         key_prefix="GROQ_KEY_",
     ),
+    # Same OpenAI wire format, on this machine. Verified 2026-10-09: it accepts an
+    # inline base64 `image_url` part and honours a strict `json_schema` exactly,
+    # which is what `.parse()` sends — so the local tier is a row here and not an
+    # integration. `json_object`, the looser form, does *not* work on it.
+    "ollama": Provider(
+        base_url=settings.OLLAMA_BASE_URL,
+        key_prefix=None,
+        # A photo it has not seen costs ~5-20s here, and a cold model load adds
+        # another ~5s on top. This is a local process, not a network call, so a
+        # long ceiling costs nothing when it is not needed.
+        timeout=120.0,
+    ),
+    # Not HTTP at all: answers come from a fixture captured after the final
+    # rehearsal. It is a chain entry so the demo-day ordering stays declarative in
+    # LLM_CHAIN_CRIME instead of being re-implemented at each call site.
+    "replay": Provider(base_url="", key_prefix=None),
 }
+
+# Providers that are served from a fixture rather than a network call.
+_FIXTURE_PROVIDERS: Final = frozenset({"replay"})
 
 # Errors worth moving to the next key or model. Anything else is a bug in our
 # request and is raised, because silently falling through a schema error would
@@ -160,7 +189,9 @@ _ROTATION: dict[tuple[str, str], itertools.count[int]] = {}
 # typo'd feature fails loudly at the call rather than quietly finding no keys.
 FEATURE_GEO: Final = "GEO"
 FEATURE_EXTRACT: Final = "EXTRACT"
-KNOWN_FEATURES: Final = frozenset({FEATURE_GEO, FEATURE_EXTRACT})
+# D07. Named CRIME, not VISION, to match the key that exists: GEMINI_KEY_CRIME_ONE.
+FEATURE_CRIME: Final = "CRIME"
+KNOWN_FEATURES: Final = frozenset({FEATURE_GEO, FEATURE_EXTRACT, FEATURE_CRIME})
 
 
 def _env_pairs() -> dict[str, str]:
@@ -197,10 +228,15 @@ def keys_for(provider: str, feature: str) -> tuple[str, ...]:
     is the exact coupling this split exists to prevent, and a missing key should be
     a loud "no keys configured" rather than a quota mystery three days later.
     """
+    prefix_name = PROVIDERS[provider].key_prefix
+    if prefix_name is None:
+        # A keyless provider still has to return one "key" so the caller's loop
+        # runs once. The SDK requires the argument; nothing reads the value.
+        return ("no-key-needed",)
     cache_key = (provider, feature)
     if cache_key in _KEY_CACHE:
         return _KEY_CACHE[cache_key]
-    prefix = f"{PROVIDERS[provider].key_prefix}{feature}_".casefold()
+    prefix = f"{prefix_name}{feature}_".casefold()
     found = {
         name: value
         for name, value in _env_pairs().items()
@@ -256,6 +292,55 @@ def _redact(key: str) -> str:
     return f"{key[:4]}…{len(key)}"
 
 
+_FIXTURE_DIR: Final = Path(__file__).resolve().parents[2] / "data" / "fixtures"
+_REPLAY_CACHE: dict[str, dict[str, dict]] = {}
+
+
+def _replay_lookup(
+    fixture_name: str, replay_key: str | None, schema: type[Output]
+) -> Output | None:
+    """
+    One captured answer, or None to fall through to the next tier.
+
+    The fixture holds the **model's own fields only**, keyed by a hash of the
+    image. Our own layer is re-derived from them by the caller, the same split
+    D04 keeps by re-deriving prose through `framing.py` instead of storing it.
+
+    A missing file, a missing key, or a stored entry that no longer fits the
+    schema all mean "not available here" — never an error. The capture is a
+    convenience; the next tier is the answer.
+    """
+    if not replay_key:
+        return None
+    if fixture_name not in _REPLAY_CACHE:
+        path = _FIXTURE_DIR / fixture_name
+        try:
+            _REPLAY_CACHE[fixture_name] = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            logger.info("no replay fixture at %s yet — skipping that tier", path)
+            _REPLAY_CACHE[fixture_name] = {}
+        except (OSError, json.JSONDecodeError) as problem:
+            logger.warning("replay fixture %s unreadable (%s) — skipping", path, problem)
+            _REPLAY_CACHE[fixture_name] = {}
+    entry = _REPLAY_CACHE[fixture_name].get(replay_key)
+    if entry is None:
+        return None
+    try:
+        return schema.model_validate(entry)
+    except ValidationError:
+        # The capture predates a change to the schema. Stale, not fatal.
+        logger.warning(
+            "replay entry %s no longer fits %s — recapture; skipping that tier",
+            replay_key[:12], schema.__name__,
+        )
+        return None
+
+
+def reset_replay_cache() -> None:
+    """Forget loaded fixtures. For tests, and after a fresh capture in a dev run."""
+    _REPLAY_CACHE.clear()
+
+
 async def complete(
     system: str,
     user: str,
@@ -265,9 +350,50 @@ async def complete(
     chain_override: str | None = None,
     request_timeout: float = 20.0,
     max_tokens: int = 512,
+    image_data_url: str | None = None,
+    replay_key: str | None = None,
 ) -> Output:
+    """Just the answer. See `complete_with_engine` for the same call plus which tier gave it."""
+    answer, _engine = await complete_with_engine(
+        system,
+        user,
+        schema,
+        feature=feature,
+        chain_override=chain_override,
+        request_timeout=request_timeout,
+        max_tokens=max_tokens,
+        image_data_url=image_data_url,
+        replay_key=replay_key,
+    )
+    return answer
+
+
+async def complete_with_engine(
+    system: str,
+    user: str,
+    schema: type[Output],
+    *,
+    feature: str,
+    chain_override: str | None = None,
+    request_timeout: float = 20.0,
+    max_tokens: int = 512,
+    image_data_url: str | None = None,
+    replay_key: str | None = None,
+) -> tuple[Output, str]:
     """
-    Ask one feature's chain for a validated `schema` instance.
+    Ask one feature's chain for a validated `schema` instance, and say who answered.
+
+    Returns `(answer, engine)` where `engine` is the provider that produced it —
+    `"gemini"`, `"replay"`, `"ollama"`. D07 shows that on screen: a replayed or
+    locally-computed answer is labelled as one rather than passing for a live
+    cloud call, the same rule D06 follows with `RouteResponse.engine`.
+
+    `image_data_url` attaches one image to the user turn as a `data:` URL. Verified
+    2026-10-09 against Gemini and Ollama: both accept the inline base64 part and
+    honour the strict `json_schema` that `.parse()` sends.
+
+    `replay_key` identifies the photo for the `replay` tier — a content hash. A
+    `replay` entry in the chain with no `replay_key` is skipped.
 
     `feature` is required and has no default on purpose: it selects both the model
     chain and the key pool, and a wrong default would silently spend another
@@ -283,7 +409,22 @@ async def complete(
     measured without editing configuration that other work depends on.
     """
     attempts = 0
+    # One user turn, built once: a plain string without an image, or the parts
+    # list both providers expect with one.
+    user_content: Any = user
+    if image_data_url is not None:
+        user_content = [
+            {"type": "text", "text": user},
+            {"type": "image_url", "image_url": {"url": image_data_url}},
+        ]
+
     for provider, model in chain(feature, chain_override):
+        if provider in _FIXTURE_PROVIDERS:
+            hit = _replay_lookup(model, replay_key, schema)
+            if hit is not None:
+                logger.info("%s served %s from %s", provider, schema.__name__, model)
+                return hit, provider
+            continue
         keys = keys_for(provider, feature)
         if not keys:
             logger.warning(
@@ -297,13 +438,24 @@ async def complete(
         for step in range(len(keys)):
             key = keys[(offset + step) % len(keys)]
             attempts += 1
-            client = AsyncOpenAI(api_key=key, base_url=PROVIDERS[provider].base_url, timeout=request_timeout)
+            client = AsyncOpenAI(
+                api_key=key,
+                base_url=PROVIDERS[provider].base_url,
+                timeout=PROVIDERS[provider].timeout or request_timeout,
+                # The SDK retries connection errors twice by default, and this
+                # loop is already the retry: a dead network made one Gemini
+                # attempt cost three hangs before the chain could reach the
+                # offline tier, turning a 5s local answer into a 70s round trip
+                # that the app had already given up waiting for. Fall through on
+                # the first failure and let the next tier answer.
+                max_retries=0,
+            )
             try:
                 response = await client.chat.completions.parse(
                     model=model,
                     messages=[
                         {"role": "system", "content": system},
-                        {"role": "user", "content": user},
+                        {"role": "user", "content": user_content},
                     ],
                     response_format=schema,
                     max_tokens=max_tokens,
@@ -334,7 +486,7 @@ async def complete(
                 # gave us nothing usable; another may do better.
                 logger.warning("%s:%s returned no parsable content", provider, model)
                 continue
-            return parsed
+            return parsed, provider
 
     raise LLMUnavailable(
         f"no model in LLM_CHAIN_{feature} produced a validated {schema.__name__} "

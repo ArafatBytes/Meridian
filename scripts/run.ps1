@@ -96,20 +96,75 @@ if ($backendEnv -match '(?m)^\s*DATABASE_URL\s*=.*' ) {
 # -----------------------------------------------------------------------------
 Step "Network"
 
-$lanIp = $env:HOST_LAN_IP
-if (-not $lanIp) {
-    $lanIp = (Get-NetIPConfiguration |
-        Where-Object { $_.IPv4DefaultGateway -ne $null -and $_.NetAdapter.Status -eq 'Up' } |
-        Select-Object -First 1).IPv4Address.IPAddress
+# Always look at the network first, whatever a leftover variable says.
+$adapters = @(Get-NetIPConfiguration |
+    Where-Object { $_.IPv4DefaultGateway -ne $null -and $_.NetAdapter.Status -eq 'Up' })
+$detectedIp = ($adapters | Select-Object -First 1).IPv4Address.IPAddress
+
+# Every address this machine currently answers on, used below to reject an
+# override that points somewhere this machine is not.
+$ownIps = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Select-Object -ExpandProperty IPAddress)
+
+if ($adapters.Count -gt 1) {
+    # Common when a hotspot is up alongside ethernet. Say which one was taken,
+    # because picking the wrong one leaves the phone unable to reach the API.
+    Warn "More than one network is up. Using the first; set `$env:HOST_LAN_IP to pick another:"
+    foreach ($a in $adapters) {
+        Say "    $($a.InterfaceAlias) -> $($a.IPv4Address.IPAddress)"
+    }
 }
+
+# HOST_LAN_IP is honoured only when *you* set it.
+#
+# This script writes that same variable below, and `$env:` changes persist for
+# the whole PowerShell session - so reading it back unconditionally meant a
+# second run in the same window reused the first run's address and never looked
+# at the network again. Moving between a router and a phone hotspot then left
+# the app calling an IP that no longer existed, while every part of the restart
+# appeared to succeed. The marker below is how we tell your value from our own.
+$previousIp = $env:HOST_LAN_IP
+$lanIp = $env:HOST_LAN_IP
+if ($lanIp -and $lanIp -eq $env:MERIDIAN_LAN_IP_AUTOSET) {
+    $lanIp = $null
+}
+# An override naming an address this machine does not hold is always stale, not
+# deliberate - a window left open from before the laptop changed networks, or
+# carried over from a version of this script that did not write the marker. The
+# marker check alone cannot catch that case, and the symptom is nasty: Metro
+# picks its own address and prints the right one, while the app is built against
+# the wrong one, so everything looks correct except the phone.
+if ($lanIp -and ($ownIps -notcontains $lanIp)) {
+    Warn "HOST_LAN_IP is $lanIp, which is not an address on this machine - ignoring it."
+    Warn "This usually means the laptop changed networks since that value was set."
+    $lanIp = $null
+}
+$manual = [bool]$lanIp
+if (-not $lanIp) { $lanIp = $detectedIp }
+
 if (-not $lanIp) {
     Warn "Could not detect a LAN IP. Falling back to localhost - a physical phone will NOT be able to connect."
     Warn "Set it manually:  `$env:HOST_LAN_IP = '192.168.x.x'"
     $lanIp = '127.0.0.1'
+} elseif ($manual) {
+    Ok "LAN IP: $lanIp (from HOST_LAN_IP; detected $detectedIp)"
 } else {
     Ok "LAN IP: $lanIp"
 }
+
+# The address moved. This is the moment the app breaks silently, so say so here
+# rather than letting it surface as "Network error" on the phone: EXPO_PUBLIC_*
+# values are inlined into the bundle at build time, and a cached bundle keeps
+# serving the old address however many times you restart or rescan the QR.
+if ($previousIp -and $previousIp -ne $lanIp) {
+    Warn "LAN IP changed: $previousIp -> $lanIp"
+    Warn "Metro has the old address baked into its cache. Start it with -c:"
+    Say  "    cd frontend; npx expo start -c"
+}
+
 $env:HOST_LAN_IP = $lanIp
+# Remembers that the value above is ours, not yours. See the note above.
+$env:MERIDIAN_LAN_IP_AUTOSET = $lanIp
 # Overrides the value in frontend/.env so the app reaches the backend on this
 # machine rather than on whatever IP was hardcoded.
 $env:EXPO_PUBLIC_API_BASE_URL = "http://${lanIp}:8000/api/v1"
