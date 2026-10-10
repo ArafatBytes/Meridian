@@ -908,10 +908,13 @@ drafts and signed off. D01–D07 still pass.
       this reviewer is load-bearing in a way they were not when the plan was written *(S28)*
 - [x] 📄 `docs/walkthroughs/D08.md` — written and **run on a device, 10 Oct**
 - [x] 🔴 **D08 walkthrough run on the device, 10 Oct — all steps passed.** §0 satisfied
-- [ ] 🔴 **The native-speaker gate.** `python scripts/eval_gd_drafts.py --runs 3` writes
-      `data/eval/gd_drafts.md` with three scenarios, three drafts each and a sign-off box. Nine of
-      nine came back clean on 10 Oct — no invented numbers, no repeated form line, 96–100% Bangla,
-      ~1.8s. **Clean is not the same as correct Bangla.** Only the reviewer decides that
+- [x] 🔴 **The native-speaker gate — met 10 Oct.** Nakib (native speaker) read all three scenarios
+      in `backend/data/eval/gd_drafts.md` and signed off: formal enough for a thana, nothing stated
+      that the complainant did not say, no offence or section of law named. The automated checks
+      were also clean (no invented numbers, no repeated form line, 96–100% Bangla, ~1.8s) — but
+      those cannot see bad Bangla, which is why this gate needed a person.
+      **Re-run it if the prompt in `app/casework/draft.py` changes:** the sign-off is on the
+      wording that prompt produces, not on the feature
 - [x] **Dhaka thana coordinates fixed from the police's own site.** `dmp.gov.bd/find-your-local-
       police/` carries a Google Maps embed per station; resolving each embed gives the station's
       marker. **46 of 51 verified, 43 of them from DMP itself**, with `coord_source` recording

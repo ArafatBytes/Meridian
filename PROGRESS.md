@@ -73,7 +73,7 @@ Full write-up, indicators of compromise and the remediation checklist:
 
 | | |
 |---|---|
-| **Last sprint completed** | **D08 — ✅ CLOSED.** [`docs/walkthroughs/D08.md`](docs/walkthroughs/D08.md) passed on a device, every step. D01–D07 all closed |
+| **Last sprint completed** | **D08 — ✅ CLOSED, both gates.** [`docs/walkthroughs/D08.md`](docs/walkthroughs/D08.md) passed on a device, every step, and the native-speaker Bangla review is signed. D01–D07 all closed |
 | **NEXT SPRINT** | **D09 — Tomorrow's map, and the loop closed** (scheduled Oct 22) → [DEMO_PLAN.md](DEMO_PLAN.md) §D09 |
 | **Baton holder** | **free** |
 | **Trunk** | `develop` @ `1bd0ab8` · D08 on `sprint/D08` |
@@ -136,19 +136,19 @@ there is nothing to transmit to. "Routing" means naming the right thana on the d
 
 | Activity | Status |
 |---|---|
-| **Native-speaker Bangla review** | ⏳ **the one D08 gate not met.** `backend/data/eval/gd_drafts.md` is written and waiting for a reader |
+| **Native-speaker Bangla review** | ✅ **met 10 Oct** — Nakib read all three scenarios and signed off. Re-run if `app/casework/draft.py`'s prompt changes |
 | D07 eval set | 6 images; the gate wants 30–40 |
 | D07 replay fixture | re-capture after the final rehearsal |
 
 ### ▶️ RESUME HERE
 
-**Get a native Bangla speaker to read `backend/data/eval/gd_drafts.md` and sign the box at the
-bottom.** It is three scenarios × three drafts. Nine of nine passed the automated checks, and
-those checks cannot tell whether the Bangla is *right* — when `qwen3-vl:4b` was measured on the
-same task it wrote `কাকুরির মর` for Kakrail mor and the same checks called four of six runs
-"clean". Only a person decides this one.
+**D09 — Tomorrow's map, and the loop closed** ([DEMO_PLAN.md](DEMO_PLAN.md) §D09, scheduled Oct 22).
+**D08 is fully closed: both its gates are met.** The walkthrough passed on a device and the
+native-speaker review is signed.
 
-Then **D09** ([DEMO_PLAN.md](DEMO_PLAN.md) §D09).
+One standing obligation it leaves behind: **the Bangla sign-off is on the wording that
+`app/casework/draft.py`'s prompt produces, not on the feature.** If that prompt changes, re-run
+`python scripts/eval_gd_drafts.py --runs 3` and get it read again.
 
 ---
 
@@ -250,12 +250,17 @@ is why the vision tier has never met it. Recorded beside the field in `app/llm/m
   only printing needs the identity block, and the screen says so. Blocking review because someone
   has not typed their father's name helps nobody.
 
-### The gate that is still open
+### Both gates met
 
-**A native Bangla speaker has not read the drafts.** `backend/data/eval/gd_drafts.md` is written
-and waiting. Nine of nine passed the automated checks — and those checks called four of six
-`qwen3-vl:4b` runs "clean" while it was writing `কাকুরির মর`. They cannot see bad Bangla. Only a
-person can.
+The walkthrough passed on a device, and **the native-speaker review is signed** — Nakib read all
+three scenarios in `backend/data/eval/gd_drafts.md` on 10 October: formal enough for a thana,
+nothing stated that the complainant did not say, no offence named.
+
+Worth knowing what that sign-off covers. The automated checks were clean too — and the same checks
+called four of six `qwen3-vl:4b` runs "clean" while it was writing `কাকুরির মর` for Kakrail mor, so
+they cannot see bad Bangla and never could. **The sign-off is on the wording
+`app/casework/draft.py`'s prompt produces, not on the feature.** Change that prompt and the gate
+has to be run again.
 
 ---
 

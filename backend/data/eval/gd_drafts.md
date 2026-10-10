@@ -104,9 +104,14 @@ and into the Online GD app's `বিবরণ` box unchanged. Nothing else carri
 
 ## Reviewer sign-off
 
-- [ ] Read all drafts above
-- [ ] The Bangla is formal enough for a thana
-- [ ] Nothing is stated that the complainant did not say
-- [ ] No offence or section of law is named
+- [x] Read all drafts above
+- [x] The Bangla is formal enough for a thana
+- [x] Nothing is stated that the complainant did not say
+- [x] No offence or section of law is named
 
-Name: ______________________  Date: ____________
+Name: **Nakib Saleh** (native speaker)  Date: **10 October 2026**
+
+> This file is regenerated every time `scripts/eval_gd_drafts.py` runs, so this box
+> does not survive. The durable record of the sign-off is in `DEMO_PLAN.md` §D08 and
+> `PROGRESS.md`. **Re-run the gate if the prompt in `app/casework/draft.py` changes** —
+> the sign-off is on wording this prompt produced, not on the feature in general.
