@@ -376,6 +376,32 @@ class Settings(BaseSettings):
         ",ollama:qwen3-vl:4b-instruct-q4_K_M"
     )
 
+    # D08: writing the General Diary narrative in formal Bangla (ADR 0007).
+    # Chosen by bake-off on 2026-10-10, three scenarios, two rounds:
+    #
+    #   gemini-3.5-flash-lite  12/12 succeeded, 1.84s avg. Correct place names,
+    #                          Bangla numerals, proper formal register.
+    #   gpt-oss-120b            5/12. Fast and its Bangla is serviceable, but it
+    #                          failed Groq's own JSON validation on whole
+    #                          scenarios, and it mangles proper nouns —
+    #                          মজিদহিল for Motijheel, কাখরাইল for Kakrail — and
+    #                          leaves dates and IMEIs in Latin script. A police
+    #                          application with a wrong place name is worse than
+    #                          no document, so it is the fallback and not the
+    #                          primary. A rough draft a human then edits still
+    #                          beats no draft.
+    #
+    # gemini-3.5-flash was measured and rejected: 5/12, 9.6s, repeated 503s, and
+    # reasoning tokens ate the whole budget before it wrote anything.
+    #
+    # No local tier. A 4B model writing formal legal Bangla is a bad bet, and
+    # unlike D07's photo analysis the demo's GD text is fixed — so the offline
+    # tier here is a replay fixture or nothing.
+    LLM_CHAIN_GD: str = (
+        "gemini:gemini-3.5-flash-lite"
+        ",groq:openai/gpt-oss-120b"
+    )
+
     # Where the local tier lives. 127.0.0.1 rather than localhost is deliberate:
     # measured 2026-10-09, resolving "localhost" on Windows against an
     # IPv4-bound Ollama cost a flat 2.3s per call. From inside Docker the host

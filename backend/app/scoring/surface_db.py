@@ -81,9 +81,14 @@ _FLAG_COLUMNS: Final[str] = f"""
 # test is not redundant: the trigger sets expires_at to the LATER of the
 # decay-derived instant and valid_to, so a window that has closed can still sit
 # inside a live decay curve.
+#
+# `valid_from` is the floor (D09): a scheduled flag is not served before its window
+# opens. The reasoning is in `decay.is_live`, which is the Python mirror of this
+# predicate and must keep saying the same thing.
 _LIVE_PREDICATE: Final[str] = """
     status IN ('unconfirmed', 'confirmed')
     AND expires_at > :at
+    AND (valid_from IS NULL OR valid_from <= :at)
     AND (valid_to IS NULL OR valid_to > :at)
 """
 

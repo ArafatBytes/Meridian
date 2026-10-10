@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,6 @@ import {
   TouchableOpacity,
   StatusBar,
   Alert,
-  ActivityIndicator,
-  Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -26,15 +24,12 @@ import {
   shadows,
   gradients,
 } from '../../theme';
-import { useAuthStore, useLocationStore } from '../../store';
-import AuthService from '../../services/auth.service';
+import { useAuthStore } from '../../store';
 import { GlassCard } from '../../components/GlassCard';
-import { SOSCameraModal } from '../../components/SOSCameraModal';
+import { useSOS } from '../../features/sos/useSOS';
+import { SOSFlow } from '../../features/sos/SOSFlow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MainTabParamList } from '../../types';
-import { API_BASE_URL } from '../../constants/app.constants';
-import * as FileSystem from 'expo-file-system';
-import { Accelerometer } from 'expo-sensors';
 
 type HomeScreenNavigationProp = BottomTabNavigationProp<
   MainTabParamList,
@@ -43,198 +38,14 @@ type HomeScreenNavigationProp = BottomTabNavigationProp<
 
 const HomeScreen: React.FC = () => {
   const { user } = useAuthStore();
-  const { currentLocation, getCurrentLocation } = useLocationStore();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const rootNavigation = useNav<any>();
 
-  const [isSOSModalVisible, setIsSOSModalVisible] = useState(false);
-  const [isSendingSOS, setIsSendingSOS] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  // Which half of the SOS we are in. The upload finishes long before the alert
-  // does — the server then talks to the SMTP relay — and showing "uploading" through
-  // that second phase is what made a working SOS look hung at 98%.
-  const [sosStage, setSosStage] = useState<'uploading' | 'sending'>('uploading');
-
-  const handleSOSPress = () => {
-    setIsSOSModalVisible(true);
-    // Proactively try to get location if we don't have it
-    if (!currentLocation) {
-      getCurrentLocation().catch(err => console.log('Bg location fetch failed:', err));
-    }
-  };
-
-  const handleVideoRecorded = async (uri: string) => {
-    setIsSOSModalVisible(false);
-    setIsSendingSOS(true);
-
-    try {
-      // Fetched at trigger time, not read from the store.
-      //
-      // `useAuthStore().token` is captured once by `initialize()` and never
-      // updated, and a Supabase access token lasts an hour -- so an SOS sent from a
-      // session older than that went out with a dead token and the backend answered
-      // 401 after the video had already uploaded. `getAuthToken()` asks Supabase,
-      // which refreshes if needed. This is the single most important call in the
-      // app to get right; it must not depend on how long the app has been open.
-      const token = await AuthService.getAuthToken();
-
-      if (!token) {
-        throw new Error('You are not logged in. Please Logout and Login again.');
-      }
-
-      let finalLocation = currentLocation;
-
-      // If we still don't have location, force fetch it now
-      if (!finalLocation) {
-        try {
-          console.log('Location null, fetching now...');
-          await getCurrentLocation();
-          // Re-read from store or just await logic?
-          // Store updates state, but 'currentLocation' var here is closure stale?
-          // Ideally `getCurrentLocation` returns the location, but the store definition returns void.
-          // Let's rely on useLocationStore.getState() if accessible or just trust the store update pattern,
-          // BUT functional component closure means 'currentLocation' is stale.
-          // Better approach: use useLocationStore.getState().currentLocation if available via import,
-          // or simply re-fetch it from the store hook if React re-renders? No, that won't work in this async function.
-
-          // Simplest fix: The current structure of useLocationStore doesn't return the loc.
-          // I will use `useLocationStore.getState().currentLocation` pattern if I can import store directly,
-          // but here I only have the hook.
-
-          // Let's modify the plan: I will just use the hook's returned function,
-          // but I can't get the updated state inside this function easily without checking the store directly.
-
-          // Workaround: We will ignore the error for now and assume the 'catch' above in handleSOSPress
-          // might have helped, or throw a descriptive error telling user to enable location.
-
-          // Actually, I can import `useLocationStore` directly to get state non-reactively.
-          // Let's just catch the error and throw a user friendly message.
-          finalLocation = useLocationStore.getState().currentLocation; // Get the latest state directly
-          if (!finalLocation) {
-            throw new Error('Location not available. Please enable GPS and try again.');
-          }
-        } catch (e: any) {
-          throw new Error(e.message || 'Location data unavailable. Cannot send SOS.');
-        }
-      }
-
-      if (!finalLocation) {
-        // Second check just in case
-        throw new Error('Location data unavailable. Cannot send SOS.');
-      }
-
-      const formData = new FormData();
-      formData.append('latitude', String(finalLocation.latitude));
-      formData.append('longitude', String(finalLocation.longitude));
-
-      const fileType = uri.split('.').pop() || 'mp4';
-      // @ts-ignore
-      formData.append('video', {
-        uri,
-        name: `sos_video.${fileType}`,
-        type: `video/${fileType}`,
-      });
-
-      setUploadProgress(0);
-
-      // Progress Simulation (To ensure dynamic UI even on fast/local networks)
-      let simulatedProgress = 0;
-      const progressInterval = setInterval(() => {
-        simulatedProgress += Math.random() * 5; // Increment randomly
-        if (simulatedProgress > 98) simulatedProgress = 98; // Cap at 98%
-        setUploadProgress(prev => Math.max(prev, Math.floor(simulatedProgress)));
-      }, 200);
-
-      // Once the bytes are gone, the wait is the server's: it is talking to the
-      // SMTP relay. Saying "uploading 98%" through that is how a working SOS looks
-      // broken — which is exactly how it read the first time this was run on a
-      // phone. Tell the truth instead.
-      setSosStage('uploading');
-
-      const data: any = await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', `${API_BASE_URL}/sos/trigger`);
-        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            const realPercent = Math.round((event.loaded / event.total) * 100);
-            setUploadProgress(prev => {
-              const newProgress = Math.max(prev, realPercent);
-              // Update simulated base so it doesn't drag us down
-              simulatedProgress = newProgress;
-              return newProgress;
-            });
-            if (event.loaded >= event.total) {
-              setSosStage('sending');
-            }
-          }
-        };
-
-        xhr.onload = () => {
-          clearInterval(progressInterval);
-          if (xhr.status >= 200 && xhr.status < 300) {
-            setUploadProgress(100); // Jump to 100 on success
-            try {
-              resolve(JSON.parse(xhr.response));
-            } catch (e) {
-              reject(new Error('Invalid server response'));
-            }
-          } else if (xhr.status === 401) {
-            reject(new Error('Session expired. Please start the App again or Logout/Login.'));
-          } else {
-            try {
-              const errData = JSON.parse(xhr.response);
-              reject(new Error(errData.detail || errData.message || 'Failed to send SOS'));
-            } catch (e) {
-              reject(new Error(`Server Error: ${xhr.status}`));
-            }
-          }
-        };
-
-        xhr.onerror = () => {
-          clearInterval(progressInterval);
-          reject(new Error('Network request failed. Please check internet connection.'));
-        }
-
-        xhr.send(formData);
-      });
-
-      Alert.alert(
-        'SOS Sent!',
-        `Emergency services and ${data.contacts_notified} contacts have been notified.\nPolice Stations found: ${data.police_stations_found ?? 0}`,
-        [{ text: 'OK' }]
-      );
-
-    } catch (error: any) {
-      console.error('SOS Error:', error);
-      Alert.alert('SOS Failed', error.message || 'Could not send SOS alert. Please try again.');
-    } finally {
-      setIsSendingSOS(false);
-    }
-  };
-
-  // Auto-SOS: Gyration/Shake Detection
-  // Threshold: 3.5g (Extremely violent shake required - 98% intensity)
-  React.useEffect(() => {
-    const THRESHOLD = 6.0;
-    Accelerometer.setUpdateInterval(200);
-
-    const subscription = Accelerometer.addListener(data => {
-      const { x, y, z } = data;
-      const magnitude = Math.sqrt(x * x + y * y + z * z);
-
-      if (magnitude > THRESHOLD) {
-        if (!isSOSModalVisible && !isSendingSOS) {
-          console.log("🚨 Auto-SOS Triggered by High Intensity Sensor!");
-          handleSOSPress();
-        }
-      }
-    });
-
-    return () => subscription && subscription.remove();
-  }, [isSOSModalVisible, isSendingSOS]);
+  // Defect 14. The whole SOS flow — token refresh, location, upload progress, the
+  // shake listener — now lives in `useSOS`, so `MapScreen` runs the same one
+  // instead of a red button with a `// TODO` behind it.
+  const sos = useSOS();
 
   // The voice-activated SOS block that used to live here has been removed.
   //
@@ -248,7 +59,8 @@ const HomeScreen: React.FC = () => {
   // Removed now rather than ported, because SDK 57 drops expo-av and porting
   // dead code to a new API is pure waste. Real hot-word detection is S18, and
   // it uses an on-device wake-word engine -- not a polling loop that uploads
-  // audio. Until then SOS is the manual button and the shake gesture above.
+  // audio. Until then SOS is the manual button and the shake gesture, both of
+  // which now live in `useSOS`.
 
   const handleReportCrimePress = () => {
     navigation.navigate('Reports');
@@ -268,39 +80,7 @@ const HomeScreen: React.FC = () => {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
-      <SOSCameraModal
-        visible={isSOSModalVisible}
-        onClose={() => setIsSOSModalVisible(false)}
-        onVideoRecorded={handleVideoRecorded}
-        onError={(err) => {
-          setIsSOSModalVisible(false);
-          Alert.alert('Recording Error', err);
-        }}
-      />
-
-      <Modal transparent visible={isSendingSOS}>
-        <View style={styles.loadingOverlay}>
-          <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color={colors.danger} />
-            <Text style={styles.loadingText}>
-              {sosStage === 'sending'
-                ? 'Alerting your contacts...'
-                : 'Uploading Evidence...'}
-            </Text>
-
-            <View style={styles.progressBarContainer}>
-              <View style={[styles.progressBarFill, { width: `${uploadProgress}%` }]} />
-            </View>
-            <Text style={styles.progressText}>{uploadProgress}% Completed</Text>
-
-            <Text style={styles.loadingSubText}>
-              {sosStage === 'sending'
-                ? 'Evidence uploaded. Sending the alert — do not close the app.'
-                : 'Please do not close the app'}
-            </Text>
-          </View>
-        </View>
-      </Modal>
+      <SOSFlow sos={sos} />
 
       <ScrollView
         style={styles.scrollView}
@@ -320,7 +100,7 @@ const HomeScreen: React.FC = () => {
         {/* SOS Emergency Button */}
         <TouchableOpacity
           style={[styles.sosButtonContainer, styles.sosButton]}
-          onPress={handleSOSPress}
+          onPress={sos.start}
         >
           <Ionicons name="alert-circle" size={32} color={colors.white} />
           <Text style={styles.sosButtonText}>SOS Emergency</Text>
@@ -532,49 +312,6 @@ const styles = StyleSheet.create({
   scoreNumber: {
     ...typography.bodySmall,
     color: colors.textSecondary,
-  },
-  loadingOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingCard: {
-    backgroundColor: colors.white,
-    padding: spacing.xl,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    ...shadows.lg,
-  },
-  loadingText: {
-    ...typography.h4,
-    color: colors.text,
-    marginTop: spacing.md,
-    fontWeight: 'bold',
-  },
-  loadingSubText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  progressBarContainer: {
-    width: 200,
-    height: 8,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 4,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 4,
-  },
-  progressText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
   },
 
 });

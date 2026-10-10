@@ -11,6 +11,7 @@ import {
   TextInput,
   Keyboard,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 
 import MapView, {
@@ -38,6 +39,9 @@ import RiskFlagSheet, { riskBand } from '../../components/RiskFlagSheet';
 import { RiskFlagMarker, isConfirmedFlag } from '../../components/RiskFlagMarker';
 import RouteComparisonCard, { safetyColour } from '../../components/RouteComparisonCard';
 import PlaceSearch from '../../components/PlaceSearch';
+import { AS_OF_PRESETS, asOfSummary } from '../../features/risk/scheduled';
+import { useSOS } from '../../features/sos/useSOS';
+import { SOSFlow } from '../../features/sos/SOSFlow';
 import type { GeoResolution } from '../../types/contracts/geo';
 
 interface CrimeReportData {
@@ -106,6 +110,35 @@ const crimeColor = (category: string): string =>
  * which is true whatever produced it.
  */
 const MAX_DRAWN_RADIUS_M = 5000;
+
+/*
+ * Overlay geometry.
+ *
+ * Everything on top of the map is absolutely positioned, and three of those things
+ * used to be placed by independent guesses that happened to collide:
+ *
+ *   - the time control sat at `insets.bottom + spacing.xxl * 2` (96) while the SOS
+ *     button occupies `insets.bottom + spacing.xl` upwards (32 to 112), so a
+ *     full-width bar lay across the top of an 80pt emergency button;
+ *   - the report and route buttons started at `insets.top + spacing.xl` (32) while
+ *     the search card starts at `insets.top + spacing.xs` (4) and is ~42 tall, so
+ *     the card — which has the higher zIndex — covered the top of both;
+ *   - the risk badge is content-sized with no right bound, so a long label
+ *     ("31 risk flags · news 4 min ago") ran underneath the SOS button.
+ *
+ * The fix is to name the sizes and derive the positions from them, so a button that
+ * changes size moves the things around it instead of silently overlapping them.
+ */
+const SOS_SIZE = 80;
+const FAB_SIZE = 56;
+/** Vertical gap between the two stacked right-hand buttons. Was a bare `+ 70`. */
+const FAB_GAP = 14;
+/**
+ * Height assumed for the search card until `onLayout` reports the real one — the
+ * collapsed `PlaceSearch`, which is padding plus a single input row. Used for the
+ * first frame only, and close enough that nothing visibly jumps.
+ */
+const SEARCH_CARD_FALLBACK = 46;
 
 /**
  * An "hours from now" offset as the instant to ask the surface about.
@@ -181,8 +214,20 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   // from now -- otherwise dragging the time control forward would show a flag with
   // negative time remaining.
   const [riskAsOf, setRiskAsOf] = useState<string | null>(null);
-  // Hours ahead of now that the map is being shown at. 0 is live. Dev builds only.
+  // Hours ahead of now that the map is being shown at. 0 is live.
   const [asOfOffsetHours, setAsOfOffsetHours] = useState(0);
+
+  // Defect 14. One SOS implementation, shared with Home.
+  const sos = useSOS();
+
+  /*
+   * The search card's real height, measured rather than assumed.
+   *
+   * `PlaceSearch` grows when it has a result to show, so a constant would either
+   * leave a gap most of the time or overlap once someone searched. Measuring means
+   * the buttons below it follow it down and are never covered.
+   */
+  const [searchHeight, setSearchHeight] = useState(SEARCH_CARD_FALLBACK);
   const [selectedCrime, setSelectedCrime] = useState<CrimeReportData | null>(
     null,
   );
@@ -215,6 +260,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   const [isSearching, setIsSearching] = useState(false);
 
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
 
   const requestLocation = async () => {
     try {
@@ -508,27 +554,6 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     }
   }, [currentLocation, hasInitialized]);
 
-  const handleSOSPress = () => {
-    Alert.alert(
-      'SOS Emergency',
-      'Are you sure you want to activate SOS alert?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Activate',
-          style: 'destructive',
-          onPress: () => {
-            // TODO: Implement SOS activation
-            Alert.alert(
-              'SOS Activated',
-              'Emergency contacts have been notified',
-            );
-          },
-        },
-      ],
-    );
-  };
-
 
   // A place search resolved: move the map to it and drop a pin.
   //
@@ -546,6 +571,17 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       longitudeDelta: span,
     });
   };
+
+  // Laid out as a stack rather than as independent guesses — see the geometry note
+  // at the top of this file.
+  const searchTop = insets.top + spacing.xs;
+  const fabColumnTop = searchTop + searchHeight + spacing.sm;
+  const sosTop = insets.bottom + spacing.xl + SOS_SIZE;
+  // `maxWidth` rather than a `right` bound: setting both `left` and `right` on an
+  // absolute element stretches it, so a badge reading "0 risk flags" would sit in a
+  // pill the width of the screen. This hugs the label and still stops short of SOS.
+  const riskBadgeMaxWidth =
+    windowWidth - spacing.lg * 2 - SOS_SIZE - spacing.sm;
 
   return (
     <View style={styles.container}>
@@ -681,7 +717,10 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
             // the verification tier or the source count. See RiskFlagMarker for the
             // `tracksViewChanges` and `key` reasoning -- both matter at ~60 markers.
             <RiskFlagMarker
-              key={`risk-${flag.flagId}-${flag.status}-${flag.sourceCount}`}
+              // `tracksViewChanges={false}` means the marker bitmap is taken once, so
+              // every field that changes the drawing has to be in this key. `validFrom`
+              // joined it in D09: it decides round versus square.
+              key={`risk-${flag.flagId}-${flag.status}-${flag.sourceCount}-${flag.validFrom ?? 'live'}`}
               flag={flag}
               onPress={setSelectedFlag}
             />
@@ -721,14 +760,17 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
 
       {/* Place search - demo beat 3. Hidden in route mode, which has its own inputs. */}
       {!routeMode && (
-        <View style={[styles.searchContainer, { top: insets.top + spacing.xs }]}>
+        <View
+          style={[styles.searchContainer, { top: searchTop }]}
+          onLayout={event => setSearchHeight(event.nativeEvent.layout.height)}
+        >
           <PlaceSearch onResolved={flyToResolved} />
         </View>
       )}
 
       {/* Route Search Interface (Google Maps Style) */}
       {routeMode && (
-        <View style={[styles.searchContainer, { top: insets.top + spacing.xs }]}>
+        <View style={[styles.searchContainer, { top: searchTop }]}>
           <View style={styles.searchBox}>
             {/* The way out of route mode. It lives inside the card because the
                 floating button that used to do this job sat underneath the card and
@@ -842,11 +884,18 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       )}
 
+      {/* Defect 14. This button used to confirm an SOS and then pop
+          "Emergency contacts have been notified" without notifying anyone — a red
+          button that lied, on the screen a user is most likely to be looking at
+          when something is happening around them. It now runs the same `useSOS`
+          flow as Home: real recording, real upload, real alert. */}
+      <SOSFlow sos={sos} />
+
       {/* SOS Button (Hide in route mode) */}
       {!routeMode && (
         <TouchableOpacity
           style={[styles.sosButton, { bottom: insets.bottom + spacing.xl }]}
-          onPress={handleSOSPress}
+          onPress={sos.start}
           activeOpacity={0.8}
         >
           <MaterialCommunityIcons
@@ -861,7 +910,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       {/* Report Button (Hide in route mode) */}
       {!routeMode && (
         <TouchableOpacity
-          style={[styles.reportButton, { top: insets.top + spacing.xl }]}
+          style={[styles.reportButton, { top: fabColumnTop }]}
           onPress={() => {
             navigation.navigate('Reports');
             setTimeout(() => {
@@ -883,7 +932,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           style={[
             styles.actionButton,
             {
-              top: insets.top + spacing.xl + 70,
+              top: fabColumnTop + FAB_SIZE + FAB_GAP,
               right: spacing.lg,
               backgroundColor: colors.primary
             }
@@ -917,7 +966,17 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           there is none. Bottom-left since D04: at the top it sat under the search card
           (zIndex 10) and could not be seen at all. */}
       {!routeMode && (
-        <View style={[styles.riskBadge, { bottom: insets.bottom + spacing.xl }]}>
+        <View
+          style={[
+            styles.riskBadge,
+            {
+              bottom: insets.bottom + spacing.xl,
+              // A content-sized badge with no bound slid under the SOS button once
+              // the label grew. Bounded here; the label ellipsizes instead.
+              maxWidth: riskBadgeMaxWidth,
+            },
+          ]}
+        >
           <View
             style={[
               styles.riskDot,
@@ -930,12 +989,23 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
               },
             ]}
           />
-          <Text style={styles.riskBadgeText}>
-            {riskError ??
-              [`${riskFlags.length} risk flags`, newsLabel(ingestion, isFetchingNews)]
-                .filter(Boolean)
-                .join(' · ')}
-          </Text>
+          {/* The badge text is the way into the news page, rather than a third
+              icon in a row of two. It already reads "… · news 4 min ago", so it is
+              the thing on screen that most looks like it should open the news, and
+              it is a far bigger tap target than another 16pt glyph. */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate('News')}
+            hitSlop={8}
+            style={styles.riskBadgeLabel}
+            accessibilityLabel="See the articles behind these flags"
+          >
+            <Text style={styles.riskBadgeText} numberOfLines={1}>
+              {riskError ??
+                [`${riskFlags.length} risk flags`, newsLabel(ingestion, isFetchingNews)]
+                  .filter(Boolean)
+                  .join(' · ')}
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={refreshRiskLayer}
             style={styles.riskBadgeButton}
@@ -962,28 +1032,23 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       )}
 
-      {/* The "as of" time control. DEV BUILDS ONLY.
-          This is what makes decay showable. Without it, beat 5 means standing on stage
-          saying "trust me, in three hours this will fade" -- the one claim in the demo
-          that cannot be demonstrated in real time, because the shortest half-life in
-          the surface is an hour.
+      {/* The time control. Demo beat 8 — and the reason it ships.
+          It arrived in D02 behind `__DEV__`, as the only way to make decay
+          showable: without it, beat 5 means standing on stage saying "trust me,
+          in three hours this will fade". D09 takes the `__DEV__` off, because the
+          same control answers a question no competing product asks — what will
+          this road be like tomorrow? Forward-dated flags are served only inside
+          their window, so a procession announced for tomorrow is genuinely absent
+          at Now and genuinely there at Tomorrow.
 
-          Presets rather than a slider, deliberately: a slider needs a dependency the
-          project does not have, and a dragged value fires a request per frame. Six taps
-          are also repeatable on stage in a way a drag is not.
-
-          `__DEV__` is false in any production build, so this does not ship. D09 promotes
-          it to a real forward-looking control over the same `as_of` parameter -- at
-          which point it stops being a debug affordance and becomes beat 8. */}
-      {__DEV__ && !routeMode && (
-        <View style={[styles.asOfBar, { bottom: insets.bottom + spacing.xxl * 2 }]}>
-          <Text style={styles.asOfLabel}>
-            {asOfOffsetHours === 0
-              ? 'Showing: now'
-              : `Showing: +${asOfOffsetHours}h — ${riskFlags.length} flags left`}
-          </Text>
+          Presets rather than a slider, deliberately: a slider needs a dependency
+          the project does not have, a dragged value fires a request per frame, and
+          six taps are repeatable on stage in a way a drag is not. */}
+      {!routeMode && (
+        <View style={[styles.asOfBar, { bottom: sosTop + spacing.sm }]}>
+          <Text style={styles.asOfLabel}>{asOfSummary(asOfOffsetHours, riskFlags, Date.now())}</Text>
           <View style={styles.asOfButtons}>
-            {[0, 3, 6, 12, 24, 48].map(hours => (
+            {AS_OF_PRESETS.map(({ hours, label }) => (
               <TouchableOpacity
                 key={hours}
                 style={[
@@ -998,7 +1063,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                     asOfOffsetHours === hours && styles.asOfButtonTextActive,
                   ]}
                 >
-                  {hours === 0 ? 'now' : `+${hours}h`}
+                  {label}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1132,6 +1197,11 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginRight: 6,
   },
+  // `flexShrink` rather than `flex: 1`: the badge should still hug a short label
+  // rather than stretching to the full width it is now allowed.
+  riskBadgeLabel: {
+    flexShrink: 1,
+  },
   riskBadgeText: {
     color: colors.text,
     fontSize: fontSize.xs,
@@ -1144,12 +1214,15 @@ const styles = StyleSheet.create({
   },
   sosButton: {
     position: 'absolute',
+    // `bottom` is set inline from the safe-area inset; this is the fallback.
     bottom: spacing.xl,
     right: spacing.lg,
     backgroundColor: colors.error,
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    // From the constant the overlay maths uses, so growing the button moves the
+    // time control above it instead of being covered by it.
+    width: SOS_SIZE,
+    height: SOS_SIZE,
+    borderRadius: SOS_SIZE / 2,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 8,
@@ -1166,12 +1239,13 @@ const styles = StyleSheet.create({
   },
   reportButton: {
     position: 'absolute',
-    top: spacing.xl,
+    // `top` is set inline, below the search card. See the geometry note on
+    // `fabColumnTop`; a static top here is what put it behind the card.
     right: spacing.lg,
     backgroundColor: colors.primary,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    borderRadius: FAB_SIZE / 2,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 4,
@@ -1192,9 +1266,9 @@ const styles = StyleSheet.create({
   // Both values are needed: zIndex settles it on iOS, elevation on Android.
   actionButton: {
     position: 'absolute',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    borderRadius: FAB_SIZE / 2,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 11,

@@ -5,6 +5,7 @@ import ProfileScreen from '../screens/Profile/ProfileScreen';
 import EditProfileScreen from '../screens/Profile/EditProfileScreen';
 import EmergencyContactsScreen from '../screens/Profile/EmergencyContactsScreen';
 import SOSHotWordsScreen from '../screens/Profile/SOSHotWordsScreen';
+import SOSHistoryScreen from '../screens/Profile/SOSHistoryScreen';
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
 
@@ -22,6 +23,7 @@ const ProfileNavigator: React.FC = () => {
         component={EmergencyContactsScreen}
       />
       <Stack.Screen name="SOSHotWords" component={SOSHotWordsScreen} />
+      <Stack.Screen name="SOSHistory" component={SOSHistoryScreen} />
     </Stack.Navigator>
   );
 };

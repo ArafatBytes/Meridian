@@ -133,10 +133,19 @@ class ApiService {
 
   private handleError(error: AxiosError): ApiError {
     if (error.response) {
+      const body = error.response.data as any;
       return {
-        message: (error.response.data as any)?.message || 'An error occurred',
+        // FastAPI puts the reason in `detail`, and every endpoint in this
+        // project is FastAPI. Looking only at `message` meant every backend
+        // error reached the user as the literal string "An error occurred" --
+        // including ones written to be read, like "Approve the General Diary
+        // before recording a GD number".
+        message:
+          (typeof body?.detail === 'string' ? body.detail : undefined) ||
+          body?.message ||
+          'An error occurred',
         statusCode: error.response.status,
-        errors: (error.response.data as any)?.errors,
+        errors: body?.errors ?? body?.detail,
       };
     } else if (error.request) {
       return {

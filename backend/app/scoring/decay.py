@@ -356,7 +356,13 @@ def expires_at_for(
     return decayed_out
 
 
-def is_live(*, at: datetime, expires_at: datetime, valid_to: datetime | None = None) -> bool:
+def is_live(
+    *,
+    at: datetime,
+    expires_at: datetime,
+    valid_from: datetime | None = None,
+    valid_to: datetime | None = None,
+) -> bool:
     """
     Whether a flag should be served at the instant `at`.
 
@@ -366,6 +372,15 @@ def is_live(*, at: datetime, expires_at: datetime, valid_to: datetime | None = N
     window that has closed can still sit inside a live decay curve, and a procession
     that finished at noon should not be on the map at midnight.
 
+    **`valid_from` is a floor as well (D09).** A flag whose window has not opened is
+    not served. Without this test a procession announced today for tomorrow morning
+    appears on *today's* map at full severity — `elapsed_hours` clamps a negative
+    age to zero, so nothing has decayed yet — and that is a false claim about the
+    present: the road is clear now. It would also bend D06's routes today around a
+    road that is currently fine. A scheduled flag is a claim about a window, so it
+    is served inside that window and at an `as_of` the caller chose, which is
+    exactly what demo beat 8 moves the time control to show.
+
     This is the Python statement of `_LIVE_PREDICATE` in `surface_db.py`, for the
     seeded surface, which has no SQL to put it in. Status is not tested here because
     the fixture has no rejected or expired rows and `SeededRiskSurface` filters on
@@ -373,4 +388,6 @@ def is_live(*, at: datetime, expires_at: datetime, valid_to: datetime | None = N
     """
     if at.tzinfo is None:
         at = at.replace(tzinfo=UTC)
+    if valid_from is not None and valid_from > at:
+        return False
     return expires_at > at and (valid_to is None or valid_to > at)

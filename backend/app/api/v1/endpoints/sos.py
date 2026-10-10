@@ -1,15 +1,24 @@
 """
 SOS Emergency endpoints
 """
-from sqlalchemy import select
+import json
+import logging
+from sqlalchemy import select, text
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional, Any
+from typing import Optional, Any, Final
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.schemas.sos import SOSTriggerRequest, SOSResponse
+from app.schemas.sos import (
+    SOSTriggerRequest,
+    SOSResponse,
+    SOSHistoryEntry,
+    SOSHistoryResponse,
+)
 from app.services.sos_service import sos_service
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -97,3 +106,88 @@ async def trigger_sos(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to trigger SOS: {str(e)}"
         )
+
+
+# ---------------------------------------------------------------------------
+# D09 — "the alert was delivered, and here is the record"
+# ---------------------------------------------------------------------------
+
+# Raw SQL for one reason: `location` is a PostGIS geography, and reading it through
+# the ORM hands back WKB that then needs decoding. `ST_Y`/`ST_X` in the query is
+# what `scoring/surface_db.py` already does, and `extensions` is the schema PostGIS
+# lives in on this Supabase project.
+_HISTORY: Final = text(
+    """
+    select id, timestamp, status, voice_activated, contacts_notified,
+           extensions.ST_Y(location::extensions.geometry) as lat,
+           extensions.ST_X(location::extensions.geometry) as lon
+    from public.sos_incidents
+    where user_id = :user_id
+    order by timestamp desc
+    limit :limit
+    """
+)
+
+
+def _entry(row: Any) -> SOSHistoryEntry:
+    """
+    One row to one history entry, tolerating every shape `contacts_notified` has had.
+
+    Three shapes exist in this column. Rows written since defect 35 hold the JSON
+    object the schema documents. Rows older than it hold null. And nothing stops a
+    future writer putting a bare list there, which is what the column's name
+    suggests. All three have to render, because an audit trail that fails to display
+    its own oldest rows is not much of an audit trail — so an unreadable blob
+    degrades to "delivered: not recorded" rather than to a 500.
+    """
+    blob: dict[str, Any] = {}
+    if row.contacts_notified:
+        try:
+            parsed = json.loads(row.contacts_notified)
+            if isinstance(parsed, dict):
+                blob = parsed
+        except (ValueError, TypeError):
+            logger.warning("sos_incident %s has unparseable contacts_notified", row.id)
+
+    return SOSHistoryEntry(
+        id=str(row.id),
+        timestamp=row.timestamp,
+        latitude=float(row.lat),
+        longitude=float(row.lon),
+        status=row.status or "active",
+        voice_activated=bool(row.voice_activated),
+        delivered=blob.get("delivered"),
+        recipient_count=int(blob.get("recipient_count") or 0),
+        police_station_count=int(blob.get("police_station_count") or 0),
+        video_attached=bool(blob.get("video_attached")),
+    )
+
+
+@router.get("/history", response_model=SOSHistoryResponse)
+async def sos_history(
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+) -> SOSHistoryResponse:
+    """
+    This user's own past SOS alerts, most recent first.
+
+    **Scoped to the caller by `user_id` in the WHERE clause, not by a filter applied
+    afterwards.** An SOS record says where somebody was at a moment they were
+    frightened; there is no route to anyone else's.
+
+    `user_id` is the Supabase JWT's `sub`, which is exactly the value
+    `trigger_sos` writes, so this matches without any mapping. The column's foreign
+    key points at the `public.users` mirror rather than at `auth.users` — real debt,
+    owned by ADR 0003 — but the *value* is the auth user id either way, which is why
+    this needed no migration.
+
+    No empty-list special case: zero alerts is a count of zero, and the screen says
+    so in words. A 404 would mean "no such thing as your history", which is wrong.
+    """
+    rows = await db.execute(
+        _HISTORY,
+        {"user_id": current_user["user_id"], "limit": max(1, min(limit, 200))},
+    )
+    incidents = [_entry(row) for row in rows]
+    return SOSHistoryResponse(count=len(incidents), incidents=incidents)
