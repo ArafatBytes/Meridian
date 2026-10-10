@@ -208,6 +208,11 @@ ALLOWED_WRITERS: dict[str, str] = {
     "app/scoring/fixture.py": "calls to_mobility_statement() for every fixture row",
     "app/scoring/chronic.py": "calls to_mobility_statement() for every chronic row",
     "app/agents/live_risk.py": "calls to_mobility_statement() for every published news flag",
+    # D09. Same reason as live_risk: it produces a statement, and it produces it by
+    # calling to_mobility_statement(). Its own invariant suite asserts mechanically
+    # that it never composes one -- see
+    # test_scheduled_flags_are_windows.py::test_the_agent_never_writes_a_mobility_statement_itself.
+    "app/agents/scheduled_risk.py": "calls to_mobility_statement() for every scheduled flag",
     # D06. Both forward an already-framed string from a RiskFlag onto the route response;
     # neither composes one. `test_forwarding_writers_only_forward` below proves that
     # mechanically rather than trusting this comment -- see its docstring for why an

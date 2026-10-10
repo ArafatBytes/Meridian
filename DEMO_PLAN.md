@@ -60,7 +60,7 @@ to do on the device that evening.
 | **D06** | Oct 16–17 | Ask for a route through a flagged corridor. Get alternatives, each with a plain-English reason. — **✅ closed Oct 9** | S12, S13, S05, S07 |
 | **D07** | Oct 18–19 | Photograph a two-person scene. Get a real interaction read. See the evidence photo stored. | S06 |
 | **D08** | Oct 20–21 | Turn a report into a **Bangla General Diary** draft. Correct thana. Cannot submit unapproved. | S27, S28 |
-| **D09** | Oct 22 | Move the map to **tomorrow** — a procession already flagged. SOS history screen. | S26, S05, S07 |
+| **D09** | Oct 22 | Move the map to **tomorrow** — a procession already flagged. SOS history screen. The headlines behind the map, as cards. — **✅ closed Oct 10** | S26, S05, S07 |
 | **D10** | Oct 23 | **Feature freeze.** The whole nine-minute script, three times, on the device. | new |
 | — | **Oct 24** | **Finale** | — |
 
@@ -89,7 +89,7 @@ sprint that makes it real *and* to the walkthrough that proves it.
 | 5 | Show a flag whose severity has decayed below threshold and disappeared on its own. **No stale red zones.** | D02 | `D02` |
 | 6 | Report an incident with a photo. The vision stack analyses it, names what it found, and the evidence is persisted. | D07 | `D07` |
 | 7 | Generate the **Bangla General Diary** from that report. Correct thana. Human review gate that cannot be bypassed. Then show both exits — print the DMP form, or copy the narrative into the police's own app. **We draft; a person files.** | D08 | `D08` |
-| 8 | Show **tomorrow's** map: an announced procession already flagged, before it happens. | D09 | `D09` |
+| 8 | Show **tomorrow's** map: an announced procession already flagged, before it happens — and the announcement itself, as a card on the news page. | D09 | `D09` |
 | 9 | Trigger SOS. Email delivered, **and here is the record** — the loop closed. | D01, D09 | `D01`, `D09` |
 
 Beats 3, 5, 7 and 8 are the ones no competitor has. If time runs short, protect those four over
@@ -943,31 +943,129 @@ drafts and signed off. D01–D07 still pass.
 
 ---
 
-## D09 — Tomorrow's map, and the loop closed
-**Oct 22 · source: S26, S05, S07**
+## D09 — Tomorrow's map, and the loop closed — ✅ CLOSED
+**Oct 22 · built and closed Oct 10 · source: S26, S05, S07**
 
 **Showable:** move the map's time control to **tomorrow**. An announced procession is **already
 flagged**, before it has happened. Then open the SOS history screen and show the record of an alert
 that was actually delivered.
 
-**Gate:** `docs/walkthroughs/D09.md` passes on a device. D01–D08 still pass. **This is the last
-sprint that ships a feature.**
+**Gate:** ✅ **met.** `docs/walkthroughs/D09.md` passed on a device, every step. D01-D08 still
+pass. **This was the last sprint that ships a feature.**
 
-- [ ] `ScheduledRiskAgent` — read published announcements of processions, shutdowns, exam days and
-      large gatherings; emit **forward-dated** flags using the `valid_from` / `valid_to` columns D01
-      already created, so **no migration and no contract change is needed today** *(S26)*
-- [ ] Mobility framing is non-negotiable here. Processions and gatherings are "road blocked" or
-      "heavy crowd", never characterised politically *(S26, invariant)*
-- [ ] 📱 **Map time control, promoted from D02's dev-only version to a real forward-looking one**,
-      over the same `as_of` parameter. **No competing product looks forward. This is beat 8** *(S26)*
-- [ ] 📱 Forward-dated flags visually distinguished from live ones — a scheduled risk is a different
-      claim from a current one
-- [ ] 📱 **Defect 14 — `MapScreen`'s SOS button is still a `// TODO` alert** while `HomeScreen`'s is
-      real. Extract one `useSOS()` hook; both screens consume it *(S07)*
-- [ ] 📱 **SOS history screen**, over the audit trail D01 started writing. Beat 9's second half: the
-      alert was delivered *and here is the record*. This is what "closing the loop on public data"
-      looks like to a judge *(S05)*
-- [ ] 📄 `docs/walkthroughs/D09.md`
+- [x] `ScheduledRiskAgent` - reads published announcements of processions, shutdowns, exam days and
+      large gatherings; emits **forward-dated** flags using the `valid_from` / `valid_to` columns
+      D01 already created, so **no migration and no contract change** *(S26)*. Hourly cron at
+      `20 * * * *`, offset from D04's so the two do not contend for the same free-tier quota.
+      Verified end to end against live sitemaps: 390 listed, 1 announcement, fetched, read, 0 events
+      published - correctly, because the article stated no hour
+- [x] **The model is never asked for an instant.** It answers `day` (today / tomorrow / day_after)
+      and an integer `start_hour`; `_window()` does the arithmetic from the article's own
+      publication date in Dhaka time. This is D08's IMEI lesson applied before it cost anything -
+      a free-tier model asked for `2026-10-11T10:00:00+06:00` gets it wrong quietly
+- [x] Mobility framing is non-negotiable here. Processions and gatherings are "road blocked" or
+      "heavy crowd", never characterised politically *(S26, invariant)*. The framing invariant
+      caught the new agent as an unjustified writer of `mobility_statement` and made it be
+      allowlisted with a reason - the guard working, not a nuisance
+- [x] 📱 **Map time control, promoted from D02's dev-only version to a real forward-looking one**,
+      over the same `as_of` parameter. **No competing product looks forward. This is beat 8**
+      *(S26)*. Relabelled in words at the far end - `Tomorrow`, `+2 days` - and the status line now
+      names the instant and counts the *scheduled* flags. The dev label said "N flags left", a decay
+      framing that had this control's direction backwards once it started looking forward
+- [x] 📱 Forward-dated flags visually distinguished from live ones - a scheduled risk is a different
+      claim from a current one. **Shape, because every other channel was already spent:** colour
+      carries severity, fill and ring style carry verification, so a scheduled flag is a rounded
+      square. The two questions are independent and the map shows both at once
+- [x] 📱 **Defect 14 - `MapScreen`'s SOS button was a `// TODO` alert** that confirmed an SOS and
+      then claimed contacts had been notified. Extracted `useSOS()` + `SOSFlow`; both screens
+      consume them *(S07)*. `HomeScreen` went 580 to 319 lines. A straight extraction, not a
+      rewrite - the shake threshold's 6.0-versus-3.5 discrepancy was carried over untouched,
+      because changing a trigger inside a refactor is two changes with one of them tested (B5)
+- [x] 📱 **SOS history screen**, over the audit trail D01 started writing. Beat 9's second half: the
+      alert was delivered *and here is the record* *(S05)*. Reachable from the profile menu - three
+      routes have sat declared-but-unregistered in `ProfileStackParamList` since D01, so declaring
+      one is not shipping it
+- [x] **`GET /sos/history`** - it did not exist; `endpoints/sos.py` had exactly one route. Scoped to
+      the caller in the WHERE clause, not filtered afterwards. Tolerates all three shapes
+      `contacts_notified` has had, because an audit trail that cannot render its own oldest rows is
+      not one
+- [x] ~~**And `sos_incidents.user_id` -> `public.users` needs a migration like D08's**~~ -
+      **withdrawn 10 Oct, on reading the code properly. No migration, and D09 needed no contract
+      change.** The column does reference the `public.users` mirror, but the value written to it is
+      `current_user["user_id"]`, the Supabase JWT's `sub` - **the auth user id** - and `trigger_sos`
+      auto-provisions the mirror row before writing, so the key is always satisfiable. The FK target
+      is real debt, owned by **ADR 0003 / B1**. **D08's defect was a value mismatch; this is a
+      pointer at a mirror of the right value**
+- [x] 🔴 **Found by building: nothing stopped a scheduled flag being served before its window
+      opened.** `decay.elapsed_hours` clamps a negative age to zero, so tomorrow's procession would
+      have sat on tonight's map at *full* severity - and bent tonight's routes around a road that is
+      currently clear. Fixed as a `valid_from` floor in **both** `surface_db._LIVE_PREDICATE` and
+      its Python mirror `decay.is_live`, with an invariant asserting both still say it. D01 built
+      every other part of forward-dating; this was the one piece nobody could have specified before
+      a forward-dated flag existed
+- [x] 🔴 **Found by building: the fixture had zero forward-dated flags**, so beat 8 had nothing to
+      show at all. Three `seed-scheduled-*` entries added - a confirmed procession, an unconfirmed
+      one, and a works notice spanning both the `Tomorrow` and `+2 days` presets. Measured on the
+      seeded surface: **192 flags at `Now` with 0 scheduled, 67 at `Tomorrow` with 3**
+- [x] 🔴 **Found on a device: three overlay collisions on the map, two of them older than D09.**
+      Every overlay is absolutely positioned and three were placed by independent guesses that
+      happened to intersect: the new time control lay across the top of the 80pt **SOS** button; the
+      **report** and **route** buttons started at `insets.top + 32` while the search card runs to
+      about `insets.top + 46` *with a higher zIndex*, so the card covered the top of both; and the
+      risk badge had no right bound, so a long label ran under the SOS button. Fixed by naming the
+      button sizes and **deriving** the positions from them - the styles now read `width: SOS_SIZE`,
+      so growing a button moves its neighbours instead of being covered by them - and the search
+      card's height is measured with `onLayout` rather than assumed, because `PlaceSearch` grows
+      when it has a result. Verified by checking every overlay rectangle for intersection
+- [x] 🔴 **Found on a device: the news page counted a statistics table as a news article.**
+      `chronic.py` cites `police.gov.bd/.../crime_statistic_comparative_statement` on every derived
+      chronic flag - a genuine `https://` link - so the header read **`1 real of 30` on a day when
+      no news article had been ingested at all.** A permanent +1 from a statistics page makes the
+      one number this screen exists for unreadable: is "1 real" an article, or the stats page again?
+      The whole **chronic layer is now excluded** - a statistics table is not news, and the citation
+      still appears on the chronic flag's own sheet as that layer's provenance. 30 cards to 25,
+      and the counter now reads the truth: **0**
+- [x] 📄 `docs/walkthroughs/D09.md` - **passed on a device, every step, 10 Oct**
+- [x] 📱 **News page - the headlines behind the map, as cards.** Built 10 Oct. Two tabs over the
+      same `as_of` parameter: **Today** (what was read) and **Tomorrow** (what was announced).
+      Frontend only - `GET /risk/flags` already returns `sources[]` on every flag, so this regroups
+      what the map already had. Reached by tapping the risk badge, which already reads
+      "... - news 4 min ago" and so is the thing on screen that most looks like it should open it
+- [x] 📱 **And it is the ingestion dashboard**, which is why it looks the way it does. The header
+      carries the agent's own last-run numbers and every card is counted as *n real of m* with
+      sample headlines labelled `Sample data`. Ingestion is thin and the fix is next phase; a page
+      that presented fixture headlines as a day's work would make it impossible to tell whether a
+      day had worked. **The number to watch is "real of".** Today 10 Oct: **0 real of 25** on the
+      `db` surface, **1 real of 26** on `seeded` - the one difference being the single genuine
+      article in the replay fixture, which `seed_risk_flags.py` does not load (`include_replay=False`)
+- [x] 🔴 **Found by building it: my own "22 of 207 flags carry a headline" was wrong.**
+      `fixture.py::_generated_sources` invents a reference for every seeded flag that did not spell
+      its own out, so the Today tab came out at **274 cards, 272 of them reading
+      `Sample report - Mirpur 10`**, with the two real articles invisible among them. Those are not
+      articles - the generator's own comment says the titles are deliberately implausible so that
+      nobody mistakes the fixture for a news archive - so `isGeneratedPlaceholder` leaves them off.
+      **274 cards to 31.** The 22 hand-written sample headlines stay, labelled, because they do read
+      like reporting
+- [ ] 🔴 **Raised, not fixed: live news ingestion is producing almost nothing, and it is older than
+      D09.** Recent `live_risk` runs read `in=0 out=0`: of ~390 articles listed per run the
+      relevance filter passes about **1%**, and those few are already stored, so the queue is empty.
+      Of 24 documents ever read, the model found 4 incidents and the gazetteer rejected 3. **Beats 1
+      and 2 therefore run on the seeded surface, not on live news.** That is defensible on stage -
+      `RISK_SURFACE_IMPL` is the switch and the agent is real - but it should be a decision rather
+      than a discovery. Widening the sources is **B11a**; loosening the filter and growing the
+      gazetteer are **D04** and **B7**. **Outside D09's scope; needs a call**
+
+> **The news page we are *still* not building — the discard pile.** The headline list above
+> ships. This is the other one. `extracted_incidents` carries
+> `discarded_reason` - `unresolved_location`, `duplicate`, `rejected`, `low_confidence` - and its
+> migration calls the null-`flag_id` rows "the audit trail for *discarded, never guessed*". A page
+> showing **what we read and what we threw away, and why** is a stronger claim than a headline list,
+> and no competing product can show its own discard pile. It needs a new endpoint over
+> `raw_documents` + `extracted_incidents`, a new contract and a TypeScript mirror. **Parked as
+> B6b**, which costs nothing, because the data is being written either way. The measurement above
+> makes it a *better* page than the headline list: three of four extracted incidents were discarded,
+> and that is the honest story of how this pipeline behaves. The page that shipped shows what was
+> published; this one would show what was refused.
 
 ---
 
@@ -1071,6 +1169,7 @@ has been lifted out of it.
 | **B5** | **Defect 16** (export `routeService` from the services barrel), remove the ~30 lines of stale-closure deliberation in `HomeScreen`, reconcile the shake threshold (comment says 3.5 g, code says 6.0 — pick one and justify it with a measurement) | S07 | Small, real, and the shake threshold is a correctness question, not a style one. |
 | **B6** | Frontend refactor — feature directories under `src/features/`, `src/components/` reduced to shared primitives | S08 | The demo track adds screens fast. This is the sprint that pays for that. |
 | **B6a** | **Push notifications, background location, geofence alerting, alert-fatigue thresholds.** Plus D05's independence check if it was cut. | S16, S17, S15 | **Cut from D09 during the §8 review.** Beat 8 needs only the Scheduled Risk Agent and the time control, and keeping these in a single-day sprint was what forced feature work into D10. Sits between B6 and B7 rather than renumbering sixteen rows. |
+| **B6b** | **Ingestion provenance page — what we read, and what we discarded.** One endpoint over `raw_documents` + `extracted_incidents`, plus the contract and its TypeScript mirror. Three articles about one procession collapsing into a single flag; an incident we could not place and refused to guess at, with `discarded_reason` saying which. | S09, S14 | **Deferred from D09 on 10 Oct**, and only for capacity — the idea is stronger than the plain headline page that shipped instead. The columns are already written and already populated, so nothing decays while this waits. Needs backend work on a day that had none left; sits beside B6a rather than renumbering ten rows. |
 | **B7** | Gazetteer density beyond the demo zone | S10 | Gates geographic expansion. Manual work that does not compress — start it as background early. |
 | **B8** | Trips model and on-device hot-word detection | S18 | Prerequisite for B10. `sos_hot_words` rows are written and read by nothing until this lands. |
 | **B9** | Admin observability — fleet health at a glance | S21 | Once eight agents run on schedules, you cannot operate them without this. |

@@ -235,7 +235,12 @@ class SeededRiskSurface:
             flag
             for flag in loaded_flags()
             if flag.status in ("unconfirmed", "confirmed")
-            and is_live(at=at, expires_at=flag.expires_at, valid_to=flag.valid_to)
+            and is_live(
+                at=at,
+                expires_at=flag.expires_at,
+                valid_from=flag.valid_from,
+                valid_to=flag.valid_to,
+            )
         ]
 
     async def flags_in_bbox(

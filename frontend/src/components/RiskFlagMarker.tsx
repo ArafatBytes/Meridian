@@ -8,12 +8,20 @@
  * ```
  *   confirmed     (3)   filled, solid ring, source count in white
  *   unconfirmed    ?    hollow, dashed ring, question mark
+ *   scheduled     [3]   square rather than round — a claim about a future window
  * ```
  *
- * Two independent channels carry the same distinction — fill and ring style — because
- * one of them has to survive a projector with the contrast wound down, and because
- * colour alone already carries severity. A viewer who cannot separate hues still sees
- * solid-versus-hollow.
+ * Two independent channels carry the confirmed/unconfirmed distinction — fill and
+ * ring style — because one of them has to survive a projector with the contrast
+ * wound down, and because colour alone already carries severity. A viewer who cannot
+ * separate hues still sees solid-versus-hollow.
+ *
+ * **D09 adds scheduled, and it gets its own channel: shape.** Every other channel is
+ * already spent — colour on severity, fill and ring on verification — so a
+ * forward-dated flag is a rounded *square*. That matters because the two questions
+ * are independent: a scheduled flag can be confirmed or unconfirmed exactly as a
+ * live one can, and the map has to show both at once. Squareness says *when*,
+ * fill says *whether*, colour says *how bad*.
  *
  * ## Why this replaces `pinColor`
  *
@@ -43,6 +51,7 @@ import { Marker } from 'react-native-maps';
 import { colors } from '../theme';
 import type { RiskFlag } from '../types/contracts';
 import { riskBand } from './RiskFlagSheet';
+import { isScheduledFlag } from '../features/risk/scheduled';
 
 export interface RiskFlagMarkerProps {
   flag: RiskFlag;
@@ -55,6 +64,7 @@ export const isConfirmedFlag = (flag: RiskFlag): boolean => flag.status === 'con
 const RiskFlagMarkerComponent: React.FC<RiskFlagMarkerProps> = ({ flag, onPress }) => {
   const band = riskBand(flag.severityNow);
   const confirmed = isConfirmedFlag(flag);
+  const scheduled = isScheduledFlag(flag);
 
   return (
     <Marker
@@ -62,13 +72,15 @@ const RiskFlagMarkerComponent: React.FC<RiskFlagMarkerProps> = ({ flag, onPress 
       title={flag.mobilityStatement}
       // The callout keeps saying it in words as well as in shape. Shape is faster to
       // read; words are what a screen reader and a long-press get.
-      description={`${band.label} · ${Math.round(flag.severityNow)}/100 · ${
+      description={`${scheduled ? 'Scheduled · ' : ''}${band.label} · ${Math.round(
+        flag.severityNow,
+      )}/100 · ${
         confirmed ? `confirmed, ${flag.sourceCount} sources` : 'unconfirmed, 1 source'
       }`}
       anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={false}
       onPress={() => onPress(flag)}
-      accessibilityLabel={`${flag.mobilityStatement}. ${
+      accessibilityLabel={`${scheduled ? 'Scheduled. ' : ''}${flag.mobilityStatement}. ${
         confirmed
           ? `Confirmed by ${flag.sourceCount} independent sources.`
           : 'Unconfirmed, a single source.'
@@ -83,6 +95,9 @@ const RiskFlagMarkerComponent: React.FC<RiskFlagMarkerProps> = ({ flag, onPress 
             borderColor: band.color,
             borderStyle: confirmed ? 'solid' : 'dashed',
             borderWidth: 2,
+            // Square for scheduled. 7 rather than 0 so it still reads as a mark on
+            // a map at this size instead of a rendering artefact.
+            borderRadius: scheduled ? 7 : 13,
           },
         ]}
       >
@@ -114,6 +129,7 @@ export const RiskFlagMarker = React.memo(
     prev.flag.flagId === next.flag.flagId &&
     prev.flag.status === next.flag.status &&
     prev.flag.sourceCount === next.flag.sourceCount &&
+    prev.flag.validFrom === next.flag.validFrom &&
     Math.round(prev.flag.severityNow) === Math.round(next.flag.severityNow) &&
     prev.onPress === next.onPress,
 );

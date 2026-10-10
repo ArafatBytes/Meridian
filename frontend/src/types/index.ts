@@ -287,6 +287,10 @@ export type MapStackParamList = {
   MapView: undefined;
   CrimeReport: { location?: Coordinates };
   ReportDetails: { reportId: string };
+  // D09. The articles behind the pins currently on screen — a drill-down from the
+  // map, not a section of its own. `CrimeReport` and `ReportDetails` above have
+  // been declared since D01 with no screen behind either; see MapNavigator.
+  News: undefined;
 };
 
 export type ReportsStackParamList = {
@@ -304,6 +308,10 @@ export type ProfileStackParamList = {
   EditProfile: undefined;
   EmergencyContacts: undefined;
   SOSHotWords: undefined;
+  // D09, beat 9's second half. Declaring a route here is not shipping it -- the
+  // three below have been declared and unregistered since D01 -- so this also has
+  // a row on the profile menu and a screen in ProfileNavigator.
+  SOSHistory: undefined;
   Settings: undefined;
   TrackingHistory: undefined;
   About: undefined;
