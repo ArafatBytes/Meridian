@@ -69,118 +69,86 @@ Full write-up, indicators of compromise and the remediation checklist:
 
 ## 📍 CURRENT STATE
 
-*Last updated: 2026-10-09 · by: Arafat · after: D06 (closed on a device)*
+*Last updated: 2026-10-10 · by: Nakib · after: D08 (closed on a device)*
 
 | | |
 |---|---|
-| **Last sprint completed** | **D06 — ✅ CLOSED.** [`docs/walkthroughs/D06.md`](docs/walkthroughs/D06.md) steps 1–11 passed on a device; the run found **three** things, all fixed, and the walkthrough now has 13 steps. D01–D05 all closed |
-| **NEXT SPRINT** | **D07 — Crime detection from an image** (scheduled Oct 18–19) → [DEMO_PLAN.md](DEMO_PLAN.md) §D07. ⚠️ **Blocked on §7.1, which was due 17 October and is still open** |
+| **Last sprint completed** | **D08 — ✅ CLOSED.** [`docs/walkthroughs/D08.md`](docs/walkthroughs/D08.md) passed on a device, every step. D01–D07 all closed |
+| **NEXT SPRINT** | **D09 — Tomorrow's map, and the loop closed** (scheduled Oct 22) → [DEMO_PLAN.md](DEMO_PLAN.md) §D09 |
 | **Baton holder** | **free** |
-| **Trunk** | `develop` @ `3e35774` · **working tree uncommitted** — D06's 9 new files + 11 changed |
-| **Build status** | 🟢 **GREEN.** 286 backend tests (34 new), `mypy --strict` clean on 90 files, `tsc` clean, 45 jest, `check.sh` all green with the ESLint budget **held at 106**. Pre-existing and untouched: 2 failures in `tests/test_crime_vision.py` (D07's) |
-| **Slack** | D06 was scheduled Oct 16–17 and built Oct 9 — **seven days ahead**, and the OSRM long pole is now behind us |
-| **Phase** | 1 — Live surface and routing |
+| **Trunk** | `develop` @ `1bd0ab8` · D08 on `sprint/D08` |
+| **Build status** | 🟢 **GREEN.** 347 backend tests, 63 jest, `tsc` clean |
+| **Slack** | D08 was scheduled Oct 20–21 and built Oct 10 — **ten days ahead** |
+| **Phase** | 2 — Casework |
 
-### ✅ Beat 4 works, and the routing stack is no longer borrowed
+### ✅ Beat 7 works: a report becomes a General Diary
 
-- **Ranked alternatives**, coloured by safety, each with a framed one-sentence reason and a
-  trade-off clause — *"Fastest, and avoids 4 flagged corridors."*
-- **Flagged corridors drawn on the map**, solid on the route you are viewing and dashed on the
-  one you are not, so the comparison reads without narration.
-- **Our own OSRM graph.** `engine` on every response says `local`, and a fallback to the public
-  demo server is loud rather than silent.
-- **OSRM's durations.** Bangshal → Mirpur-10 reads **14 min**; the deleted flat-30 km/h
-  assumption said 25.
-- **One scale.** `safety_score` 0–100, higher is safer. `71/100`, not `70.6% Safe`.
+Open a report, tap **General Diary**, get a formal Bangla application naming the right thana.
+Edit it. Approve it — and you cannot approve what you have not read. Print the DMP form, or copy
+the narrative into the police's own Online GD app. Record the GD number the thana hands back.
 
-Five defects closed: **6** (filters honoured), **7** (local OSRM, real durations, walking),
-**8** (PostGIS corridor query), **10** (Nominatim proxy + cache), **11** (one scale).
+**We draft; a person files.** There is no submit endpoint and there will not be one: Bangladesh
+Police has no public API, and a cognizable offence — assault, robbery, theft, burglary, every
+category D07 proposes — cannot be closed online anyway. See
+[ADR 0007](docs/adr/0007-d08-casework-gd.md) and [`docs/reference/gd-formats.md`](docs/reference/gd-formats.md).
 
-### 🔴 The finding of the sprint: the chronic layer had to be down-weighted
+The review gate is not a disabled button. Approving sends the sha256 of the exact narrative the
+server issued; a wrong hash is a 409, and the database rejects `ready_to_file` without an
+`approved_at` regardless of which code writes to it.
 
-Scored at full weight, a 12.6 km Dhaka crossing passing three chronic flags scored
-**16.7/100**. Every route in the city scored about the same, so `max_crime_score` rejected all
-of them — defect 6's filter was meaningless — and the ranking reflected **historical coverage
-rather than today's events**.
+### 🔴 Two things prompting could not fix
 
-That is precisely the **"stale red zones"** failure demo beat 5 exists to disclaim, and
-concept document §9's commitment not to label areas permanently. `ROUTE_CHRONIC_WEIGHT=0.35`
-brings the same route to **68.6** and lets a live event move the number.
+1. **No model copies a 15-digit IMEI.** Gemini produced `35209900171481`, `35099001761481` and
+   `3352099001761481` for `352099001761481` across five attempts. Telling it not to convert to
+   Bangla numerals changed nothing. `app/casework/draft.py::_repair_identifiers` now substitutes
+   the complainant's own string back in, and where that would be ambiguous it warns rather than
+   guessing. A wrong IMEI is a stolen phone that can never be traced.
+2. **`crime_reports.category` could not be read through the ORM at all** — mapped by enum *name*
+   (`THEFT`) while every row holds the *value* (`theft`), because the frontend writes straight to
+   Supabase in lowercase. Invisible until D08 became the first code to read a report back through
+   SQLAlchemy; `endpoints/crimes.py` is still `pass` stubs.
 
-**It is tuned to one measurement on one corridor. Raise it only with another.**
+### 🔴 `police_stations.csv` was wrong, and §7.2 is closed
 
-### 🔴 Three bugs the new tests caught, all of which read as working code
+Motijheel was **14.6 km** from Motijheel. Dhaka thanas sit 2–4 km apart, so nearest-station lookup
+was effectively random — a Dhanmondi report proposed Mugda. `dmp.gov.bd/find-your-local-police/`
+carries a Google Maps embed per station whose marker resolves to the real location:
+**46 of 51 Dhaka stations now verified, 43 from DMP itself**, with a `coord_source` column saying
+which. Where DMP and OSM both have a point, 18 of 22 agree within 62 m.
 
-1. **`SeededRiskSurface.flags_near_path` raised on every call.** `zip(x, x[1:], strict=True)`
-   — offset slices always differ by one. The same pattern was in `alternatives._clears`.
-   **That is the offline demo path**, so D10's failure drill would have died on it.
-2. **The detour generator could not handle a flag *on* the route** — the commonest case there
-   is. It pushed away from the flag towards the nearest path vertex, so a flag on a vertex gave
-   zero distance and no waypoint. Now perpendicular to the route's heading.
-3. **An alternative claimed to avoid flags while being strictly worse.** Option 2 of the
-   Dhanmondi→Gulshan pair is slower *and* passes more flags, and it does avoid two — so the
-   literal count was 2. True and misleading. "Avoids N" now requires actually being safer.
+Still unverified and marked as such: Cantonment, Turag, Uttarkhan, Hatirjheel, Bhashantek.
+
+**§7.2 closed early:** `POLICE_ROUTING_ENABLED` stays `false` — not for lack of time, but because
+there is nothing to transmit to. "Routing" means naming the right thana on the document. The CSV's
+`email` and `phone` columns are one placeholder repeated 606 times and are never displayed.
 
 ### System state
 
 | Subsystem | State |
 |---|---|
-| Routing | ✅ **Local OSRM**, real durations, risk-scored through the protocol, explanations on screen |
-| Rumour Guard | ✅ Live (D05). Semantic dedup, promotion, measured threshold |
-| Live ingestion | ✅ 3 outlets every 15 min; **only Channel 24 has ever yielded a document** |
-| Risk surface | ✅ `db` and `seeded`; both satisfy the protocol including `flags_near_path` |
-| Geocoding | ✅ Gazetteer (guarded) + Nominatim proxy (general), kept separate on purpose |
-| Agents live | **3 of 8** — Live Risk, Expiry Sweep, Rumour Guard |
-| Walking routes | ⚠️ Car graph geometry, corrected durations, caveat on screen. A `foot.lua` graph is the fix |
-| Vision | ⚠️ `pose_analysis: null` always; 3 of 6 crime classes unreachable — **D07, and it is next** |
-| Known defects | **13 open of 44** — 6, 7, 8, 10, 11 closed this sprint |
+| `RISK_SURFACE_IMPL` | `seeded` |
+| Agents live | Casework Agent added (D08) |
+| Migrations applied | through `20261010160000__gd_profiles_on_auth_users.sql` |
+| Contracts | **CHANGED in D08** — `gd_drafts`, `gd_profiles`, `LLM_CHAIN_GD` |
+| Feature flags off | `POLICE_ROUTING_ENABLED` (permanently — §7.2) |
 
-### ⚠️ D07 is next and it is blocked on a decision
+### 🧵 Background activities (off-baton)
 
-**§7.1 — the image-analysis reasoning layer — was due 17 October and is still open.** D07
-cannot close defect 30 without it, because the vocabulary gap *is* the decision.
-
-And §7.1's recommendation needs rewording before it can be taken: it says *"local detection
-plus Claude vision… and the key is already configured"*, but **this project has no Anthropic
-key**. The LLM tier runs on free Gemini and Groq endpoints. Gemini's flash-lite models are
-multimodal and free, which is the obvious substitute — but that is a decision, not a fait
-accompli.
-
-### ⏳ Still open, unchanged by this sprint
-
-- **B0: credential rotation and the git-history rewrite** from the 7 October incident.
-- **`LLM_CHAIN_GEO`'s Groq fallback** — 95.6% with 1 fabrication, or 93.3% with none and no
-  network. Recommendation is to drop it. Owner's call.
-- **Beat 1 rests on one source.** Ekattor and Independent have never produced a document.
-- **Social media / official feeds** — backlogged as **B11a**, deliberately.
-
-### 🧵 Background activities (off-baton, §9)
-
-| Activity | Owner | Status |
-|---|---|---|
-| **OSRM graph (D06)** | Arafat | ✅ **built and serving** — no longer the long pole |
-| **Eval set (D07)** | Arafat | ❌ **2 of 30–40 images. Now the critical path** — D07 is next and its gate needs this |
-| Native Bangla reader (D08) | — | ❌ not arranged. Gate on D08, depends on someone else's calendar |
-| Dedup clusters (D05) | Arafat | 8 clusters hand-written; replace with real `summary_en` as the corpus grows |
-| Credential rotation (B0) | Arafat | in progress |
+| Activity | Status |
+|---|---|
+| **Native-speaker Bangla review** | ⏳ **the one D08 gate not met.** `backend/data/eval/gd_drafts.md` is written and waiting for a reader |
+| D07 eval set | 6 images; the gate wants 30–40 |
+| D07 replay fixture | re-capture after the final rehearsal |
 
 ### ▶️ RESUME HERE
 
-**1. Calibrate `ROUTE_CONGESTION_FACTOR` against a journey you know.** It is `0.35`, scaled
-from one measurement on one corridor, and it decides what the app tells someone about their
-journey. Pick a trip whose real duration you can vouch for, compare, and adjust — the number
-and its full derivation are in `config.py`. **This is the only outstanding item from D06 that
-affects what a user is told.**
+**Get a native Bangla speaker to read `backend/data/eval/gd_drafts.md` and sign the box at the
+bottom.** It is three scenarios × three drafts. Nine of nine passed the automated checks, and
+those checks cannot tell whether the Bangla is *right* — when `qwen3-vl:4b` was measured on the
+same task it wrote `কাকুরির মর` for Kakrail mor and the same checks called four of six runs
+"clean". Only a person decides this one.
 
-**2. Commit.** 10 new files and 13 changed, including a contract change to `RiskSurface`.
-
-**3. Take the §7.1 decision — it is overdue and D07 is next.** Reword it for a provider that
-exists before choosing.
-
-**4. Grow the D07 eval set, off the baton.** It holds 2 images; D07's gate wants 30–40 and
-nobody can compress that work later.
-
-Then **D07** ([DEMO_PLAN.md](DEMO_PLAN.md) §D07).
+Then **D09** ([DEMO_PLAN.md](DEMO_PLAN.md) §D09).
 
 ---
 
@@ -209,6 +177,85 @@ git push   # then PR, squash-merge to main, tell your partner
 # 📜 Handoff Log
 
 *Newest first. Append-only.*
+
+---
+
+## D08 — The General Diary, and the hand-off we deliberately do not automate
+
+*2026-10-10 · Nakib · `sprint/D08`*
+
+> **Note on the record:** D07 was closed and pushed (`1bd0ab8`) without a Handoff Log entry. This
+> entry does not try to reconstruct it; D07's own walkthrough and ADR 0006 hold that detail.
+
+**Shipped.** A report becomes a formal Bangla General Diary application addressed to the right
+thana. The reporter reads it, edits it, approves it, and prints the DMP form or copies the
+narrative into the police's own Online GD app. The walkthrough passed on a device, every step.
+
+**The decision that shaped the sprint.** The plan said "generate a Bangla GD" and left the next
+question unasked: what does the user *do* with it? Research (`docs/reference/gd-formats.md`) said
+Bangladesh Police has no public API, no partner process, and — decisively — **a cognizable offence
+cannot be closed online at all.** Assault, robbery, theft and burglary are every category D07
+proposes, so the walk to the thana exists no matter what we build. We draft; a person files. There
+is no submit endpoint, and ADR 0007 records why there will not be one.
+
+That also made the sprint *smaller* than planned: the official DMP form is a frame around one blank
+space, and the Online GD app's `অন্যান্য আবেদন` path is two fields — a type and one `বিবরণ` box.
+Both want the same paragraph. One artefact, not two.
+
+**The review gate is enforced, not displayed.** Approving sends the sha256 of the exact narrative
+the server issued. A wrong hash is a 409; an edit invalidates a prior reading; and the table's own
+check constraints reject `ready_to_file` without `approved_at` whoever writes the row. There is no
+`filed` state, because filing happens at a counter that tells us nothing — what we keep is the GD
+number the user types back in.
+
+**Model choice was measured, not assumed.** `gemini-3.5-flash-lite` 12/12, 1.84s.
+`gpt-oss-120b` 5/12 and it mangles proper nouns — `মজিদহিল` for Motijheel — so it is the fallback.
+`gemini-3.5-flash` 5/12 at 9.6s, rejected. `qwen3-vl:4b` was measured too and is **not usable**:
+`কাকুরির মর` for Kakrail mor, a destroyed year, an invented address. So `LLM_CHAIN_GD` is cloud
+only and with no network a GD cannot be drafted — the app says so rather than producing something
+that looks like an application and is not one.
+
+### Four defects found by building, three of them older than D08
+
+1. **No model can copy a 15-digit IMEI.** Five attempts, three corruptions. Prompting did not
+   help. `_repair_identifiers` now puts the complainant's own string back; ambiguity becomes a
+   warning on the review screen, never a guess.
+2. **`crime_reports.category` was unreadable through the ORM** — mapped by enum name, stored by
+   value. D08 is the first code to read a report back through SQLAlchemy, which is why nobody hit
+   it before.
+3. **`api.service` swallowed every backend message.** It read `data.message`; FastAPI writes
+   `data.detail`. Every error in the whole app surfaced as the literal string "An error occurred".
+   It also flattens axios errors, so `error.response.status` does not survive the interceptor —
+   which made a 404 meaning "no draft yet" look like a failure and alerted on every screen open.
+4. **`police_stations.csv` coordinates were wrong** — Motijheel 14.6 km from Motijheel. Fixed from
+   DMP's own station maps; 46 of 51 Dhaka stations verified, 43 from DMP. §7.2 closed with it.
+
+### A trap for whoever adds a local tier to a long-output feature
+
+Ollama compiles a strict `json_schema` into a GBNF grammar, and a large `maxLength` on a string
+breaks that compiler before a token is generated — `400 Failed to initialize samplers`. Measured:
+200, 500, 1000 and 1500 compile; 2000 and 3000 do not. D07's `CrimeCues.description` is 200, which
+is why the vision tier has never met it. Recorded beside the field in `app/llm/models.py`.
+
+### What was deliberately not done
+
+- **No offline tier for GD.** Measured, not assumed — see above. A replay fixture is the answer if
+  D10 wants beat 7 to survive a dead venue network.
+- **No Bangla station names.** `police_stations.csv` holds English only; inventing 606 Bangla
+  spellings is the same unverified-data mistake that put Motijheel 14 km from Motijheel. The
+  district is translated where known; station names stay as they are.
+- **Five Dhaka thanas left unverified** — Cantonment, Turag, Uttarkhan, Hatirjheel, Bhashantek have
+  no map on the DMP page and are not in OSM. They say `legacy — unverified` rather than pretending.
+- **Approval is not blocked on a missing profile.** You can read and approve a draft without one;
+  only printing needs the identity block, and the screen says so. Blocking review because someone
+  has not typed their father's name helps nobody.
+
+### The gate that is still open
+
+**A native Bangla speaker has not read the drafts.** `backend/data/eval/gd_drafts.md` is written
+and waiting. Nine of nine passed the automated checks — and those checks called four of six
+`qwen3-vl:4b` runs "clean" while it was writing `কাকুরির মর`. They cannot see bad Bangla. Only a
+person can.
 
 ---
 

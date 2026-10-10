@@ -293,6 +293,10 @@ export type ReportsStackParamList = {
   MyReports: undefined;
   AddReport: undefined;
   ReportDetails: { reportId: string };
+  // D08. The General Diary lives under Reports because that is where the
+  // report it is drafted from lives.
+  GdDraft: { reportId: string };
+  GdProfile: undefined;
 };
 
 export type ProfileStackParamList = {

@@ -371,12 +371,51 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
             </Text>
           </View>
         </View>
+
+        {/* D08 — the General Diary. A report is a record; this is what turns it
+            into something a police station will accept. We draft it; the user
+            signs and files it. */}
+        <TouchableOpacity
+          style={styles.gdButton}
+          onPress={() => navigation.navigate('GdDraft', { reportId })}
+        >
+          <MaterialCommunityIcons
+            name="file-document-edit-outline"
+            size={22}
+            color={colors.white}
+          />
+          <View style={styles.gdButtonText}>
+            <Text style={styles.gdButtonTitle}>General Diary</Text>
+            <Text style={styles.gdButtonSubtitle}>
+              Turn this report into a formal Bangla GD application
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.white} />
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  gdButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  gdButtonText: { flex: 1, marginLeft: spacing.md },
+  gdButtonTitle: { color: colors.white, fontSize: fontSize.md, fontWeight: '700' },
+  gdButtonSubtitle: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: fontSize.xs,
+    marginTop: 2,
+  },
   container: {
     flex: 1,
     backgroundColor: colors.background,

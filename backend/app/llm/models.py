@@ -181,3 +181,55 @@ class CrimeCues(BaseModel):
             "can be seen. Do not name a crime, assign blame, or say what someone intends."
         ),
     )
+
+
+class GdDraft(BaseModel):
+    """
+    D08's one call: the body of a General Diary application. ADR 0007.
+
+    Three fields, and the smallest of the three is the one that matters. The
+    DMP form is a frame around a single blank space, and the Online GD app's
+    `onnanno abedon` path is two fields -- the type, and one description box.
+    Both want the same paragraph, so we generate it once.
+
+    `narrative_bn` is the whole product. There is no second artefact to fall
+    back on if it reads wrong, which is why a native speaker signing off is a
+    gate on D08 and not a nicety.
+    """
+
+    # `max_length` is a real constraint on this field and also a ceiling on
+    # where this model can run. Ollama compiles a strict `json_schema` into a
+    # GBNF grammar, and a large `maxLength` blows that compiler up:
+    # `failed to parse grammar`, before a single token is generated. Measured
+    # 2026-10-10 against qwen3-vl:4b — 200, 500, 1000 and 1500 compile; 2000 and
+    # 3000 do not. D07's `CrimeCues.description` is 200, which is why that tier
+    # has never hit this.
+    #
+    # It does not bite today, because `LLM_CHAIN_GD` is cloud-only by decision.
+    # It would bite the moment someone adds a local tier here, so: anything
+    # above ~1500 needs this field relaxed for that provider, not a debugging
+    # session.
+    narrative_bn: str = Field(
+        max_length=3000,
+        description=(
+            "The complainant's account in the formal written Bangla used in "
+            "official applications, in the first person, beginning with "
+            "'binito nibedon ei je,'. Only facts the complainant gave. Where a "
+            "fact a duty officer would ask for is missing, write a bracketed gap "
+            "rather than inventing one."
+        ),
+    )
+    summary_en: str = Field(
+        max_length=400,
+        description=(
+            "One sentence in English saying what the narrative claims happened, "
+            "so the draft can be checked by someone who does not read Bangla "
+            "before they sign it."
+        ),
+    )
+    missing_details: list[str] = Field(
+        description=(
+            "Facts a duty officer will ask for that the complainant did not "
+            "provide, in English, at most six. Empty when nothing is missing."
+        ),
+    )

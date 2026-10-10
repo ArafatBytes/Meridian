@@ -516,7 +516,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
       const createdAtString = `${nowYear}-${nowMonth}-${nowDay}T${nowHours}:${nowMinutes}:${nowSeconds}.000Z`;
 
       // Submit report to Supabase
-      await crimeService.submitReport({
+      const filed = await crimeService.submitReport({
         category: selectedCategory,
         title: title.trim(),
         description: description.trim(),
@@ -548,12 +548,29 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
           : null,
       });
 
-      Alert.alert('Success', 'Your report has been submitted successfully', [
-        {
-          text: 'OK',
-          onPress: () => navigation.goBack(),
-        },
-      ]);
+      // D08. A report is a record; a General Diary is what a police station
+      // will accept. The moment someone has just finished describing what
+      // happened is the moment they have the details in their head, so offer it
+      // here rather than making them find the report again. Not *during* the
+      // report — a GD is drafted from a filed one, and splitting their
+      // attention while they are still describing the incident helps nobody.
+      const filedId = filed?.id;
+      Alert.alert(
+        'Report submitted',
+        filedId
+          ? 'Do you want to file this with the police? Meridian can write the General Diary application in formal Bangla — you read it, approve it and take it to the thana.'
+          : 'Your report has been submitted successfully',
+        filedId
+          ? [
+              { text: 'Not now', style: 'cancel', onPress: () => navigation.goBack() },
+              {
+                text: 'Create General Diary',
+                onPress: () =>
+                  navigation.replace('GdDraft', { reportId: filedId }),
+              },
+            ]
+          : [{ text: 'OK', onPress: () => navigation.goBack() }],
+      );
     } catch (error: any) {
       Alert.alert(
         'Submission Failed',

@@ -4,6 +4,8 @@ import { ReportsStackParamList } from '../types';
 import ReportsScreen from '../screens/Reports/ReportsScreen';
 import AddReportScreen from '../screens/Reports/AddReportScreen';
 import ReportDetailsScreen from '../screens/Reports/ReportDetailsScreen';
+import GdDraftScreen from '../screens/Casework/GdDraftScreen';
+import GdProfileScreen from '../screens/Casework/GdProfileScreen';
 
 const Stack = createNativeStackNavigator<ReportsStackParamList>();
 
@@ -17,6 +19,8 @@ const ReportsNavigator: React.FC = () => {
       <Stack.Screen name="MyReports" component={ReportsScreen} />
       <Stack.Screen name="AddReport" component={AddReportScreen} />
       <Stack.Screen name="ReportDetails" component={ReportDetailsScreen} />
+      <Stack.Screen name="GdDraft" component={GdDraftScreen} />
+      <Stack.Screen name="GdProfile" component={GdProfileScreen} />
     </Stack.Navigator>
   );
 };

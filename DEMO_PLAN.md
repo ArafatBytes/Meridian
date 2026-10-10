@@ -88,7 +88,7 @@ sprint that makes it real *and* to the walkthrough that proves it.
 | 4 | Request a route through a flagged corridor. An alternative is offered with a plain-language reason: *fire reported near Bangshal, roads likely blocked, three sources.* | D06 | `D06` |
 | 5 | Show a flag whose severity has decayed below threshold and disappeared on its own. **No stale red zones.** | D02 | `D02` |
 | 6 | Report an incident with a photo. The vision stack analyses it, names what it found, and the evidence is persisted. | D07 | `D07` |
-| 7 | Generate the **Bangla General Diary** from that report. Correct thana. Human review gate that cannot be bypassed. | D08 | `D08` |
+| 7 | Generate the **Bangla General Diary** from that report. Correct thana. Human review gate that cannot be bypassed. Then show both exits — print the DMP form, or copy the narrative into the police's own app. **We draft; a person files.** | D08 | `D08` |
 | 8 | Show **tomorrow's** map: an announced procession already flagged, before it happens. | D09 | `D09` |
 | 9 | Trigger SOS. Email delivered, **and here is the record** — the loop closed. | D01, D09 | `D01`, `D09` |
 
@@ -840,11 +840,11 @@ these photos as GD attachments.
 ---
 
 ## D08 — Casework Agent: the Bangla General Diary
-**Oct 20–21 · source: S27, S28**
+**Oct 20–21 · source: S27, S28 · decided by ADR 0007**
 
 **Showable:** open a report you filed, tap **generate GD**, and get a formal Bangla General Diary
-draft naming the correct thana. Edit it. Try to submit without approving — **the app will not let
-you.** Export the PDF.
+draft naming the correct thana. Edit it. Try to approve without reading — **the app will not let
+you.** Export the PDF, or copy the narrative straight into the police's own Online GD app.
 
 **Gate:** `docs/walkthroughs/D08.md` passes on a device, and a native Bangla speaker has read three
 drafts and signed off. D01–D07 still pass.
@@ -852,23 +852,91 @@ drafts and signed off. D01–D07 still pass.
 > The long plan calls the closed loop **"the decisive differentiator"**, and this is the cheapest
 > high-value sprint in the track: one LLM call, one template, one lookup, one review screen.
 
-- [ ] GD template in formal Bangla, structured from the real form *(S27)*
-- [ ] Thana identification from incident coordinates, over `police_stations.csv` *(S27)*
-- [ ] `CaseworkAgent` — report plus evidence plus geolocation becomes a draft, through
-      `app/llm/client.py` with a validated output model *(S27)*
-- [ ] **Mandatory human review. It must be structurally impossible to submit an unreviewed draft —
+**What the research changed** — `docs/reference/gd-formats.md`, ADR 0007:
+
+> **We draft; a person files.** There is no Bangladesh Police API, no partnership, and no way to get
+> one in fourteen days — and a cognizable offence (assault, robbery, theft, burglary: *every*
+> category D07 proposes) cannot be closed online anyway. The applicant must appear at the thana.
+>
+> **One narrative serves both routes.** The official DMP form is a frame around one blank space, and
+> the Online GD app's `অন্যান্য আবেদন` → `সাধারন ডায়রী করার আবেদন` path is **two fields**: the type,
+> and one `বিবরণ` box. Both want the same formal Bangla paragraph. No second template.
+>
+> **The state machine has no `filed` state.** It ends at `ready_to_file`. We add a *"GD number (if
+> filed)"* the user types back in — which closes the loop truthfully and makes Meridian their case
+> record.
+
+- [x] **GD profile — the one genuine addition.** The DMP form requires জাতীয় পরিচয় পত্র নং, পিতা,
+      মাতা, ঠিকানা (স্থায়ী) **and** ঠিকানা (বর্তমান) as separate fields. We store none of them and
+      they are not guessable. Collected once, reused. **Not in the original plan; budget for it**
+- [x] GD template on the real DMP frame, in formal Bangla — `docs/reference/dmp-gd-form.pdf`
+      transcribed in `docs/reference/gd-formats.md`. Use the form's own spelling (সাধারণ ডাইরী) *(S27)*
+- [x] Thana identification from incident coordinates, over `police_stations.csv` *(S27)*. **Show the
+      thana name only — never the email or phone columns**, which are one placeholder repeated 606
+      times. See §7.2, now closed
+- [x] `CaseworkAgent` — report plus geolocation becomes a draft, through `app/llm/client.py` with a
+      validated output model *(S27)*
+- [x] `LLM_CHAIN_GD=gemini:gemini-3.5-flash-lite,groq:openai/gpt-oss-120b` — measured, ADR 0007.
+      Keys `GEMINI_KEY_GD_ONE`, `GROQ_KEY_GD_ONE`
+- [x] ⚠️ **Offline tier: measured, and there is none.** `qwen3-vl:4b` was run on the same three
+      scenarios on 10 Oct. It writes **কাকুরির মর** for Kakrail mor and **মুটি জেলার শাপলা চট্টার**
+      for Motijheel Shapla Chattar, destroyed a year (`০৯ অক্টোবর ২৮`), invented an address that
+      appears nowhere in the report, and took 7–13s against the cloud tier's 1.8s. **And the
+      automated checks called four of those six runs "clean"** — which is the sharpest argument
+      there is for why the native-speaker sign-off is a gate. **With no network, drafting fails
+      with a message and saves nothing.** If D10 wants beat 7 offline, the answer is a replay
+      fixture, not a local model. **Open for D10**
+- [x] **Nothing the vision model proposed may enter the narrative as fact.** The confirmed category
+      may select the template; D07's cue outputs may not become sentences. A false complaint is
+      punishable, and the person signing it is the user
+- [x] **Mandatory human review. It must be structurally impossible to approve an unreviewed draft —
       enforced in the state machine, not the UI.** A generated legal document is a draft until a
       person approves it, and this is the single most likely thing for a judge to press on *(S28)*
-- [ ] ⚠️ **Embed a Bengali-glyph font in the PDF export.** Default PDF base fonts have no Bengali
-      coverage, so the output renders as empty boxes — and it will look fine on screen right up to
-      the moment you export. Budget time for this; it is the classic trap in this task
-- [ ] 📱 **`features/casework/`** — draft review, inline edit, approve, export to PDF *(S28)*
-- [ ] 📱 **The review gate visible as a gate** — a disabled submit with a stated reason, not a hidden
-      button. The safeguard is a selling point; show it working
+- [x] ⚠️ ~~**Embed a Bengali-glyph font in the PDF export.**~~ **Avoided rather than solved.** The
+      PDF is printed on the device through `expo-print`, which renders HTML with Android's own text
+      stack — the one already drawing Bangla everywhere else in the app. No font to embed, no
+      shaping library, no PDF dependency in the backend. The trap is real; we stepped around it
+- [x] 📱 **`features/casework/`** — draft review, inline edit, approve, export to PDF *(S28)*
+- [x] 📱 **The review gate visible as a gate** — a disabled approve with a stated reason, not a
+      hidden button. The safeguard is a selling point; show it working
+- [x] 📱 **Two exits and a card.** **Print** → the full PDF on the DMP frame, signature line blank.
+      **Copy** → the narrative alone, for pasting into `বিবরণ`. **Where else to take this** → 999,
+      109, PCSW `01320-000888`, CID Cyber `01320010148`, keyed off the category
 - [ ] **A native speaker reads at least three drafts.** Formal Bangla that is subtly wrong is worse
       on stage than an English placeholder. **This is a gate, and it depends on a person — arrange
-      them in §9, not on the 20th** *(S28)*
-- [ ] 📄 `docs/walkthroughs/D08.md`
+      them in §9, not on the 20th.** The narrative is now the *entire* product in both routes, so
+      this reviewer is load-bearing in a way they were not when the plan was written *(S28)*
+- [x] 📄 `docs/walkthroughs/D08.md` — written and **run on a device, 10 Oct**
+- [x] 🔴 **D08 walkthrough run on the device, 10 Oct — all steps passed.** §0 satisfied
+- [ ] 🔴 **The native-speaker gate.** `python scripts/eval_gd_drafts.py --runs 3` writes
+      `data/eval/gd_drafts.md` with three scenarios, three drafts each and a sign-off box. Nine of
+      nine came back clean on 10 Oct — no invented numbers, no repeated form line, 96–100% Bangla,
+      ~1.8s. **Clean is not the same as correct Bangla.** Only the reviewer decides that
+- [x] **Dhaka thana coordinates fixed from the police's own site.** `dmp.gov.bd/find-your-local-
+      police/` carries a Google Maps embed per station; resolving each embed gives the station's
+      marker. **46 of 51 verified, 43 of them from DMP itself**, with `coord_source` recording
+      which source each row came from. Where DMP and OSM both have a point, 18 of 22 agree within
+      62 m. Dhanmondi 27 → Dhanmondi 0.66 km; Paltan → Paltan 0.10 km; Mugda → Mugda 0.05 km
+- [ ] 5 Dhaka thanas still unverified — **Cantonment, Turag, Uttarkhan, Hatirjheel, Bhashantek**.
+      None has a map embed on the DMP page and none is mapped in OSM. The thana picker covers them
+- [ ] 💡 **This also unblocks "find the nearest police station"** as a feature, which was not
+      viable this morning. **Outside D08** — raise it separately
+
+**Found while building, 10 October — two defects no amount of prompting fixed:**
+
+> **The model cannot copy a 15-digit IMEI.** Across five attempts Gemini produced
+> `35209900171481`, `35099001761481` and `3352099001761481` for `352099001761481` — a digit dropped,
+> dropped again, and one added. Telling it not to convert to Bangla numerals did not help, because
+> the problem is copying a long digit string at all. **So the model no longer does that job:**
+> `_repair_identifiers` substitutes the complainant's own string back in, and where it cannot do so
+> unambiguously it adds a line to the review screen instead of guessing. A wrong IMEI is a stolen
+> phone that can never be traced.
+>
+> **`crime_reports.category` could not be read through the ORM at all.** The model mapped it by
+> enum *name* (`THEFT`) while every row holds the *value* (`theft`) — the frontend writes reports
+> straight to Supabase in lowercase. Any ORM read raised `LookupError`. It stayed invisible because
+> the handlers in `endpoints/crimes.py` are still `pass` stubs, and **D08 is the first code in the
+> project to read a report back through SQLAlchemy.**
 
 ---
 
@@ -919,7 +987,8 @@ sprint that ships a feature.**
 - [ ] **Three full rehearsals on the real device.** Time them. Nine minutes is the target
 - [ ] **Failure drills:** kill the network, kill Redis, kill the LLM key. The demo should degrade to
       the seeded surface and keep going. Rehearse the sentence you say while it does
-- [ ] Decide and document the police-routing position — §7.2 *(S05)*
+- [x] ~~Decide and document the police-routing position — §7.2~~ **closed early, 10 Oct, ADR 0007.
+      `POLICE_ROUTING_ENABLED=false`: there is nothing to transmit to** *(S05)*
 - [ ] Q&A numbers ready: geolocation accuracy (D03), flag precision (D05), **vision
       false-accusation rate (D07)**, time-from-incident-to-alert (D04)
 - [ ] **Write down what was cut**, and the honest one-line answer for each. Judges ask; a prepared
@@ -1053,10 +1122,20 @@ category is always human. Three tiers behind one chain, all measured on 2026-10-
 > beats the best fine-tuned method on UCF-Crime, with **over 20 AUC points** coming from prompt
 > design alone. "Use a VLM and prompt it well" is the frontier, not the shortcut.
 
-**7.2 — Police routing. Decide in D10.**
+**7.2 — Police routing. ✅ CLOSED 2026-10-10 by ADR 0007.**
 
-Either seed real thana contacts for the demo zone, or leave `POLICE_ROUTING_ENABLED=false` and be
-ready to say why. Do not demo it against 606 rows of `noorlabib@iut-dhaka.edu`.
+`POLICE_ROUTING_ENABLED` **stays `false`**, and the answer to "why" is not a shortage of time — it
+is that **there is nothing to transmit to.** Bangladesh Police has no public API, no developer
+portal and no partner process; the only API that exists anywhere is the internal one between Online
+GD and CDMS++. And a cognizable offence cannot be closed online in any case: the applicant must
+appear at the thana with a printed copy.
+
+So **routing means naming the right thana on the document**, not sending anything. The thana name
+is shown; `police_stations.csv`'s `email` and `phone` columns are **never displayed** — 606 rows
+carry one placeholder address and one placeholder number. The coordinates are real and are what the
+lookup uses. If a real contact list is ever obtained this becomes a data change, not a code change.
+
+Research: `docs/reference/gd-formats.md`. Decision: `docs/adr/0007-d08-casework-gd.md`.
 
 ---
 
@@ -1071,7 +1150,7 @@ Stated now so they are recognised rather than discovered.
 | **A sprint silently breaks an earlier one.** | Nine sprints touching one app in 17 days. The D01 draft of this plan dropped `public.users` while `sos.py` still wrote to it — beat 9 would have died on 8 October and surfaced on the 23rd. **This has now actually happened once:** D04 found that SOS had been 401ing on any session older than an hour since D01, undetected because `D01.md` is always run just after signing in. | §3's second gate: **every previous walkthrough still passes before you hand over.** That is the regression suite — and note it was not enough here. A walkthrough re-run reproduces the *steps*, not the *state*; this bug needed a stale session. **When re-running D01, sign in at least an hour beforehand, or sign in on the previous day.** |
 | **Live ingestion is unreliable on the day.** Scrapers break, sites block, networks fail. | Beat 1 depends on D04 working at a specific minute in a specific room. | D02's fixture plus D04's replayable cache. D04's gate requires a successful run **with the network off**. |
 | **The gazetteer and the OSRM graph are long poles.** Manual and slow, neither compressible by an agent. | The concept document names the gazetteer the primary technical risk; the OSRM graph is a multi-gigabyte download plus preprocessing. | Both are §9 background work, started **now**, off the baton, during D01–D02. |
-| **Bangla output is subtly wrong, or renders as boxes.** | Formal legal Bangla is not validatable by eye the night before, and PDF base fonts have no Bengali glyphs. | Native-speaker sign-off is a D08 *gate*. The font is an explicit D08 task. Arrange the reviewer in §9. |
+| **Bangla output is subtly wrong, or renders as boxes.** | Formal legal Bangla is not validatable by eye the night before, and PDF base fonts have no Bengali glyphs. **ADR 0007 made this worse:** one narrative now serves both the printed form and the online app, so if the Bangla is wrong there is nothing else carrying the draft. | Native-speaker sign-off is a D08 *gate*, and now a load-bearing one. The font is an explicit D08 task. **Arrange the reviewer in §9, before the 20th.** Model chosen by measurement, not reputation — ADR 0007: `gemini-3.5-flash-lite` wrote correct place names and Bangla numerals 12/12; `gpt-oss-120b` mangled Motijheel and Kakrail and left dates in Latin script. |
 | **D07 overruns.** | §7.1 is taken, and most of the sprint is deletion — but **the evidence photo is the first storage write in the codebase** (no bucket, no image column, no precedent), and **neither model has been shown a photo that should flag.** Those are the two unestimated pieces. | Three tiers, so no single failure kills beat 6 (ADR 0006's failure matrix). The eval set is §9.3, started now and off the baton. If D07 slips, cut to **"describe and persist"** — drop the proposed category, keep the description and the stored photo. The honest version is still showable. |
 | **A judge asks about something the demo quietly avoids.** | Honest answers exist for every gap, but only if prepared. | D10's cut list and Q&A numbers. "Measured, scheduled, here is the figure" beats improvisation. |
 
