@@ -71,6 +71,11 @@ const ProfileScreen: React.FC<Props> = ({ navigation }) => {
       title: 'SOS Hot Words',
       onPress: () => navigation.navigate('SOSHotWords'),
     },
+    {
+      icon: 'document-text-outline',
+      title: 'SOS History',
+      onPress: () => navigation.navigate('SOSHistory'),
+    },
     { icon: 'time-outline', title: 'Tracking History', onPress: () => {} },
     { icon: 'settings-outline', title: 'Settings', onPress: () => {} },
     { icon: 'information-circle-outline', title: 'About', onPress: () => {} },

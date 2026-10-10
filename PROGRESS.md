@@ -69,118 +69,123 @@ Full write-up, indicators of compromise and the remediation checklist:
 
 ## 📍 CURRENT STATE
 
-*Last updated: 2026-10-09 · by: Arafat · after: D06 (closed on a device)*
+*Last updated: 2026-10-10 · by: Nakib · after: D09 (closed on a device)*
 
 | | |
 |---|---|
-| **Last sprint completed** | **D06 — ✅ CLOSED.** [`docs/walkthroughs/D06.md`](docs/walkthroughs/D06.md) steps 1–11 passed on a device; the run found **three** things, all fixed, and the walkthrough now has 13 steps. D01–D05 all closed |
-| **NEXT SPRINT** | **D07 — Crime detection from an image** (scheduled Oct 18–19) → [DEMO_PLAN.md](DEMO_PLAN.md) §D07. ⚠️ **Blocked on §7.1, which was due 17 October and is still open** |
+| **Last sprint completed** | **D09 — ✅ CLOSED.** [`docs/walkthroughs/D09.md`](docs/walkthroughs/D09.md) passed on a device, every step. D01–D08 all closed |
+| **NEXT SPRINT** | **D10 — Feature freeze, hardening, rehearsal** (scheduled Oct 23) → [DEMO_PLAN.md](DEMO_PLAN.md) §D10 |
 | **Baton holder** | **free** |
-| **Trunk** | `develop` @ `3e35774` · **working tree uncommitted** — D06's 9 new files + 11 changed |
-| **Build status** | 🟢 **GREEN.** 286 backend tests (34 new), `mypy --strict` clean on 90 files, `tsc` clean, 45 jest, `check.sh` all green with the ESLint budget **held at 106**. Pre-existing and untouched: 2 failures in `tests/test_crime_vision.py` (D07's) |
-| **Slack** | D06 was scheduled Oct 16–17 and built Oct 9 — **seven days ahead**, and the OSRM long pole is now behind us |
-| **Phase** | 1 — Live surface and routing |
+| **Trunk** | `develop` @ `1bd0ab8` · D08 and D09 on `sprint/D08` |
+| **Build status** | 🟢 **GREEN.** 375 backend tests, 101 jest, `tsc` clean |
+| **Slack** | D09 was scheduled Oct 22 and built Oct 10 — **twelve days ahead** |
+| **Phase** | 2 — Casework / forward-looking risk. **Feature work is now frozen: D10 is hardening only** |
 
-### ✅ Beat 4 works, and the routing stack is no longer borrowed
+### ✅ Beat 8 works: the map moves to tomorrow
 
-- **Ranked alternatives**, coloured by safety, each with a framed one-sentence reason and a
-  trade-off clause — *"Fastest, and avoids 4 flagged corridors."*
-- **Flagged corridors drawn on the map**, solid on the route you are viewing and dashed on the
-  one you are not, so the comparison reads without narration.
-- **Our own OSRM graph.** `engine` on every response says `local`, and a fallback to the public
-  demo server is loud rather than silent.
-- **OSRM's durations.** Bangshal → Mirpur-10 reads **14 min**; the deleted flat-30 km/h
-  assumption said 25.
-- **One scale.** `safety_score` 0–100, higher is safer. `71/100`, not `70.6% Safe`.
+Open the Map. Tap **Tomorrow** on the time control. Three flags appear that were not there, drawn
+as **squares** rather than circles, and some of the live ones are gone. Tap one: the sheet says
+**Scheduled**, gives the window, and labels the time **Announced** rather than Observed — nobody
+observed a procession that has not happened.
 
-Five defects closed: **6** (filters honoured), **7** (local OSRM, real durations, walking),
-**8** (PostGIS corridor query), **10** (Nominatim proxy + cache), **11** (one scale).
+Measured on the seeded surface: **192 flags at `Now`, 0 scheduled. 67 at `Tomorrow`, 3 scheduled.**
 
-### 🔴 The finding of the sprint: the chronic layer had to be down-weighted
+**No migration and no contract change.** D01 put `valid_from` / `valid_to` on `risk_flags` twelve
+days before anything used them, and `decay.decay_anchor` already measured decay from the start of
+the window rather than from the announcement. D09 is mostly the agent that fills those columns.
 
-Scored at full weight, a 12.6 km Dhaka crossing passing three chronic flags scored
-**16.7/100**. Every route in the city scored about the same, so `max_crime_score` rejected all
-of them — defect 6's filter was meaningless — and the ranking reflected **historical coverage
-rather than today's events**.
+### ✅ Beat 9 closes: the alert, and the record
 
-That is precisely the **"stale red zones"** failure demo beat 5 exists to disclaim, and
-concept document §9's commitment not to label areas permanently. `ROUTE_CHRONIC_WEIGHT=0.35`
-brings the same route to **68.6** and lets a live event move the number.
+`GET /sos/history` did not exist — `endpoints/sos.py` had exactly one route. It does now, scoped to
+the caller in the WHERE clause rather than filtered afterwards, and Profile → **SOS History** shows
+each alert with its delivery state, recipient count and coordinates. The video is sent and deleted;
+contacts are a count, not addresses. Both are said on the screen.
 
-**It is tuned to one measurement on one corridor. Raise it only with another.**
+### 🔴 The defect that would have broken beat 8 on stage
 
-### 🔴 Three bugs the new tests caught, all of which read as working code
+**Nothing stopped a forward-dated flag being served before its window opened.** `elapsed_hours`
+clamps a negative age to zero, so tomorrow's procession would have appeared on *tonight's* map at
+**full severity** — and bent tonight's routes around a road that is currently clear. Fixed as a
+`valid_from` floor in **both** `surface_db._LIVE_PREDICATE` and its Python mirror `decay.is_live`,
+with an invariant that asserts both still say it: a floor in only one would make the offline demo
+and the live backend disagree about whether tomorrow is visible today.
 
-1. **`SeededRiskSurface.flags_near_path` raised on every call.** `zip(x, x[1:], strict=True)`
-   — offset slices always differ by one. The same pattern was in `alternatives._clears`.
-   **That is the offline demo path**, so D10's failure drill would have died on it.
-2. **The detour generator could not handle a flag *on* the route** — the commonest case there
-   is. It pushed away from the flag towards the nearest path vertex, so a flag on a vertex gave
-   zero distance and no waypoint. Now perpendicular to the route's heading.
-3. **An alternative claimed to avoid flags while being strictly worse.** Option 2 of the
-   Dhanmondi→Gulshan pair is slower *and* passes more flags, and it does avoid two — so the
-   literal count was 2. True and misleading. "Avoids N" now requires actually being safer.
+The fixture also had **zero** forward-dated flags, so beat 8 had nothing to show at all.
+
+### 🔴 Live news ingestion is producing almost nothing — next phase's work
+
+Measured 10 Oct, and it is **older than D09**:
+
+| | |
+|---|---|
+| `raw_documents` ever stored | 24 |
+| extracted incidents | 4 |
+| of those, published as a flag | **1**, and it has expired |
+| of those, rejected by the gazetteer | 3 |
+| recent `live_risk` runs | `in=0 out=0` — ~390 articles listed, ~1% pass the filter, and those are already stored |
+
+**So beats 1 and 2 run on the seeded surface, not on live news.** Defensible on stage —
+`RISK_SURFACE_IMPL` is the switch and the agent is real — and now a decision rather than a
+discovery. **Owner's call, 10 Oct: more sources and fixes come in the next phase; do not dabble
+now.** The news page was built partly so that work is visible when it lands.
+
+### 🧵 The news page is the ingestion dashboard
+
+Map → tap the risk badge → **What we read**. Today and Tomorrow tabs, the agent's own last-run
+numbers in the header, and a counter reading **`n real of m · the rest is sample data`**.
+
+**Today it reads `0 real of 25`** on the `db` surface — 1 of 26 on `seeded`, which also serves
+the replay fixture's single real article. That is the number to watch. It is deliberately prominent: a
+page that presented 31 fixture headlines as a day's work would make it impossible to tell whether a
+given day's ingestion had done anything.
+
+Building it corrected an earlier estimate of mine. `fixture.py::_generated_sources` invents a
+reference for every seeded flag that did not spell its own out, so the first version of the Today
+tab was **274 cards, 272 of them reading `Sample report — Mirpur 10`**. Those are not articles —
+the generator's comment says the titles are deliberately implausible so nobody mistakes the fixture
+for a news archive — so they are filtered out. 274 → 31.
+
+A device run then caught a second one: the **chronic layer** cites a real `police.gov.bd` statistics
+URL on every derived flag, so the header read `1 real of 30` on a day when **no news article had
+been ingested at all**. A permanent +1 from a statistics table makes the only number this screen
+exists for unreadable. The chronic layer is excluded now; 31 → 25, and the counter reads `0`, which
+is the truth.
 
 ### System state
 
 | Subsystem | State |
 |---|---|
-| Routing | ✅ **Local OSRM**, real durations, risk-scored through the protocol, explanations on screen |
-| Rumour Guard | ✅ Live (D05). Semantic dedup, promotion, measured threshold |
-| Live ingestion | ✅ 3 outlets every 15 min; **only Channel 24 has ever yielded a document** |
-| Risk surface | ✅ `db` and `seeded`; both satisfy the protocol including `flags_near_path` |
-| Geocoding | ✅ Gazetteer (guarded) + Nominatim proxy (general), kept separate on purpose |
-| Agents live | **3 of 8** — Live Risk, Expiry Sweep, Rumour Guard |
-| Walking routes | ⚠️ Car graph geometry, corrected durations, caveat on screen. A `foot.lua` graph is the fix |
-| Vision | ⚠️ `pose_analysis: null` always; 3 of 6 crime classes unreachable — **D07, and it is next** |
-| Known defects | **13 open of 44** — 6, 7, 8, 10, 11 closed this sprint |
+| `RISK_SURFACE_IMPL` | **`db`** — it is *unset* in `backend/.env`, so `config.py`'s default applies. This file said `seeded` for several sprints and that was wrong. It matters: on `db` the fixture reaches the map only after `scripts/seed_risk_flags.py` has been run, and on `seeded` the fixture is read straight from disk at process start |
+| Agents live | **Scheduled Risk Agent added (D09)** — `scheduled_risk`, cron `20 * * * *` |
+| Migrations applied | through `20261010160000__gd_profiles_on_auth_users.sql` — **D09 adds none** |
+| Contracts | **UNCHANGED in D09.** `valid_from` / `valid_to` have been on the wire since D01 |
+| Feature flags off | `POLICE_ROUTING_ENABLED` (permanently — §7.2) |
 
-### ⚠️ D07 is next and it is blocked on a decision
+### 🧵 Background activities (off-baton)
 
-**§7.1 — the image-analysis reasoning layer — was due 17 October and is still open.** D07
-cannot close defect 30 without it, because the vocabulary gap *is* the decision.
-
-And §7.1's recommendation needs rewording before it can be taken: it says *"local detection
-plus Claude vision… and the key is already configured"*, but **this project has no Anthropic
-key**. The LLM tier runs on free Gemini and Groq endpoints. Gemini's flash-lite models are
-multimodal and free, which is the obvious substitute — but that is a decision, not a fait
-accompli.
-
-### ⏳ Still open, unchanged by this sprint
-
-- **B0: credential rotation and the git-history rewrite** from the 7 October incident.
-- **`LLM_CHAIN_GEO`'s Groq fallback** — 95.6% with 1 fabrication, or 93.3% with none and no
-  network. Recommendation is to drop it. Owner's call.
-- **Beat 1 rests on one source.** Ekattor and Independent have never produced a document.
-- **Social media / official feeds** — backlogged as **B11a**, deliberately.
-
-### 🧵 Background activities (off-baton, §9)
-
-| Activity | Owner | Status |
-|---|---|---|
-| **OSRM graph (D06)** | Arafat | ✅ **built and serving** — no longer the long pole |
-| **Eval set (D07)** | Arafat | ❌ **2 of 30–40 images. Now the critical path** — D07 is next and its gate needs this |
-| Native Bangla reader (D08) | — | ❌ not arranged. Gate on D08, depends on someone else's calendar |
-| Dedup clusters (D05) | Arafat | 8 clusters hand-written; replace with real `summary_en` as the corpus grows |
-| Credential rotation (B0) | Arafat | in progress |
+| Activity | Status |
+|---|---|
+| **Native-speaker Bangla review** | ✅ **met 10 Oct** — Nakib read all three scenarios and signed off. Re-run if `app/casework/draft.py`'s prompt changes |
+| **Ingestion volume** | 🔴 **deferred to the next phase by the owner, 10 Oct.** More sources and fixes; the news page is where it will show |
+| D07 eval set | 6 images; the gate wants 30–40 |
+| D07 replay fixture | re-capture after the final rehearsal |
 
 ### ▶️ RESUME HERE
 
-**1. Calibrate `ROUTE_CONGESTION_FACTOR` against a journey you know.** It is `0.35`, scaled
-from one measurement on one corridor, and it decides what the app tells someone about their
-journey. Pick a trip whose real duration you can vouch for, compare, and adjust — the number
-and its full derivation are in `config.py`. **This is the only outstanding item from D06 that
-affects what a user is told.**
+**D10 — Feature freeze, hardening, rehearsal** ([DEMO_PLAN.md](DEMO_PLAN.md) §D10, scheduled
+Oct 23). **D09 is closed; it was the last sprint that ships a feature.** From here, anything that
+is not working is *cut from the script*, not fixed.
 
-**2. Commit.** 10 new files and 13 changed, including a contract change to `RiskSurface`.
+Two things D10 should not have to rediscover:
 
-**3. Take the §7.1 decision — it is overdue and D07 is next.** Reword it for a provider that
-exists before choosing.
+**`RISK_SURFACE_IMPL` is unset, so the `db` default applies.** The fixture reaches the map only
+after `scripts/seed_risk_flags.py` has run, and that script does **not** load the replay fixture
+(`include_replay=False`) — so the `db` and `seeded` surfaces legitimately differ by one flag and
+one real article. Decide which surface the finale runs on, and write it down.
 
-**4. Grow the D07 eval set, off the baton.** It holds 2 images; D07's gate wants 30–40 and
-nobody can compress that work later.
-
-Then **D07** ([DEMO_PLAN.md](DEMO_PLAN.md) §D07).
+**Live news ingestion yields nothing, and it is deferred by decision, not by oversight.** The
+baseline is measured below. Beats 1 and 2 run on the seeded surface; the honest sentence for a judge
+is that ingestion is source-agnostic, the agent is real, and `RISK_SURFACE_IMPL` is the switch.
 
 ---
 
@@ -209,6 +214,176 @@ git push   # then PR, squash-merge to main, tell your partner
 # 📜 Handoff Log
 
 *Newest first. Append-only.*
+
+---
+
+## D09 — Tomorrow's map, and the loop closed
+
+*2026-10-10 · Nakib · `sprint/D08`*
+
+**Shipped, and closed on a device — every step of the walkthrough passed.** The map looks
+forward. An announced procession is on it before it happens, drawn
+differently because it is a different kind of claim, and it is **not** on it before it is due. SOS
+has one implementation instead of one-and-a-lie, and every alert now leaves a record you can read.
+
+**D01 did most of this work twelve days early.** `valid_from` / `valid_to` on `risk_flags`,
+`decay.decay_anchor` measuring a scheduled flag's decay from the start of its window rather than
+from the announcement, `elapsed_hours` clamping a negative age, `expires_at_for` taking the later of
+decay and `valid_to`, both surfaces carrying the columns, and the fixture loader already accepting
+`valid_from_offset_hours`. Every one of those has a comment saying "D09". So D09 added the agent
+that fills the columns and the UI that reads them — **no migration, no contract change.**
+
+### The one piece nobody could have specified in advance
+
+**A scheduled flag could be served before its window opened.** Nothing tested `valid_from` as a
+floor: `expires_at` is derived to be the *later* of the decay curve and `valid_to`, so a procession
+announced tonight for tomorrow morning was live from the moment it was written — and
+`elapsed_hours` clamps negative ages to zero, so it would have appeared at **full severity**. On
+tonight's map. Bending tonight's routes around a road that is currently clear.
+
+It is one line in `surface_db._LIVE_PREDICATE` and one in `decay.is_live`, and the invariant suite
+now asserts both still say it, because a floor in only one of them would make the offline demo and
+the live backend disagree about whether tomorrow is visible today.
+
+The second thing building it found: **the fixture had zero forward-dated entries**, so beat 8 had
+nothing to show at all. Three now, and `192 flags at Now / 0 scheduled` versus
+`67 at Tomorrow / 3 scheduled` is the beat, measurable without a phone.
+
+### Asking a model for a date is the IMEI mistake again
+
+D08 measured that no free-tier model reliably copies a 15-digit IMEI — three corruptions in five
+attempts, and prompting did not help. A scheduled event needs a time, and
+`2026-10-11T10:00:00+06:00` is the same class of string.
+
+So `ScheduledEvent` does not have one. The model answers `day` — today, tomorrow or day_after — and
+an integer `start_hour`, which is exactly the sentence the article contains (*আগামীকাল সকাল ১০টা*),
+and `_window()` does the arithmetic from the publication date we already know for certain. An
+invariant asserts no field on that model accepts a datetime. **The lesson transferred before it
+cost anything, which is the only time a lesson is cheap.**
+
+### Three refusals worth keeping
+
+- **Cross-article corroboration of announcements is not wired to Rumour Guard.** It matches on
+  *observed* time, and two papers can carry the same call a day apart, so running it risks merging
+  two different events into one `confirmed` claim. Two pins for one procession is cosmetic; a false
+  confirmation is not. Matching on the *window* is the right fix and is not D09-sized.
+- **`end_hour` is trusted only when it is after `start_hour`.** `22:00–02:00` and a misread
+  `14:00–14:00` are indistinguishable from one integer, so both fall back to the per-kind default
+  duration. Wrong by hours beats wrong by a day.
+- **The shake threshold was left alone.** The comment says 3.5 g and the code says 6.0. Extracting
+  `useSOS` was a straight move of working code; changing a trigger threshold inside a refactor is
+  two changes with only one of them tested. B5 owns it.
+
+### Defect 14 was worse than a TODO
+
+`MapScreen`'s red SOS button confirmed an SOS and then said *"Emergency contacts have been
+notified"*, having notified nobody — on the screen a user is most likely to be looking at when
+something is happening around them. `useSOS` + `SOSFlow` now serve both screens; `HomeScreen` went
+**580 lines to 319**.
+
+### The news page, and the number it exists to show
+
+Built on the owner's call, after I had recommended cutting it. The recommendation was right about
+the data and wrong about the use: ingestion is being fixed next phase, and **this is the screen on
+which that work becomes visible.** So the counter reads `n real of m`, sample headlines are tagged,
+and the header carries the agent's own last-run numbers. Today: **2 real of 31.**
+
+It also corrected a measurement of mine. I had said 22 of 207 flags carry a headline;
+`fixture.py::_generated_sources` invents one for every seeded flag that did not spell its own out,
+so the first Today tab was **274 cards, 272 reading `Sample report — Mirpur 10`**. The generator's
+own comment explains why those exist and why they are implausible on purpose — so they are not
+listed as articles. 274 → 31.
+
+### What the pipeline is actually doing, stated plainly
+
+24 documents ever stored, 4 extracted incidents, **1 flag ever published and it has expired**,
+3 of the 4 refused by the gazetteer, and recent runs reading `in=0 out=0` because the relevance
+filter passes about 1% of ~390 listed articles and those are already stored.
+
+**Beats 1 and 2 run on the seeded surface.** That is a defensible thing to say on stage and a bad
+thing to discover during a rehearsal. Owner's decision, 10 Oct: next phase.
+
+## D08 — The General Diary, and the hand-off we deliberately do not automate
+
+*2026-10-10 · Nakib · `sprint/D08`*
+
+> **Note on the record:** D07 was closed and pushed (`1bd0ab8`) without a Handoff Log entry. This
+> entry does not try to reconstruct it; D07's own walkthrough and ADR 0006 hold that detail.
+
+**Shipped.** A report becomes a formal Bangla General Diary application addressed to the right
+thana. The reporter reads it, edits it, approves it, and prints the DMP form or copies the
+narrative into the police's own Online GD app. The walkthrough passed on a device, every step.
+
+**The decision that shaped the sprint.** The plan said "generate a Bangla GD" and left the next
+question unasked: what does the user *do* with it? Research (`docs/reference/gd-formats.md`) said
+Bangladesh Police has no public API, no partner process, and — decisively — **a cognizable offence
+cannot be closed online at all.** Assault, robbery, theft and burglary are every category D07
+proposes, so the walk to the thana exists no matter what we build. We draft; a person files. There
+is no submit endpoint, and ADR 0007 records why there will not be one.
+
+That also made the sprint *smaller* than planned: the official DMP form is a frame around one blank
+space, and the Online GD app's `অন্যান্য আবেদন` path is two fields — a type and one `বিবরণ` box.
+Both want the same paragraph. One artefact, not two.
+
+**The review gate is enforced, not displayed.** Approving sends the sha256 of the exact narrative
+the server issued. A wrong hash is a 409; an edit invalidates a prior reading; and the table's own
+check constraints reject `ready_to_file` without `approved_at` whoever writes the row. There is no
+`filed` state, because filing happens at a counter that tells us nothing — what we keep is the GD
+number the user types back in.
+
+**Model choice was measured, not assumed.** `gemini-3.5-flash-lite` 12/12, 1.84s.
+`gpt-oss-120b` 5/12 and it mangles proper nouns — `মজিদহিল` for Motijheel — so it is the fallback.
+`gemini-3.5-flash` 5/12 at 9.6s, rejected. `qwen3-vl:4b` was measured too and is **not usable**:
+`কাকুরির মর` for Kakrail mor, a destroyed year, an invented address. So `LLM_CHAIN_GD` is cloud
+only and with no network a GD cannot be drafted — the app says so rather than producing something
+that looks like an application and is not one.
+
+### Four defects found by building, three of them older than D08
+
+1. **No model can copy a 15-digit IMEI.** Five attempts, three corruptions. Prompting did not
+   help. `_repair_identifiers` now puts the complainant's own string back; ambiguity becomes a
+   warning on the review screen, never a guess.
+2. **`crime_reports.category` was unreadable through the ORM** — mapped by enum name, stored by
+   value. D08 is the first code to read a report back through SQLAlchemy, which is why nobody hit
+   it before.
+3. **`api.service` swallowed every backend message.** It read `data.message`; FastAPI writes
+   `data.detail`. Every error in the whole app surfaced as the literal string "An error occurred".
+   It also flattens axios errors, so `error.response.status` does not survive the interceptor —
+   which made a 404 meaning "no draft yet" look like a failure and alerted on every screen open.
+4. **`police_stations.csv` coordinates were wrong** — Motijheel 14.6 km from Motijheel. Fixed from
+   DMP's own station maps; 46 of 51 Dhaka stations verified, 43 from DMP. §7.2 closed with it.
+
+### A trap for whoever adds a local tier to a long-output feature
+
+Ollama compiles a strict `json_schema` into a GBNF grammar, and a large `maxLength` on a string
+breaks that compiler before a token is generated — `400 Failed to initialize samplers`. Measured:
+200, 500, 1000 and 1500 compile; 2000 and 3000 do not. D07's `CrimeCues.description` is 200, which
+is why the vision tier has never met it. Recorded beside the field in `app/llm/models.py`.
+
+### What was deliberately not done
+
+- **No offline tier for GD.** Measured, not assumed — see above. A replay fixture is the answer if
+  D10 wants beat 7 to survive a dead venue network.
+- **No Bangla station names.** `police_stations.csv` holds English only; inventing 606 Bangla
+  spellings is the same unverified-data mistake that put Motijheel 14 km from Motijheel. The
+  district is translated where known; station names stay as they are.
+- **Five Dhaka thanas left unverified** — Cantonment, Turag, Uttarkhan, Hatirjheel, Bhashantek have
+  no map on the DMP page and are not in OSM. They say `legacy — unverified` rather than pretending.
+- **Approval is not blocked on a missing profile.** You can read and approve a draft without one;
+  only printing needs the identity block, and the screen says so. Blocking review because someone
+  has not typed their father's name helps nobody.
+
+### Both gates met
+
+The walkthrough passed on a device, and **the native-speaker review is signed** — Nakib read all
+three scenarios in `backend/data/eval/gd_drafts.md` on 10 October: formal enough for a thana,
+nothing stated that the complainant did not say, no offence named.
+
+Worth knowing what that sign-off covers. The automated checks were clean too — and the same checks
+called four of six `qwen3-vl:4b` runs "clean" while it was writing `কাকুরির মর` for Kakrail mor, so
+they cannot see bad Bangla and never could. **The sign-off is on the wording
+`app/casework/draft.py`'s prompt produces, not on the feature.** Change that prompt and the gate
+has to be run again.
 
 ---
 

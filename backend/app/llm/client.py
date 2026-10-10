@@ -191,7 +191,11 @@ FEATURE_GEO: Final = "GEO"
 FEATURE_EXTRACT: Final = "EXTRACT"
 # D07. Named CRIME, not VISION, to match the key that exists: GEMINI_KEY_CRIME_ONE.
 FEATURE_CRIME: Final = "CRIME"
-KNOWN_FEATURES: Final = frozenset({FEATURE_GEO, FEATURE_EXTRACT, FEATURE_CRIME})
+# D08. Writing the General Diary narrative. Keys GEMINI_KEY_GD_ONE, GROQ_KEY_GD_ONE.
+FEATURE_GD: Final = "GD"
+KNOWN_FEATURES: Final = frozenset(
+    {FEATURE_GEO, FEATURE_EXTRACT, FEATURE_CRIME, FEATURE_GD}
+)
 
 
 def _env_pairs() -> dict[str, str]:

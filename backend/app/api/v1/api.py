@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     ai,
     auth,
+    casework,
     crimes,
     geo,
     ingestion,
@@ -31,3 +32,4 @@ api_router.include_router(tracking.router, prefix="/tracking", tags=["Location T
 api_router.include_router(sos.router, prefix="/sos", tags=["SOS Emergency"])
 api_router.include_router(voice.router, prefix="/voice", tags=["Voice Analysis"])
 api_router.include_router(ai.router, prefix="/ai", tags=["AI & Machine Learning"])
+api_router.include_router(casework.router, prefix="/casework", tags=["Casework — General Diary"])

@@ -11,6 +11,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../theme';
 import type { RiskFlag } from '../types/contracts/risk';
+import {
+  clockTime,
+  isScheduledFlag,
+  windowText,
+} from '../features/risk/scheduled';
 
 /**
  * The flag detail sheet. Demo beat 2's container.
@@ -139,11 +144,6 @@ function agoText(iso: string | null, from: string | null): string | null {
 /** Only real web links open. Fixture sources use a `sample:` scheme and go nowhere. */
 const isWebLink = (url: string) => /^https?:\/\//.test(url);
 
-/** "14:31" in the device's own timezone, which for this demo is Dhaka. */
-function clockTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.row}>
@@ -165,7 +165,7 @@ const RiskFlagSheet: React.FC<RiskFlagSheetProps> = ({ flag, asOf, onClose }) =>
   const remainingPercent =
     flag.severity0 > 0 ? Math.round((flag.severityNow / flag.severity0) * 100) : 0;
 
-  const isScheduled = flag.validFrom !== null;
+  const isScheduled = isScheduledFlag(flag);
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -236,7 +236,21 @@ const RiskFlagSheet: React.FC<RiskFlagSheetProps> = ({ flag, asOf, onClose }) =>
 
           <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
             <Row label="Category" value={kindLabel(flag.kind)} />
-            <Row label="Observed" value={clockTime(flag.observedAt)} />
+
+            {/* D09. The window comes first for a scheduled flag, because it is the
+                difference between this and every other flag on the map, and because
+                the badge above says "Scheduled" without saying when. */}
+            {flag.validFrom && (
+              <Row label="Scheduled for" value={windowText(flag.validFrom, flag.validTo)} />
+            )}
+
+            {/* "Observed" is the wrong word for a flag read out of an announcement:
+                nobody observed a procession that has not happened. For those,
+                `observedAt` is when it was announced, which is what this says. */}
+            <Row
+              label={isScheduled ? 'Announced' : 'Observed'}
+              value={clockTime(flag.observedAt)}
+            />
 
             {/* D05, and demo beat 2's "confirmed 14:31". Two different questions:
                 `observed` is when the city had the event, `confirmed` is when we were

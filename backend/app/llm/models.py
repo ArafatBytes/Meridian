@@ -102,6 +102,72 @@ class NewsExtraction(BaseModel):
     incidents: list[NewsIncident] = Field(default_factory=list, max_length=3)
 
 
+# ---------------------------------------------------------------------------
+# D09 — the Scheduled Risk Agent
+# ---------------------------------------------------------------------------
+
+ScheduledDay = Literal["today", "tomorrow", "day_after"]
+"""
+Which day, relative to the article's own publication date.
+
+**Not a date, and not a timestamp.** A free-tier model asked for
+`2026-10-11T10:00:00+06:00` gets it wrong in ways that are expensive and quiet: a
+shifted year, a dropped timezone, a plausible-looking instant that is a day out.
+D08 measured the same class of failure on a 15-digit IMEI — three corruptions in
+five attempts, and no amount of prompting fixed it. The lesson transfers: ask for
+small enumerations and small integers, and do the arithmetic in code.
+
+The article says "আগামীকাল সকাল ১০টা". A three-way choice plus an hour is exactly
+that sentence, and `scheduled_risk._window()` turns it into a UTC instant from the
+publication date, which we already know for certain.
+"""
+
+
+class ScheduledEvent(BaseModel):
+    """
+    One announced, not-yet-happened event that will affect movement. D09.
+
+    The complement of `NewsIncident`, whose prompt explicitly discards
+    "statements and announcements" — the thing this one is looking for.
+    """
+
+    kind: NewsKind
+    location_text: str = Field(
+        description=(
+            "The most specific place name, copied from the article in its own "
+            "script, without surrounding words such as রাজধানীর or এলাকায়."
+        )
+    )
+    mobility_impact: MobilityImpact
+    day: ScheduledDay = Field(
+        description="Which day the article says it happens, relative to the article."
+    )
+    start_hour: int = Field(
+        ge=0, le=23, description="Hour it starts, 0-23, Bangladesh local time."
+    )
+    end_hour: int | None = Field(
+        default=None,
+        ge=0,
+        le=23,
+        description="Hour it ends, if the article says. Null if it does not.",
+    )
+    severity_hint: Literal["low", "medium", "high"] | None = None
+    summary_en: str = Field(description="One short English sentence, for the audit trail.")
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class ScheduledExtraction(BaseModel):
+    """
+    Every future mobility event one article announces. Usually empty.
+
+    Same `max_length=3` and same default-empty reasoning as `NewsExtraction`: most
+    articles announce nothing, and a model told that silence is the normal answer
+    invents far less.
+    """
+
+    events: list[ScheduledEvent] = Field(default_factory=list, max_length=3)
+
+
 Cue = Literal["yes", "no", "unclear"]
 """
 Three answers, not two. `unclear` is what a model reaches for instead of guessing,
@@ -179,5 +245,57 @@ class CrimeCues(BaseModel):
         description=(
             "ONE plain sentence of what is visibly happening. Describe only what "
             "can be seen. Do not name a crime, assign blame, or say what someone intends."
+        ),
+    )
+
+
+class GdDraft(BaseModel):
+    """
+    D08's one call: the body of a General Diary application. ADR 0007.
+
+    Three fields, and the smallest of the three is the one that matters. The
+    DMP form is a frame around a single blank space, and the Online GD app's
+    `onnanno abedon` path is two fields -- the type, and one description box.
+    Both want the same paragraph, so we generate it once.
+
+    `narrative_bn` is the whole product. There is no second artefact to fall
+    back on if it reads wrong, which is why a native speaker signing off is a
+    gate on D08 and not a nicety.
+    """
+
+    # `max_length` is a real constraint on this field and also a ceiling on
+    # where this model can run. Ollama compiles a strict `json_schema` into a
+    # GBNF grammar, and a large `maxLength` blows that compiler up:
+    # `failed to parse grammar`, before a single token is generated. Measured
+    # 2026-10-10 against qwen3-vl:4b — 200, 500, 1000 and 1500 compile; 2000 and
+    # 3000 do not. D07's `CrimeCues.description` is 200, which is why that tier
+    # has never hit this.
+    #
+    # It does not bite today, because `LLM_CHAIN_GD` is cloud-only by decision.
+    # It would bite the moment someone adds a local tier here, so: anything
+    # above ~1500 needs this field relaxed for that provider, not a debugging
+    # session.
+    narrative_bn: str = Field(
+        max_length=3000,
+        description=(
+            "The complainant's account in the formal written Bangla used in "
+            "official applications, in the first person, beginning with "
+            "'binito nibedon ei je,'. Only facts the complainant gave. Where a "
+            "fact a duty officer would ask for is missing, write a bracketed gap "
+            "rather than inventing one."
+        ),
+    )
+    summary_en: str = Field(
+        max_length=400,
+        description=(
+            "One sentence in English saying what the narrative claims happened, "
+            "so the draft can be checked by someone who does not read Bangla "
+            "before they sign it."
+        ),
+    )
+    missing_details: list[str] = Field(
+        description=(
+            "Facts a duty officer will ask for that the complainant did not "
+            "provide, in English, at most six. Empty when nothing is missing."
         ),
     )

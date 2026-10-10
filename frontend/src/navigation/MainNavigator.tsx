@@ -7,7 +7,7 @@ import { colors } from '../theme';
 
 // Import screens and navigators
 import HomeScreen from '../screens/Home/HomeScreen';
-import MapScreen from '../screens/Map/MapScreen';
+import MapNavigator from './MapNavigator';
 import ReportsNavigator from './ReportsNavigator';
 import ProfileNavigator from './ProfileNavigator';
 
@@ -116,7 +116,7 @@ const MainNavigator: React.FC = () => {
       />
       <Tab.Screen
         name="Map"
-        component={MapScreen}
+        component={MapNavigator}
         options={{
           tabBarLabel: 'Map',
           tabBarIcon: MapIcon,

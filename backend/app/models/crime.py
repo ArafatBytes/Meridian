@@ -33,7 +33,24 @@ class CrimeReport(Base):
     
     id = Column(UUIDStr, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(UUIDStr, ForeignKey("users.id"), nullable=False)
-    category = Column(SQLEnum(CrimeCategory, name="crime_category"), nullable=False)
+    # `values_callable` is load-bearing, not a style choice. Without it
+    # SQLAlchemy maps this column by the enum's *member names* (THEFT, ASSAULT)
+    # while every row in the database holds its *value* ('theft', 'assault') --
+    # the frontend writes reports straight to Supabase, in lowercase, and the
+    # Postgres enum's labels are lowercase too. Reading any existing report
+    # through the ORM then raises
+    #   LookupError: 'other' is not among the defined enum values
+    # which stayed invisible until D08 became the first code to read a report
+    # back through SQLAlchemy at all (the handlers in endpoints/crimes.py are
+    # still stubs).
+    category = Column(
+        SQLEnum(
+            CrimeCategory,
+            name="crime_category",
+            values_callable=lambda enum: [member.value for member in enum],
+        ),
+        nullable=False,
+    )
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=False)
     incident_date_time = Column(DateTime, nullable=False, index=True)
