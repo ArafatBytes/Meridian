@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -225,6 +225,22 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   // Hours ahead of now that the map is being shown at. 0 is live.
   const [asOfOffsetHours, setAsOfOffsetHours] = useState(0);
 
+  /**
+   * Which risk request is the current one.
+   *
+   * Opening the map fires two fetches in the first second, by design: the
+   * screen mounts on `DEFAULT_MAP_REGION` and asks, then the device location
+   * arrives, `region` moves, and the effect below asks again. Both call
+   * `setRiskFlags`, so without this the array is whichever **answered last** --
+   * and on a slow connection that is routinely the first one, for a box
+   * centred somewhere the user is not looking.
+   *
+   * A counter rather than an AbortController: the responses are small and
+   * already in flight, and this has to work the same for the `as of` taps,
+   * which fire from a button rather than from an effect with a cleanup.
+   */
+  const riskRequestId = useRef(0);
+
   // Defect 14. One SOS implementation, shared with Home.
   // The one shared SOS controller, mounted at the app root by
   // `GuardianProvider`. Creating one per screen is what gave this app two shake
@@ -410,12 +426,17 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
    */
   const fetchRiskFlags = async (offsetHours = asOfOffsetHours) => {
     const asOf = asOfFromOffset(offsetHours);
+    const id = (riskRequestId.current += 1);
     try {
       const result = await riskService.getFlagsInRegion(region, asOf);
+      // A later request has been made since this one left. Its answer is the
+      // one the user is waiting for; dropping this reply is the whole point.
+      if (id !== riskRequestId.current) return;
       setRiskFlags(result.flags);
       setRiskAsOf(result.asOf);
       setRiskError(null);
     } catch (error: any) {
+      if (id !== riskRequestId.current) return;
       // Not fatal: the crime layer and routing still work without it.
       console.warn('Risk flags unavailable:', error?.message ?? error);
       setRiskError('Risk layer unavailable');
