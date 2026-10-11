@@ -1,3 +1,25 @@
+/**
+ * SOS hot words: storing the phrases, and — as of B8 — actually listening for them.
+ *
+ * Until this sprint the screen wrote `sos_hot_words` rows that **nothing read**.
+ * `migrations/supabase/README.md` recorded it as a known dead loop, and
+ * `/voice/analyze` compounded it: it ignored the stored phrases, used a hardcoded
+ * list, and returned an empty transcript unconditionally, so `trigger` was always
+ * false. The screen looked like a feature and was a form.
+ *
+ * Two things changed. The phrases are now **read** — by
+ * `features/voice/useVoiceGuard`, which listens app-wide and fires a real SOS
+ * when one of them is *shouted* — and the microphone button dictates **on the
+ * device** instead of uploading a clip to `/ai/speech-to-text`, which removed
+ * the last caller of a path that is broken anyway (defect 2, `pydub` commented
+ * out).
+ *
+ * This screen is the phrase list only. Arming, the shout threshold and the live
+ * meters are on the **Guardian** screen, because the recogniser session must
+ * exist exactly once for the whole app — a second one here would be a second
+ * session on the same microphone.
+ */
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -18,8 +40,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store';
 import { SOSHotWord, ProfileStackParamList } from '../../types';
-import { speechService } from '../../services';
-import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
+import { hotWordProblem } from '../../features/voice/hotwords';
+import { dictateOnce } from '../../features/voice/dictate';
 
 type SOSHotWordsScreenNavigationProp = NativeStackNavigationProp<
   ProfileStackParamList,
@@ -38,18 +60,16 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
 
-  // Recording lives in the hook: expo-audio only exposes capture via
-  // useAudioRecorder, and the hook also owns the 30s cap and unmount cleanup
-  // that the old setInterval-on-a-function-property never did reliably.
-  const recorder = useVoiceRecorder();
-  const isListening = recorder.isRecording;
-  const recordingDuration = recorder.durationSeconds;
+  // The SOS flow, so a hot word can fire the real thing rather than a stub. The
+  // same controller the button and the shake gesture use -- there is one SOS
+  // path and this is it.
 
   useEffect(() => {
     fetchHotWords();
 
-    // No recording cleanup here any more -- useVoiceRecorder stops the
-    // recorder and releases the audio session on unmount.
+    // No recording cleanup here: there is no recording. On-device dictation
+    // owns its own session and `useHotWordListener` aborts the recogniser on
+    // unmount.
   }, []);
 
   const fetchHotWords = async () => {
@@ -71,8 +91,13 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const addHotWord = async () => {
-    if (!newHotWord.trim()) {
-      Alert.alert('Error', 'Please enter a hot word or phrase');
+    // Validated before the insert, with a reason. The old check was
+    // `!newHotWord.trim()`, which accepted "sos" -- three characters, which a
+    // recogniser mishears off street noise -- and accepted a phrase already
+    // shadowed by a shorter one, which can never fire. See `hotWordProblem`.
+    const problem = hotWordProblem(newHotWord, hotWords.map(hw => hw.hot_word));
+    if (problem) {
+      Alert.alert('Cannot use that phrase', problem);
       return;
     }
 
@@ -134,52 +159,38 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
     );
   };
 
+  /**
+   * Dictate a phrase, on the device.
+   *
+   * Replaces a round trip that recorded a clip with `expo-audio`, uploaded it to
+   * `/ai/speech-to-text` and waited. Three things wrong with that: it sent audio
+   * of the user's voice to a server to fill in a text field, the endpoint behind
+   * it is broken (defect 2 -- `pydub` import commented out), and it needed a
+   * stop button and a 30-second cap to manage a recording that did not need to
+   * exist.
+   *
+   * `dictateOnce` uses the same on-device recogniser as the hot-word listener and
+   * refuses, rather than falling back to the network, when the device cannot do
+   * it privately. If it refuses, the text field still works -- typing was always
+   * the primary path here.
+   */
   const startVoiceInput = async () => {
     if (isTranscribing) return;
-
-    // Stop -> transcribe
-    if (isListening) {
-      setIsTranscribing(true);
-      try {
-        const audioUri = await recorder.stop();
-        if (!audioUri) {
-          Alert.alert('Nothing Recorded', 'No audio was captured. Please try again.');
-          return;
-        }
-
-        const result = await speechService.transcribeAudio(audioUri, {
-          language: 'en-US',
-        });
-
-        if (!result.text) {
-          Alert.alert('No Speech Detected', 'Please try again and speak clearly.');
-          return;
-        }
-
-        setNewHotWord(result.text);
-        Alert.alert(
-          'Transcription Complete',
-          `Detected: "${result.text}"
-
-Confidence: ${Math.round(result.confidence * 100)}%`,
-        );
-      } catch (error: any) {
-        Alert.alert(
-          'Transcription Failed',
-          error.message || 'Could not convert speech to text. Please try again.',
-        );
-      } finally {
-        setIsTranscribing(false);
-      }
-      return;
-    }
-
-    // Start. The hook requests permission and throws with an actionable
-    // message if it is denied.
+    setIsTranscribing(true);
     try {
-      await recorder.start();
+      const result = await dictateOnce();
+      if (!result.transcript) {
+        Alert.alert('Nothing heard', 'Please try again and speak clearly.');
+        return;
+      }
+      setNewHotWord(result.transcript);
     } catch (error: any) {
-      Alert.alert('Microphone Unavailable', error.message || 'Could not start recording.');
+      Alert.alert(
+        'Cannot dictate on this phone',
+        error?.message ?? 'Type the phrase instead.',
+      );
+    } finally {
+      setIsTranscribing(false);
     }
   };
 
@@ -215,6 +226,25 @@ Confidence: ${Math.round(result.confidence * 100)}%`,
         <View style={styles.placeholder} />
       </View>
 
+      {/* B8. Listening itself is armed on the Guardian screen, not here.
+          This screen manages the phrase list; Guardian owns the microphone,
+          the shout threshold and the live meters -- and it owns them because
+          the recogniser session must exist exactly once for the whole app. A
+          second one here would be a second session on the same microphone. */}
+      <TouchableOpacity
+        style={styles.guardianLink}
+        onPress={() => navigation.navigate('Guardian')}
+      >
+        <Ionicons name="shield-checkmark-outline" size={20} color={colors.primary} />
+        <View style={styles.guardianLinkBody}>
+          <Text style={styles.guardianLinkTitle}>Arm Voice SOS</Text>
+          <Text style={styles.guardianLinkSubtitle}>
+            Listening, the shout threshold and the live meter are on the Guardian screen.
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </TouchableOpacity>
+
       <View style={styles.inputSection}>
         <View style={styles.inputContainer}>
           <TextInput
@@ -229,31 +259,27 @@ Confidence: ${Math.round(result.confidence * 100)}%`,
         </View>
 
         <View style={styles.buttonRow}>
+          {/* No stop button and no duration any more. On-device dictation ends
+              by itself when you stop speaking, so there is nothing to cap and
+              nothing to stop -- the 30-second limit existed to bound a recording
+              that was about to be uploaded. */}
           <TouchableOpacity
-            style={[styles.voiceButton, isListening && styles.listeningButton]}
+            style={[styles.voiceButton, isTranscribing && styles.listeningButton]}
             onPress={startVoiceInput}
             disabled={isTranscribing}
           >
             {isTranscribing ? (
               <ActivityIndicator size="small" color={colors.white} />
             ) : (
-              <Ionicons
-                name={isListening ? 'stop' : 'mic'}
-                size={24}
-                color={isListening ? colors.white : colors.primary}
-              />
+              <Ionicons name="mic" size={24} color={colors.primary} />
             )}
             <Text
               style={[
                 styles.voiceButtonText,
-                isListening && styles.listeningButtonText,
+                isTranscribing && styles.listeningButtonText,
               ]}
             >
-              {isTranscribing
-                ? 'Processing...'
-                : isListening
-                  ? `Stop (${recordingDuration}s)`
-                  : 'Voice Input'}
+              {isTranscribing ? 'Listening…' : 'Dictate'}
             </Text>
           </TouchableOpacity>
 
@@ -295,6 +321,9 @@ Confidence: ${Math.round(result.confidence * 100)}%`,
           />
         )}
       </View>
+      {/* Without this the camera and progress modals never render and
+          `sos.start()` silently does nothing -- the same wiring HomeScreen and
+          MapScreen do. */}
     </KeyboardAvoidingView>
   );
 };
@@ -303,6 +332,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  guardianLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.white,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: borderRadius.md,
+  },
+  guardianLinkBody: { flex: 1 },
+  guardianLinkTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
+  guardianLinkSubtitle: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    marginTop: 2,
+    lineHeight: 16,
   },
   header: {
     flexDirection: 'row',

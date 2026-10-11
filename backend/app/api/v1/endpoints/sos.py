@@ -28,6 +28,9 @@ async def trigger_sos(
     latitude: float = Form(...),
     longitude: float = Form(...),
     video: Optional[UploadFile] = File(None),
+    # B8 / S18. Whether a hot word started this, rather than the button or the
+    # shake. Defaults false, so every existing caller is unchanged.
+    voice_activated: bool = Form(False),
     db: AsyncSession = Depends(get_db),
     current_user: Any = Depends(get_current_user)
 ):
@@ -76,7 +79,8 @@ async def trigger_sos(
             user_name=user_obj.full_name,
             location=location,
             video_file=video,
-            db=db
+            db=db,
+            voice_activated=voice_activated,
         )
 
         if not result["success"]:

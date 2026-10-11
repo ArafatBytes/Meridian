@@ -76,6 +76,22 @@ const ProfileScreen: React.FC<Props> = ({ navigation }) => {
       title: 'SOS History',
       onPress: () => navigation.navigate('SOSHistory'),
     },
+    {
+      // B6a/B8. The automatic protections: zone alerts, voice SOS, shake SOS.
+      // First among the new rows because it is the one a user actually needs to
+      // visit -- the other switches are useless until these are armed.
+      icon: 'shield-checkmark-outline',
+      title: 'Guardian — automatic SOS & zone alerts',
+      onPress: () => navigation.navigate('Guardian'),
+    },
+    {
+      // B6a. Per-category preferences, the hourly cap, a delivery self-test and
+      // the alert history. Above the four dead rows below it on purpose: those
+      // have been placeholders since D01 and this one works.
+      icon: 'notifications-outline',
+      title: 'Alerts',
+      onPress: () => navigation.navigate('AlertPreferences'),
+    },
     { icon: 'time-outline', title: 'Tracking History', onPress: () => {} },
     { icon: 'settings-outline', title: 'Settings', onPress: () => {} },
     { icon: 'information-circle-outline', title: 'About', onPress: () => {} },

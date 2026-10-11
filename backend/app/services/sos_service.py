@@ -103,7 +103,8 @@ class SOSService:
         user_name: str,
         location: dict,
         video_file: Optional[UploadFile],
-        db: AsyncSession
+        db: AsyncSession,
+        voice_activated: bool = False,
     ) -> dict:
         """
         Trigger SOS alert:
@@ -173,6 +174,7 @@ class SOSService:
                 police_station_count=len(police_emails),
                 delivered=success,
                 video_attached=video_path is not None,
+                voice_activated=voice_activated,
             )
 
             # Clean up the temporary video file.
@@ -216,6 +218,7 @@ class SOSService:
         police_station_count: int,
         delivered: bool,
         video_attached: bool,
+        voice_activated: bool = False,
     ) -> str | None:
         """
         Write one row to `sos_incidents`. Returns its id, or None if the write
@@ -264,7 +267,16 @@ class SOSService:
                         "video_attached": video_attached,
                     }
                 ),
-                voice_activated=False,  # the voice path sets this once S18 lands
+                # B8 / S18. Passed through from the client rather than inferred:
+                # a hot-word trigger and a button press are the same request
+                # otherwise, and nothing server-side can tell them apart.
+                #
+                # It is the client's claim about its own behaviour, which is worth
+                # being explicit about -- a modified client could assert it
+                # falsely. That is acceptable because nothing is authorised on
+                # this flag: it changes one boolean in the history screen, not
+                # who gets emailed. Treat it as provenance, not as a credential.
+                voice_activated=voice_activated,
                 status="active",
             )
             db.add(incident)

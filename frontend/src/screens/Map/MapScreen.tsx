@@ -40,8 +40,7 @@ import { RiskFlagMarker, isConfirmedFlag } from '../../components/RiskFlagMarker
 import RouteComparisonCard, { safetyColour } from '../../components/RouteComparisonCard';
 import PlaceSearch from '../../components/PlaceSearch';
 import { AS_OF_PRESETS, asOfSummary } from '../../features/risk/scheduled';
-import { useSOS } from '../../features/sos/useSOS';
-import { SOSFlow } from '../../features/sos/SOSFlow';
+import { useSosController } from '../../features/guardian/GuardianProvider';
 import type { GeoResolution } from '../../types/contracts/geo';
 
 interface CrimeReportData {
@@ -218,7 +217,10 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   const [asOfOffsetHours, setAsOfOffsetHours] = useState(0);
 
   // Defect 14. One SOS implementation, shared with Home.
-  const sos = useSOS();
+  // The one shared SOS controller, mounted at the app root by
+  // `GuardianProvider`. Creating one per screen is what gave this app two shake
+  // listeners and two camera modals per shake.
+  const sos = useSosController();
 
   /*
    * The search card's real height, measured rather than assumed.
@@ -887,15 +889,16 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       {/* Defect 14. This button used to confirm an SOS and then pop
           "Emergency contacts have been notified" without notifying anyone — a red
           button that lied, on the screen a user is most likely to be looking at
-          when something is happening around them. It now runs the same `useSOS`
-          flow as Home: real recording, real upload, real alert. */}
-      <SOSFlow sos={sos} />
+          when something is happening around them. It now runs the same shared SOS
+          controller as every other screen: real recording, real upload, real
+          alert. */}
+      {/* SOSFlow is rendered once by GuardianProvider at the app root. */}
 
       {/* SOS Button (Hide in route mode) */}
       {!routeMode && (
         <TouchableOpacity
           style={[styles.sosButton, { bottom: insets.bottom + spacing.xl }]}
-          onPress={sos.start}
+          onPress={() => sos.start('button')}
           activeOpacity={0.8}
         >
           <MaterialCommunityIcons
