@@ -10,13 +10,23 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { ReportsStackParamList } from '../../types';
-import { colors, spacing, borderRadius, fontSize } from '../../theme';
+import { spacing, borderRadius, fontSize } from '../../theme';
+import { useTheme } from '../../theme/ThemeProvider';
+import { useStyles } from '../../theme/useStyles';
+import type { Palette } from '../../theme/palette';
+import { glassSurface } from '../../theme/surfaces';
+import { Aurora } from '../../components/motion';
+import { fontFamily } from '../../theme/type';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, MAP_PROVIDER } from '../../components/MapComponent';
 import { crimeService } from '../../services/crime.service';
+
+// @ts-ignore - generated types fight `style` in this RN version
+const Grad = LinearGradient as any;
 
 type ReportDetailsScreenNavigationProp = NativeStackNavigationProp<
   ReportsStackParamList,
@@ -34,6 +44,8 @@ interface Props {
 }
 
 const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
+  const { t, g } = useTheme();
+  const styles = useStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const { reportId } = route.params;
   const [report, setReport] = useState<any>(null);
@@ -125,13 +137,13 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'verified':
-        return colors.success;
+        return t.ok;
       case 'investigating':
-        return colors.info;
+        return t.info;
       case 'resolved':
-        return colors.primary;
+        return t.brand;
       default:
-        return colors.warning;
+        return t.warn;
     }
   };
 
@@ -152,7 +164,7 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={t.brand} />
         <Text style={styles.loadingText}>Loading report details...</Text>
       </View>
     );
@@ -164,7 +176,7 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
         <MaterialCommunityIcons
           name="alert-circle-outline"
           size={64}
-          color={colors.error}
+          color={t.danger}
         />
         <Text style={styles.errorText}>{error || 'Report not found'}</Text>
         <TouchableOpacity
@@ -185,19 +197,27 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
+      {/* The ambient field, behind everything. `glassSurface` is a
+          translucent fill and needs something to be translucent over —
+          see the note in theme/surfaces.ts. */}
+      <Aurora intensity="ambient" />
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+      <Grad
+        colors={g.aurora}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <TouchableOpacity
           style={styles.headerButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.white} />
+          <Ionicons name="arrow-back" size={24} color={t.onBrand} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Report Details</Text>
         <TouchableOpacity style={styles.headerButton} onPress={handleDelete}>
-          <Ionicons name="trash-outline" size={24} color={colors.white} />
+          <Ionicons name="trash-outline" size={24} color={t.onBrand} />
         </TouchableOpacity>
-      </View>
+      </Grad>
 
       <ScrollView
         style={styles.content}
@@ -225,7 +245,7 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
             <MaterialCommunityIcons
               name={getCategoryIcon(report.category)}
               size={24}
-              color={colors.primary}
+              color={t.brand}
             />
             <Text style={styles.sectionTitle}>Category</Text>
           </View>
@@ -240,7 +260,7 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
             <MaterialCommunityIcons
               name="text-box"
               size={24}
-              color={colors.primary}
+              color={t.brand}
             />
             <Text style={styles.sectionTitle}>Title</Text>
           </View>
@@ -253,7 +273,7 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
             <MaterialCommunityIcons
               name="text"
               size={24}
-              color={colors.primary}
+              color={t.brand}
             />
             <Text style={styles.sectionTitle}>Description</Text>
           </View>
@@ -268,7 +288,7 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
               <MaterialCommunityIcons
                 name="image-outline"
                 size={24}
-                color={colors.primary}
+                color={t.brand}
               />
               <Text style={styles.sectionTitle}>Evidence photo</Text>
             </View>
@@ -309,7 +329,7 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
         {/* Date & Time Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="calendar" size={24} color={colors.primary} />
+            <Ionicons name="calendar" size={24} color={t.brand} />
             <Text style={styles.sectionTitle}>Incident Date & Time</Text>
           </View>
           <Text style={styles.contentText}>
@@ -320,7 +340,7 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
         {/* Location Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="location" size={24} color={colors.primary} />
+            <Ionicons name="location" size={24} color={t.brand} />
             <Text style={styles.sectionTitle}>Location</Text>
           </View>
           <Text style={styles.contentText}>
@@ -363,7 +383,7 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
             <MaterialCommunityIcons
               name="clock-outline"
               size={16}
-              color={colors.textSecondary}
+              color={t.textSoft}
             />
             <Text style={styles.timestampLabel}>Reported: </Text>
             <Text style={styles.timestampValue}>
@@ -382,7 +402,7 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
           <MaterialCommunityIcons
             name="file-document-edit-outline"
             size={22}
-            color={colors.white}
+            color={t.onBrand}
           />
           <View style={styles.gdButtonText}>
             <Text style={styles.gdButtonTitle}>General Diary</Text>
@@ -390,216 +410,222 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
               Turn this report into a formal Bangla GD application
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.white} />
+          <Ionicons name="chevron-forward" size={20} color={t.onBrand} />
         </TouchableOpacity>
       </ScrollView>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  gdButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    marginHorizontal: spacing.md,
-    marginTop: spacing.lg,
-    marginBottom: spacing.xl,
-  },
-  gdButtonText: { flex: 1, marginLeft: spacing.md },
-  gdButtonTitle: { color: colors.white, fontSize: fontSize.md, fontWeight: '700' },
-  gdButtonSubtitle: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: fontSize.xs,
-    marginTop: 2,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-  },
-  loadingText: {
-    marginTop: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    padding: spacing.xl,
-  },
-  errorText: {
-    fontSize: fontSize.lg,
-    color: colors.error,
-    textAlign: 'center',
-    marginTop: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  retryButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.md,
-  },
-  retryButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
-  backButton: {
-    backgroundColor: colors.gray300,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-  },
-  backButtonText: {
-    color: colors.textPrimary,
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacing.lg,
-    backgroundColor: colors.primary,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: 'bold',
-    color: colors.white,
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: spacing.lg,
-  },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.lg,
-  },
-  statusText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  section: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    elevation: 1,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginLeft: spacing.sm,
-  },
-  categoryValue: {
-    fontSize: fontSize.lg,
-    color: colors.primary,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  contentText: {
-    fontSize: fontSize.md,
-    color: colors.textPrimary,
-    lineHeight: 22,
-  },
-  coordinatesText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    fontFamily: 'monospace',
-  },
-  mapContainer: {
-    height: 200,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-    marginBottom: spacing.md,
-    elevation: 2,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-  },
-  map: {
-    flex: 1,
-  },
-  timestampSection: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    elevation: 1,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  timestampRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  timestampLabel: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginLeft: spacing.xs,
-  },
-  timestampValue: {
-    fontSize: fontSize.sm,
-    color: colors.textPrimary,
-  },
-  // --- D07: evidence photo -------------------------------------------------
-  evidenceImage: {
-    width: '100%',
-    height: 220,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.borderLight,
-  },
-  evidenceCaption: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    lineHeight: 22,
-    marginTop: spacing.md,
-  },
-  evidenceMeta: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-});
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    gdButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: t.brand,
+      borderRadius: borderRadius.lg,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md,
+      marginHorizontal: spacing.md,
+      marginTop: spacing.lg,
+      marginBottom: spacing.xl,
+    },
+    gdButtonText: { flex: 1, marginLeft: spacing.md },
+    gdButtonTitle: { fontFamily: fontFamily.bodySemi, color: t.onBrand, fontSize: fontSize.md,},
+    gdButtonSubtitle: {
+      fontFamily: fontFamily.body,
+      color: 'rgba(255,255,255,0.8)',
+      fontSize: fontSize.xs,
+      marginTop: 2,
+    },
+    container: {
+      flex: 1,
+      backgroundColor: t.bg,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: t.bg,
+    },
+    loadingText: {
+      fontFamily: fontFamily.body,
+      marginTop: spacing.md,
+      fontSize: fontSize.md,
+      color: t.textSoft,
+    },
+    errorContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: t.bg,
+      padding: spacing.xl,
+    },
+    errorText: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.lg,
+      color: t.danger,
+      textAlign: 'center',
+      marginTop: spacing.md,
+      marginBottom: spacing.lg,
+    },
+    retryButton: {
+      backgroundColor: t.brand,
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.md,
+      borderRadius: borderRadius.md,
+      marginBottom: spacing.md,
+    },
+    retryButtonText: {
+      fontFamily: fontFamily.bodySemi,
+      color: t.onBrand,
+      fontSize: fontSize.md,
+    },
+    backButton: {
+      backgroundColor: t.line,
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.md,
+      borderRadius: borderRadius.md,
+    },
+    backButtonText: {
+      fontFamily: fontFamily.bodySemi,
+      color: t.text,
+      fontSize: fontSize.md,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: spacing.lg,
+    },
+    headerButton: {
+      width: 40,
+      height: 40,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    headerTitle: {
+      fontFamily: fontFamily.display,
+      fontSize: fontSize.xl,
+      color: t.onBrand,
+    },
+    content: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: spacing.lg,
+    },
+    statusBadge: {
+      alignSelf: 'flex-start',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: borderRadius.md,
+      marginBottom: spacing.lg,
+    },
+    statusText: {
+      fontFamily: fontFamily.bodySemi,
+      color: t.onBrand,
+      fontSize: fontSize.md,
+      letterSpacing: 1,
+    },
+    section: {
+      ...glassSurface(t),
+      padding: spacing.md,
+      marginBottom: spacing.md,
+      elevation: 1,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: spacing.sm,
+    },
+    sectionTitle: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.lg,
+      color: t.text,
+      marginLeft: spacing.sm,
+    },
+    categoryValue: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.lg,
+      color: t.brand,
+      textTransform: 'capitalize',
+    },
+    contentText: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.md,
+      color: t.text,
+      lineHeight: 22,
+    },
+    coordinatesText: {
+      fontSize: fontSize.sm,
+      color: t.textSoft,
+      marginTop: spacing.xs,
+      fontFamily: 'monospace',
+    },
+    mapContainer: {
+      height: 200,
+      borderRadius: borderRadius.md,
+      overflow: 'hidden',
+      marginBottom: spacing.md,
+      elevation: 2,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 3,
+    },
+    map: {
+      flex: 1,
+    },
+    timestampSection: {
+      ...glassSurface(t),
+      padding: spacing.md,
+      elevation: 1,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+    },
+    timestampRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: spacing.xs,
+    },
+    timestampLabel: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.sm,
+      color: t.textSoft,
+      marginLeft: spacing.xs,
+    },
+    timestampValue: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.sm,
+      color: t.text,
+    },
+    // --- D07: evidence photo -------------------------------------------------
+    evidenceImage: {
+      width: '100%',
+      height: 220,
+      borderRadius: borderRadius.md,
+      backgroundColor: t.lineSoft,
+    },
+    evidenceCaption: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.md,
+      color: t.text,
+      lineHeight: 22,
+      marginTop: spacing.md,
+    },
+    evidenceMeta: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.xs,
+      color: t.textSoft,
+      marginTop: spacing.xs,
+    },
+  });
 
 export default ReportDetailsScreen;

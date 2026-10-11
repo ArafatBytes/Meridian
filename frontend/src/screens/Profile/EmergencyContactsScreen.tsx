@@ -36,7 +36,13 @@ import { Ionicons } from '@expo/vector-icons';
 // regression, not a broken feature.
 import * as Contacts from 'expo-contacts/legacy';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, spacing, borderRadius, fontSize } from '../../theme';
+import { spacing, borderRadius, fontSize } from '../../theme';
+import { useTheme } from '../../theme/ThemeProvider';
+import { useStyles } from '../../theme/useStyles';
+import type { Palette } from '../../theme/palette';
+import { glassBar, glassSurface } from '../../theme/surfaces';
+import { Aurora } from '../../components/motion';
+import { fontFamily } from '../../theme/type';
 import { useAuthStore } from '../../store';
 import { supabase } from '../../lib/supabase';
 import { EmergencyContact } from '../../types';
@@ -53,6 +59,8 @@ interface Props {
 }
 
 const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
   const { user } = useAuthStore();
   const insets = useSafeAreaInsets();
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
@@ -258,7 +266,7 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Ionicons name="people-outline" size={80} color={colors.textSecondary} />
+      <Ionicons name="people-outline" size={80} color={t.textSoft} />
       <Text style={styles.emptyStateTitle}>No Emergency Contacts</Text>
       <Text style={styles.emptyStateText}>
         Add contacts who can be notified in case of an emergency
@@ -269,7 +277,7 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
   const renderContactItem = ({ item }: { item: EmergencyContact }) => (
     <View style={styles.contactItem}>
       <View style={styles.contactAvatar}>
-        <Ionicons name="person" size={24} color={colors.white} />
+        <Ionicons name="person" size={24} color={t.onBrand} />
       </View>
       <View style={styles.contactInfo}>
         <Text style={styles.contactName}>{item.name}</Text>
@@ -280,7 +288,7 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
         style={styles.deleteButton}
         onPress={() => deleteEmergencyContact(item)}
       >
-        <Ionicons name="trash-outline" size={24} color={colors.error} />
+        <Ionicons name="trash-outline" size={24} color={t.danger} />
       </TouchableOpacity>
     </View>
   );
@@ -288,20 +296,24 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={t.brand} />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      {/* The ambient field, behind everything. `glassSurface` is a
+          translucent fill and needs something to be translucent over —
+          see the note in theme/surfaces.ts. */}
+      <Aurora intensity="ambient" />
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={t.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Emergency Contacts</Text>
         <View style={styles.placeholder} />
@@ -328,7 +340,7 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
           <Ionicons
             name="phone-portrait-outline"
             size={20}
-            color={colors.white}
+            color={t.onBrand}
           />
           <Text style={styles.addButtonText}>From Contacts</Text>
         </TouchableOpacity>
@@ -337,7 +349,7 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
           style={[styles.addButton, styles.manualButton]}
           onPress={openManualAddModal}
         >
-          <Ionicons name="create-outline" size={20} color={colors.white} />
+          <Ionicons name="create-outline" size={20} color={t.onBrand} />
           <Text style={styles.addButtonText}>Add Manually</Text>
         </TouchableOpacity>
       </View>
@@ -359,7 +371,7 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>Add Emergency Contact</Text>
                   <TouchableOpacity onPress={() => setIsModalVisible(false)}>
-                    <Ionicons name="close" size={24} color={colors.text} />
+                    <Ionicons name="close" size={24} color={t.text} />
                   </TouchableOpacity>
                 </View>
 
@@ -369,7 +381,7 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
                     <TextInput
                       style={styles.input}
                       placeholder="Enter contact name"
-                      placeholderTextColor={colors.textSecondary}
+                      placeholderTextColor={t.textSoft}
                       value={contactName}
                       onChangeText={setContactName}
                     />
@@ -380,7 +392,7 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
                     <TextInput
                       style={styles.input}
                       placeholder="01XXXXXXXXX"
-                      placeholderTextColor={colors.textSecondary}
+                      placeholderTextColor={t.textSoft}
                       value={contactPhone}
                       onChangeText={setContactPhone}
                       keyboardType="phone-pad"
@@ -396,7 +408,7 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
                     <TextInput
                       style={styles.input}
                       placeholder="Enter email address"
-                      placeholderTextColor={colors.textSecondary}
+                      placeholderTextColor={t.textSoft}
                       value={contactEmail}
                       onChangeText={setContactEmail}
                       keyboardType="email-address"
@@ -413,7 +425,7 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
                     disabled={isSaving}
                   >
                     {isSaving ? (
-                      <ActivityIndicator color={colors.white} />
+                      <ActivityIndicator color={t.onBrand} />
                     ) : (
                       <Text style={styles.saveButtonText}>Add Contact</Text>
                     )}
@@ -428,195 +440,198 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  backButton: {
-    padding: spacing.sm,
-  },
-  headerTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: 'bold',
-    color: colors.text,
-  },
-  placeholder: {
-    width: 40,
-  },
-  listContent: {
-    padding: spacing.lg,
-  },
-  listContentEmpty: {
-    flex: 1,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-  },
-  emptyStateTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  emptyStateText: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  contactItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    padding: spacing.lg,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.md,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  contactAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  contactInfo: {
-    flex: 1,
-    marginLeft: spacing.md,
-  },
-  contactName: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  contactPhone: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    marginBottom: 2,
-  },
-  contactEmail: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
-  deleteButton: {
-    padding: spacing.sm,
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: spacing.sm,
-  },
-  addButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  manualButton: {
-    backgroundColor: colors.secondary,
-  },
-  addButtonText: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.white,
-    marginLeft: spacing.sm,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    padding: spacing.xl,
-    paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.xxl,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-  },
-  modalTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: 'bold',
-    color: colors.text,
-  },
-  inputContainer: {
-    marginBottom: spacing.lg,
-  },
-  inputLabel: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  input: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
-  inputHint: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  saveButton: {
-    backgroundColor: colors.primary,
-    padding: spacing.lg,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  saveButtonDisabled: {
-    opacity: 0.6,
-  },
-  saveButtonText: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.white,
-  },
-});
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: t.bg,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: t.bg,
+    },
+    header: {
+      ...glassBar(t),
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.md,
+    },
+    backButton: {
+      padding: spacing.sm,
+    },
+    headerTitle: {
+      fontFamily: fontFamily.display,
+      fontSize: fontSize.xl,
+      color: t.text,
+    },
+    placeholder: {
+      width: 40,
+    },
+    listContent: {
+      padding: spacing.lg,
+    },
+    listContentEmpty: {
+      flex: 1,
+    },
+    emptyState: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: spacing.xl,
+    },
+    emptyStateTitle: {
+      fontFamily: fontFamily.display,
+      fontSize: fontSize.xl,
+      color: t.text,
+      marginTop: spacing.lg,
+      marginBottom: spacing.sm,
+    },
+    emptyStateText: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.md,
+      color: t.textSoft,
+      textAlign: 'center',
+    },
+    contactItem: {
+      ...glassSurface(t),
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: spacing.lg,
+      marginBottom: spacing.md,
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    contactAvatar: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      backgroundColor: t.brand,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    contactInfo: {
+      flex: 1,
+      marginLeft: spacing.md,
+    },
+    contactName: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.lg,
+      color: t.text,
+      marginBottom: spacing.xs,
+    },
+    contactPhone: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.md,
+      color: t.textSoft,
+      marginBottom: 2,
+    },
+    contactEmail: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.sm,
+      color: t.textSoft,
+    },
+    deleteButton: {
+      padding: spacing.sm,
+    },
+    buttonContainer: {
+      ...glassSurface(t),
+      flexDirection: 'row',
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: t.line,
+      gap: spacing.sm,
+    },
+    addButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: t.brand,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.sm,
+      borderRadius: borderRadius.md,
+    },
+    manualButton: {
+      backgroundColor: t.accent,
+    },
+    addButtonText: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.md,
+      color: t.onBrand,
+      marginLeft: spacing.sm,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'flex-end',
+    },
+    modalContent: {
+      ...glassSurface(t),
+      borderTopLeftRadius: borderRadius.xl,
+      borderTopRightRadius: borderRadius.xl,
+      padding: spacing.xl,
+      paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.xxl,
+      maxHeight: '80%',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.xl,
+    },
+    modalTitle: {
+      fontFamily: fontFamily.display,
+      fontSize: fontSize.xl,
+      color: t.text,
+    },
+    inputContainer: {
+      marginBottom: spacing.lg,
+    },
+    inputLabel: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.md,
+      color: t.text,
+      marginBottom: spacing.sm,
+    },
+    input: {
+      fontFamily: fontFamily.body,
+      backgroundColor: t.bg,
+      borderWidth: 1,
+      borderColor: t.line,
+      borderRadius: borderRadius.md,
+      padding: spacing.md,
+      fontSize: fontSize.md,
+      color: t.text,
+    },
+    inputHint: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.sm,
+      color: t.textSoft,
+      marginTop: spacing.xs,
+    },
+    saveButton: {
+      backgroundColor: t.brand,
+      padding: spacing.lg,
+      borderRadius: borderRadius.md,
+      alignItems: 'center',
+      marginTop: spacing.md,
+    },
+    saveButtonDisabled: {
+      opacity: 0.6,
+    },
+    saveButtonText: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.lg,
+      color: t.onBrand,
+    },
+  });
 
 export default EmergencyContactsScreen;

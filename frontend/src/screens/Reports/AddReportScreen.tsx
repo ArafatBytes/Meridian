@@ -17,16 +17,26 @@ import MapView, {
   MAP_PROVIDER,
 } from '../../components/MapComponent';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, {
   DateTimePickerChangeEvent,
 } from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
-import { colors, spacing, borderRadius, fontSize } from '../../theme';
+import { spacing, borderRadius, fontSize } from '../../theme';
+import { useTheme } from '../../theme/ThemeProvider';
+import { useStyles } from '../../theme/useStyles';
+import type { Palette } from '../../theme/palette';
+import { glassSurface } from '../../theme/surfaces';
+import { Aurora } from '../../components/motion';
+import { fontFamily } from '../../theme/type';
 import { useLocationStore } from '../../store';
 import { DEFAULT_MAP_REGION } from '../../constants';
 import { crimeService, CrimeAnalysisResult } from '../../services';
 import { geoService } from '../../services/geo.service';
+
+// @ts-ignore - generated types fight `style` in this RN version
+const Grad = LinearGradient as any;
 
 /**
  * Which tier answered, in words a judge can read off the screen.
@@ -62,11 +72,11 @@ const CUE_ICON: Record<string, any> = {
 
 // `unclear` is amber rather than grey: it is a real answer the model gave, not a
 // missing one, and it is the honest result for most ambiguous photos.
-const CUE_COLOUR: Record<string, string> = {
-  yes: colors.danger,
-  no: colors.textSecondary,
-  unclear: colors.warning,
-};
+const cueColour = (t: Palette): Record<string, string> => ({
+  yes: t.danger,
+  no: t.textSoft,
+  unclear: t.warn,
+});
 
 interface AddReportScreenProps {
   navigation: any;
@@ -84,6 +94,8 @@ const CRIME_CATEGORIES = [
 ];
 
 const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
+  const { t, g } = useTheme();
+  const styles = useStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const { currentLocation, getCurrentLocation } = useLocationStore();
 
@@ -623,16 +635,26 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+      {/* The ambient field, behind everything. `glassSurface` is a translucent
+          fill and needs something to be translucent over — see the note in
+          theme/surfaces.ts. `<Aurora />` with no children is already absolutely
+          positioned and `pointerEvents="box-none"`, so as the first child it
+          sits behind the rest without touching the layout. */}
+      <Aurora intensity="ambient" />
+      <Grad
+        colors={g.aurora}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.white} />
+          <Ionicons name="arrow-back" size={24} color={t.onBrand} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Report Crime</Text>
         <View style={styles.placeholder} />
-      </View>
+      </Grad>
 
       <ScrollView
         style={styles.content}
@@ -656,8 +678,8 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                   size={28}
                   color={
                     selectedCategory === category.id
-                      ? colors.white
-                      : colors.primary
+                      ? t.surface
+                      : t.brand
                   }
                 />
                 <Text
@@ -682,7 +704,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                 <MaterialCommunityIcons
                   name="robot"
                   size={24}
-                  color={colors.primary}
+                  color={t.brand}
                 />
                 <Text style={styles.aiTitle}>AI Crime Detection</Text>
                 <View style={styles.aiBadge}>
@@ -703,7 +725,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                 <MaterialCommunityIcons
                   name="camera-plus"
                   size={40}
-                  color={colors.primary}
+                  color={t.brand}
                 />
                 <Text style={styles.cameraButtonText}>Capture Crime Scene</Text>
                 <Text style={styles.cameraButtonSubtext}>
@@ -724,13 +746,13 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                   <Ionicons
                     name="close-circle"
                     size={32}
-                    color={colors.error}
+                    color={t.danger}
                   />
                 </TouchableOpacity>
 
                 {isAnalyzing && (
                   <View style={styles.analyzingOverlay}>
-                    <ActivityIndicator size="large" color={colors.primary} />
+                    <ActivityIndicator size="large" color={t.brand} />
                     <Text style={styles.analyzingText}>Analyzing image...</Text>
                   </View>
                 )}
@@ -750,7 +772,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                 <MaterialCommunityIcons
                   name="image-search-outline"
                   size={22}
-                  color={colors.primary}
+                  color={t.brand}
                 />
                 <Text style={styles.aiResultsTitle}>What the photo shows</Text>
                 {/* Owner's call, 2026-10-10: no badge when the answer came from
@@ -795,11 +817,11 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                         <MaterialCommunityIcons
                           name={CUE_ICON[answer]}
                           size={16}
-                          color={CUE_COLOUR[answer]}
+                          color={cueColour(t)[answer]}
                         />
                         <Text style={styles.cueLabel}>{label}</Text>
                         <Text
-                          style={[styles.cueAnswer, { color: CUE_COLOUR[answer] }]}
+                          style={[styles.cueAnswer, { color: cueColour(t)[answer] }]}
                         >
                           {answer}
                         </Text>
@@ -848,7 +870,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                 <Ionicons
                   name="information-circle"
                   size={16}
-                  color={colors.info}
+                  color={t.info}
                 />
                 <Text style={styles.aiInfoText}>
                   You decide what gets filed. This is a suggestion from the
@@ -865,7 +887,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
           <TextInput
             style={styles.input}
             placeholder="Brief title of the incident"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={t.textSoft}
             value={title}
             onChangeText={setTitle}
             maxLength={100}
@@ -878,7 +900,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
           <TextInput
             style={[styles.input, styles.textArea]}
             placeholder="Provide detailed description of what happened..."
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={t.textSoft}
             value={description}
             onChangeText={setDescription}
             multiline
@@ -898,7 +920,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
               <Ionicons
                 name="calendar-outline"
                 size={20}
-                color={colors.primary}
+                color={t.brand}
               />
               <Text style={styles.dateTimeText}>
                 {incidentDateTime.toLocaleDateString('en-GB')}
@@ -909,7 +931,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
               style={styles.dateTimeButton}
               onPress={() => setShowTimePicker(true)}
             >
-              <Ionicons name="time-outline" size={20} color={colors.primary} />
+              <Ionicons name="time-outline" size={20} color={t.brand} />
               <Text style={styles.dateTimeText}>
                 {incidentDateTime.toLocaleTimeString('en-US', {
                   hour: '2-digit',
@@ -1002,9 +1024,9 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
               disabled={isFetchingLocation}
             >
               {isFetchingLocation ? (
-                <ActivityIndicator size="small" color={colors.primary} />
+                <ActivityIndicator size="small" color={t.brand} />
               ) : (
-                <Ionicons name="locate" size={20} color={colors.primary} />
+                <Ionicons name="locate" size={20} color={t.brand} />
               )}
               <Text style={styles.currentLocationText}>
                 {isFetchingLocation ? 'Locating...' : 'Use Current'}
@@ -1018,7 +1040,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
               <TextInput
                 style={styles.searchInput}
                 placeholder="Search for a place..."
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={t.textSoft}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 onSubmitEditing={handleSearch}
@@ -1026,14 +1048,14 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
               />
               {isFetchingSuggestions && (
                 <View style={styles.searchLoadingContainer}>
-                  <ActivityIndicator size="small" color={colors.primary} />
+                  <ActivityIndicator size="small" color={t.brand} />
                 </View>
               )}
               <TouchableOpacity
                 style={styles.searchButton}
                 onPress={handleSearch}
               >
-                <Ionicons name="search" size={20} color={colors.white} />
+                <Ionicons name="search" size={20} color={t.onBrand} />
               </TouchableOpacity>
             </View>
 
@@ -1052,7 +1074,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                     <Ionicons
                       name="location-outline"
                       size={18}
-                      color={colors.primary}
+                      color={t.brand}
                     />
                     <Text style={styles.suggestionText} numberOfLines={2}>
                       {suggestion.display_name}
@@ -1074,7 +1096,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
               {selectedLocation && (
                 <Marker coordinate={selectedLocation}>
                   <View style={styles.customMarker}>
-                    <Ionicons name="location" size={40} color={colors.error} />
+                    <Ionicons name="location" size={40} color={t.danger} />
                   </View>
                 </Marker>
               )}
@@ -1084,7 +1106,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                 <Ionicons
                   name="information-circle"
                   size={16}
-                  color={colors.primary}
+                  color={t.brand}
                 />
                 <Text style={styles.mapHintText}>
                   Tap anywhere on the map to select location
@@ -1100,14 +1122,14 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                 name="location"
                 size={20}
                 color={
-                  isFetchingLocationName ? colors.textSecondary : colors.primary
+                  isFetchingLocationName ? t.textSoft : t.brand
                 }
               />
               {isFetchingLocationName ? (
                 <>
                   <ActivityIndicator
                     size="small"
-                    color={colors.primary}
+                    color={t.brand}
                     style={{ marginLeft: spacing.sm, marginRight: spacing.sm }}
                   />
                   <Text
@@ -1133,9 +1155,9 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
           disabled={isSubmitting}
         >
           {isSubmitting ? (
-            <ActivityIndicator size="small" color={colors.white} />
+            <ActivityIndicator size="small" color={t.onBrand} />
           ) : (
-            <Ionicons name="checkmark-circle" size={24} color={colors.white} />
+            <Ionicons name="checkmark-circle" size={24} color={t.onBrand} />
           )}
           <Text style={styles.submitButtonText}>
             {isSubmitting ? 'Submitting...' : 'Submit Report'}
@@ -1146,560 +1168,548 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    backgroundColor: colors.primary,
-    elevation: 4,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  backButton: {
-    padding: spacing.sm,
-  },
-  headerTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: 'bold',
-    color: colors.white,
-  },
-  placeholder: {
-    width: 40,
-  },
-  content: {
-    flex: 1,
-  },
-  section: {
-    padding: spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  categoryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  categoryCard: {
-    width: '48%',
-    marginBottom: spacing.md,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.sm,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 2,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 100,
-    elevation: 2,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  categoryCardActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-    elevation: 4,
-    shadowOpacity: 0.2,
-  },
-  categoryLabel: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    marginTop: spacing.sm,
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  categoryLabelActive: {
-    color: colors.white,
-    fontWeight: '600',
-  },
-  input: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  textArea: {
-    minHeight: 120,
-    paddingTop: spacing.md,
-  },
-  dateTimeContainer: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  dateTimeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    elevation: 2,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  dateTimeText: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    marginLeft: spacing.sm,
-    fontWeight: '500',
-  },
-  pickerContainer: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginTop: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    elevation: 4,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-  },
-  pickerCloseButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xl,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  pickerCloseButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
-  mapHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  currentLocationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  currentLocationText: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    marginLeft: spacing.xs,
-    fontWeight: '500',
-  },
-  mapContainer: {
-    height: 250,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
-  map: {
-    flex: 1,
-  },
-  customMarker: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mapOverlay: {
-    position: 'absolute',
-    top: spacing.sm,
-    left: spacing.sm,
-    right: spacing.sm,
-  },
-  mapHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    elevation: 2,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  mapHintText: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    marginLeft: spacing.xs,
-  },
-  searchWrapper: {
-    marginBottom: spacing.md,
-    position: 'relative',
-    zIndex: 1000,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  searchInput: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginRight: spacing.sm,
-  },
-  searchLoadingContainer: {
-    position: 'absolute',
-    right: 60,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-  },
-  searchButton: {
-    backgroundColor: colors.primary,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 48,
-    height: 48,
-  },
-  suggestionsContainer: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    marginTop: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    elevation: 4,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    maxHeight: 200,
-  },
-  suggestionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  suggestionText: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.text,
-    marginLeft: spacing.sm,
-  },
-  selectedLocationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginTop: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  selectedLocationText: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.text,
-    marginLeft: spacing.sm,
-  },
-  loadingText: {
-    color: colors.textSecondary,
-    fontStyle: 'italic',
-  },
-  submitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    padding: spacing.lg,
-    borderRadius: borderRadius.md,
-    elevation: 4,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-  },
-  submitButtonDisabled: {
-    backgroundColor: colors.border,
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    fontSize: fontSize.lg,
-    fontWeight: 'bold',
-    color: colors.white,
-    marginLeft: spacing.sm,
-  },
-  // AI Crime Detection Styles
-  aiSectionContainer: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  aiSection: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 2,
-    borderColor: colors.primary + '30',
-    padding: spacing.lg,
-  },
-  aiHeader: {
-    marginBottom: spacing.md,
-  },
-  aiTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  aiTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-    marginLeft: spacing.sm,
-    flex: 1,
-  },
-  aiBadge: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-  },
-  aiBadgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: 'bold',
-    color: colors.white,
-  },
-  aiSubtitle: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginLeft: 32,
-  },
-  cameraButton: {
-    backgroundColor: colors.background,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: colors.primary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  cameraButtonText: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.text,
-    marginTop: spacing.sm,
-  },
-  cameraButtonSubtext: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  imageContainer: {
-    position: 'relative',
-    marginTop: spacing.md,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-  },
-  capturedImage: {
-    width: '100%',
-    height: 250,
-    borderRadius: borderRadius.lg,
-  },
-  removeImageButton: {
-    position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
-    backgroundColor: colors.white,
-    borderRadius: 16,
-  },
-  analyzingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  analyzingText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    marginTop: spacing.sm,
-  },
-  aiResultsContainer: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  aiResultsCard: {
-    backgroundColor: colors.success + '10',
-    borderWidth: 1,
-    borderColor: colors.success,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-  },
-  aiResultsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  aiResultsTitle: {
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    color: colors.success,
-    marginLeft: spacing.sm,
-  },
-  aiResultRow: {
-    marginBottom: spacing.sm,
-  },
-  aiResultLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  aiResultValue: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  aiInfoBox: {
-    flexDirection: 'row',
-    backgroundColor: colors.info + '20',
-    padding: spacing.sm,
-    borderRadius: borderRadius.sm,
-    marginTop: spacing.sm,
-  },
-  aiInfoText: {
-    fontSize: fontSize.xs,
-    color: colors.info,
-    marginLeft: spacing.xs,
-    flex: 1,
-  },
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: t.bg,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.md,
+      elevation: 4,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+    },
+    backButton: {
+      padding: spacing.sm,
+    },
+    headerTitle: {
+      fontFamily: fontFamily.display,
+      fontSize: fontSize.xl,
+      color: t.onBrand,
+    },
+    placeholder: {
+      width: 40,
+    },
+    content: {
+      flex: 1,
+    },
+    section: {
+      padding: spacing.lg,
+    },
+    sectionTitle: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.lg,
+      color: t.text,
+      marginBottom: spacing.md,
+    },
+    categoryGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+    },
+    categoryCard: {
+      ...glassSurface(t),
+      width: '48%',
+      marginBottom: spacing.md,
+      paddingVertical: spacing.lg,
+      paddingHorizontal: spacing.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 100,
+      elevation: 2,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+    },
+    categoryCardActive: {
+      backgroundColor: t.brand,
+      borderColor: t.brand,
+      elevation: 4,
+      shadowOpacity: 0.2,
+    },
+    categoryLabel: {
+      fontFamily: fontFamily.bodyMedium,
+      fontSize: fontSize.md,
+      color: t.text,
+      marginTop: spacing.sm,
+      textAlign: 'center',
+    },
+    categoryLabelActive: {
+      fontFamily: fontFamily.bodySemi,
+      color: t.onBrand,
+    },
+    input: {
+      ...glassSurface(t),
+      fontFamily: fontFamily.body,
+      padding: spacing.md,
+      fontSize: fontSize.md,
+      color: t.text,
+    },
+    textArea: {
+      minHeight: 120,
+      paddingTop: spacing.md,
+    },
+    dateTimeContainer: {
+      flexDirection: 'row',
+      gap: spacing.md,
+    },
+    dateTimeButton: {
+      ...glassSurface(t),
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.lg,
+      elevation: 2,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+    },
+    dateTimeText: {
+      fontFamily: fontFamily.bodyMedium,
+      fontSize: fontSize.md,
+      color: t.text,
+      marginLeft: spacing.sm,
+    },
+    pickerContainer: {
+      ...glassSurface(t),
+      padding: spacing.md,
+      marginTop: spacing.md,
+      elevation: 4,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 4,
+    },
+    pickerCloseButton: {
+      backgroundColor: t.brand,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.xl,
+      borderRadius: borderRadius.md,
+      alignItems: 'center',
+      marginTop: spacing.md,
+    },
+    pickerCloseButtonText: {
+      fontFamily: fontFamily.bodySemi,
+      color: t.onBrand,
+      fontSize: fontSize.md,
+    },
+    mapHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
+    currentLocationButton: {
+      ...glassSurface(t),
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: borderRadius.full,
+    },
+    currentLocationText: {
+      fontFamily: fontFamily.bodyMedium,
+      fontSize: fontSize.xs,
+      color: t.brand,
+      marginLeft: spacing.xs,
+    },
+    mapContainer: {
+      height: 250,
+      borderRadius: borderRadius.md,
+      overflow: 'hidden',
+      borderWidth: 2,
+      borderColor: t.line,
+    },
+    map: {
+      flex: 1,
+    },
+    customMarker: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    mapOverlay: {
+      position: 'absolute',
+      top: spacing.sm,
+      left: spacing.sm,
+      right: spacing.sm,
+    },
+    mapHint: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: borderRadius.md,
+      elevation: 2,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+    },
+    mapHintText: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.sm,
+      color: t.text,
+      marginLeft: spacing.xs,
+    },
+    searchWrapper: {
+      marginBottom: spacing.md,
+      position: 'relative',
+      zIndex: 1000,
+    },
+    searchContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    searchInput: {
+      ...glassSurface(t),
+      fontFamily: fontFamily.body,
+      flex: 1,
+      padding: spacing.md,
+      fontSize: fontSize.md,
+      color: t.text,
+      marginRight: spacing.sm,
+    },
+    searchLoadingContainer: {
+      position: 'absolute',
+      right: 60,
+      top: 0,
+      bottom: 0,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: spacing.sm,
+    },
+    searchButton: {
+      backgroundColor: t.brand,
+      padding: spacing.md,
+      borderRadius: borderRadius.md,
+      justifyContent: 'center',
+      alignItems: 'center',
+      width: 48,
+      height: 48,
+    },
+    suggestionsContainer: {
+      ...glassSurface(t),
+      marginTop: spacing.xs,
+      elevation: 4,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 4,
+      maxHeight: 200,
+    },
+    suggestionItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: t.line,
+    },
+    suggestionText: {
+      fontFamily: fontFamily.body,
+      flex: 1,
+      fontSize: fontSize.sm,
+      color: t.text,
+      marginLeft: spacing.sm,
+    },
+    selectedLocationContainer: {
+      ...glassSurface(t),
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: spacing.md,
+      marginTop: spacing.md,
+    },
+    selectedLocationText: {
+      fontFamily: fontFamily.body,
+      flex: 1,
+      fontSize: fontSize.sm,
+      color: t.text,
+      marginLeft: spacing.sm,
+    },
+    loadingText: {
+      color: t.textSoft,
+      fontStyle: 'italic',
+    },
+    submitButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: t.brand,
+      marginHorizontal: spacing.lg,
+      marginTop: spacing.md,
+      padding: spacing.lg,
+      borderRadius: borderRadius.md,
+      elevation: 4,
+      shadowColor: t.brand,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
+    },
+    submitButtonDisabled: {
+      backgroundColor: t.line,
+      opacity: 0.6,
+    },
+    submitButtonText: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.lg,
+      color: t.onBrand,
+      marginLeft: spacing.sm,
+    },
+    // AI Crime Detection Styles
+    aiSectionContainer: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    aiSection: {
+      ...glassSurface(t),
+      padding: spacing.lg,
+    },
+    aiHeader: {
+      marginBottom: spacing.md,
+    },
+    aiTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: spacing.xs,
+    },
+    aiTitle: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.lg,
+      color: t.text,
+      marginLeft: spacing.sm,
+      flex: 1,
+    },
+    aiBadge: {
+      backgroundColor: t.brand,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderRadius: borderRadius.sm,
+    },
+    aiBadgeText: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.xs,
+      color: t.onBrand,
+    },
+    aiSubtitle: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.sm,
+      color: t.textSoft,
+      marginLeft: 32,
+    },
+    cameraButton: {
+      backgroundColor: t.bg,
+      borderWidth: 2,
+      borderStyle: 'dashed',
+      borderColor: t.brand,
+      borderRadius: borderRadius.lg,
+      padding: spacing.xl,
+      alignItems: 'center',
+      marginTop: spacing.md,
+    },
+    cameraButtonText: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.md,
+      color: t.text,
+      marginTop: spacing.sm,
+    },
+    cameraButtonSubtext: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.sm,
+      color: t.textSoft,
+      marginTop: spacing.xs,
+    },
+    imageContainer: {
+      position: 'relative',
+      marginTop: spacing.md,
+      borderRadius: borderRadius.lg,
+      overflow: 'hidden',
+    },
+    capturedImage: {
+      width: '100%',
+      height: 250,
+      borderRadius: borderRadius.lg,
+    },
+    removeImageButton: {
+      ...glassSurface(t),
+      position: 'absolute',
+      top: spacing.sm,
+      right: spacing.sm,
+      borderRadius: 16,
+    },
+    analyzingOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    analyzingText: {
+      fontFamily: fontFamily.bodySemi,
+      color: t.onBrand,
+      fontSize: fontSize.md,
+      marginTop: spacing.sm,
+    },
+    aiResultsContainer: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    aiResultsCard: {
+      backgroundColor: t.ok + '10',
+      borderWidth: 1,
+      borderColor: t.ok,
+      borderRadius: borderRadius.lg,
+      padding: spacing.lg,
+    },
+    aiResultsHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
+    aiResultsTitle: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.md,
+      color: t.ok,
+      marginLeft: spacing.sm,
+    },
+    aiResultRow: {
+      marginBottom: spacing.sm,
+    },
+    aiResultLabel: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.sm,
+      color: t.textSoft,
+      marginBottom: spacing.xs,
+    },
+    aiResultValue: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.md,
+      color: t.text,
+    },
+    aiInfoBox: {
+      flexDirection: 'row',
+      backgroundColor: t.info + '20',
+      padding: spacing.sm,
+      borderRadius: borderRadius.sm,
+      marginTop: spacing.sm,
+    },
+    aiInfoText: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.xs,
+      color: t.info,
+      marginLeft: spacing.xs,
+      flex: 1,
+    },
 
-  // Phase 2: Pose Analysis Styles
+    // Phase 2: Pose Analysis Styles
 
-  // Action Badges
+    // Action Badges
 
-  // Threat Level Badges
+    // Threat Level Badges
 
-  // Interaction Analysis
+    // Interaction Analysis
 
-  // Phase 3: Scene Analysis Styles
+    // Phase 3: Scene Analysis Styles
 
-  // Environmental Risk Badge
+    // Environmental Risk Badge
 
-  engineBadge: {
-    marginLeft: 'auto',
-    backgroundColor: colors.primary + '20',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-    borderWidth: 1,
-    borderColor: colors.primary + '40',
-  },
-  engineBadgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  // --- D07: the cue card ----------------------------------------------------
-  visionDescription: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    lineHeight: 22,
-    marginBottom: spacing.md,
-  },
-  cueList: {
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    paddingTop: spacing.sm,
-  },
-  cueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-    gap: spacing.sm,
-  },
-  cueLabel: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
-  cueAnswer: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-  },
-  proposalBox: {
-    backgroundColor: colors.borderLight,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  proposalLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  proposalValue: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-    marginTop: 2,
-  },
-  proposalReason: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    lineHeight: 19,
-  },
-  agreeText: {
-    fontSize: fontSize.sm,
-    color: colors.success,
-    marginTop: spacing.sm,
-  },
-  disagreeText: {
-    fontSize: fontSize.sm,
-    color: colors.warning,
-    marginTop: spacing.sm,
-    lineHeight: 19,
-  },
-});
+    engineBadge: {
+      marginLeft: 'auto',
+      backgroundColor: t.brand + '20',
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderRadius: borderRadius.sm,
+      borderWidth: 1,
+      borderColor: t.brand + '40',
+    },
+    engineBadgeText: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.xs,
+      color: t.brand,
+    },
+    // --- D07: the cue card ----------------------------------------------------
+    visionDescription: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.md,
+      color: t.text,
+      lineHeight: 22,
+      marginBottom: spacing.md,
+    },
+    cueList: {
+      marginTop: spacing.sm,
+      marginBottom: spacing.md,
+      borderTopWidth: 1,
+      borderTopColor: t.lineSoft,
+      paddingTop: spacing.sm,
+    },
+    cueRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 4,
+      gap: spacing.sm,
+    },
+    cueLabel: {
+      fontFamily: fontFamily.body,
+      flex: 1,
+      fontSize: fontSize.sm,
+      color: t.textSoft,
+    },
+    cueAnswer: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.sm,
+    },
+    proposalBox: {
+      backgroundColor: t.lineSoft,
+      borderRadius: borderRadius.md,
+      padding: spacing.md,
+      marginBottom: spacing.md,
+    },
+    proposalLabel: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.xs,
+      color: t.textSoft,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    proposalValue: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.lg,
+      color: t.text,
+      marginTop: 2,
+    },
+    proposalReason: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.sm,
+      color: t.textSoft,
+      marginTop: spacing.xs,
+      lineHeight: 19,
+    },
+    agreeText: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.sm,
+      color: t.ok,
+      marginTop: spacing.sm,
+    },
+    disagreeText: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.sm,
+      color: t.warn,
+      marginTop: spacing.sm,
+      lineHeight: 19,
+    },
+  });
 
 export default AddReportScreen;

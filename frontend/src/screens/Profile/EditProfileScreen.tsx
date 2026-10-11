@@ -12,14 +12,24 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, spacing, borderRadius, fontSize } from '../../theme';
+import { spacing, borderRadius, fontSize } from '../../theme';
+import { useTheme } from '../../theme/ThemeProvider';
+import { useStyles } from '../../theme/useStyles';
+import type { Palette } from '../../theme/palette';
+import { glassSurface } from '../../theme/surfaces';
+import { Aurora } from '../../components/motion';
+import { fontFamily } from '../../theme/type';
 import { useAuthStore } from '../../store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { uploadAvatar } from '../../lib/supabase-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { ProfileStackParamList } from '../../types';
+
+// @ts-ignore - generated types fight `style` in this RN version
+const Grad = LinearGradient as any;
 
 type EditProfileScreenNavigationProp = NativeStackNavigationProp<
   ProfileStackParamList,
@@ -31,6 +41,8 @@ interface Props {
 }
 
 const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
+  const { t, g } = useTheme();
+  const styles = useStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const { user, setUser } = useAuthStore();
 
@@ -294,17 +306,25 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      {/* The ambient field, behind everything. `glassSurface` is a
+          translucent fill and needs something to be translucent over —
+          see the note in theme/surfaces.ts. */}
+      <Aurora intensity="ambient" />
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+      <Grad
+        colors={g.aurora}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <TouchableOpacity
           style={styles.headerButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.white} />
+          <Ionicons name="arrow-back" size={24} color={t.onBrand} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Profile</Text>
         <View style={styles.headerButton} />
-      </View>
+      </Grad>
 
       <ScrollView
         style={styles.content}
@@ -324,16 +344,16 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
               <Image source={{ uri: avatar }} style={styles.avatar} />
             ) : (
               <View style={styles.avatarPlaceholder}>
-                <Ionicons name="person" size={60} color={colors.gray400} />
+                <Ionicons name="person" size={60} color={t.textFaint} />
               </View>
             )}
             {isUploadingImage ? (
               <View style={styles.avatarOverlay}>
-                <ActivityIndicator size="small" color={colors.white} />
+                <ActivityIndicator size="small" color={t.onBrand} />
               </View>
             ) : (
               <View style={styles.avatarEditIcon}>
-                <Ionicons name="camera" size={20} color={colors.white} />
+                <Ionicons name="camera" size={20} color={t.onBrand} />
               </View>
             )}
           </TouchableOpacity>
@@ -347,7 +367,7 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Email</Text>
             <View style={styles.inputDisabled}>
-              <Ionicons name="mail-outline" size={20} color={colors.gray400} />
+              <Ionicons name="mail-outline" size={20} color={t.textFaint} />
               <Text style={styles.disabledText}>{user?.email}</Text>
             </View>
             <Text style={styles.hint}>Email cannot be changed</Text>
@@ -359,14 +379,14 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
               <Ionicons
                 name="person-outline"
                 size={20}
-                color={colors.textSecondary}
+                color={t.textSoft}
               />
               <TextInput
                 style={styles.textInput}
                 value={name}
                 onChangeText={setName}
                 placeholder="Enter your name"
-                placeholderTextColor={colors.gray400}
+                placeholderTextColor={t.textFaint}
               />
             </View>
           </View>
@@ -377,14 +397,14 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
               <Ionicons
                 name="call-outline"
                 size={20}
-                color={colors.textSecondary}
+                color={t.textSoft}
               />
               <TextInput
                 style={styles.textInput}
                 value={phone}
                 onChangeText={setPhone}
                 placeholder="Enter your phone number"
-                placeholderTextColor={colors.gray400}
+                placeholderTextColor={t.textFaint}
                 keyboardType="phone-pad"
               />
             </View>
@@ -401,7 +421,7 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
             <Ionicons
               name={showPasswordSection ? 'chevron-up' : 'chevron-down'}
               size={24}
-              color={colors.textSecondary}
+              color={t.textSoft}
             />
           </TouchableOpacity>
 
@@ -413,14 +433,14 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
                   <Ionicons
                     name="lock-closed-outline"
                     size={20}
-                    color={colors.textSecondary}
+                    color={t.textSoft}
                   />
                   <TextInput
                     style={styles.textInput}
                     value={currentPassword}
                     onChangeText={setCurrentPassword}
                     placeholder="Enter current password"
-                    placeholderTextColor={colors.gray400}
+                    placeholderTextColor={t.textFaint}
                     secureTextEntry
                   />
                 </View>
@@ -432,14 +452,14 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
                   <Ionicons
                     name="lock-closed-outline"
                     size={20}
-                    color={colors.textSecondary}
+                    color={t.textSoft}
                   />
                   <TextInput
                     style={styles.textInput}
                     value={newPassword}
                     onChangeText={setNewPassword}
                     placeholder="Enter new password (min 6 characters)"
-                    placeholderTextColor={colors.gray400}
+                    placeholderTextColor={t.textFaint}
                     secureTextEntry
                   />
                 </View>
@@ -451,14 +471,14 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
                   <Ionicons
                     name="lock-closed-outline"
                     size={20}
-                    color={colors.textSecondary}
+                    color={t.textSoft}
                   />
                   <TextInput
                     style={styles.textInput}
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                     placeholder="Confirm new password"
-                    placeholderTextColor={colors.gray400}
+                    placeholderTextColor={t.textFaint}
                     secureTextEntry
                   />
                 </View>
@@ -470,7 +490,7 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
                 disabled={isLoading}
               >
                 {isLoading ? (
-                  <ActivityIndicator size="small" color={colors.white} />
+                  <ActivityIndicator size="small" color={t.onBrand} />
                 ) : (
                   <Text style={styles.changePasswordButtonText}>
                     Change Password
@@ -488,13 +508,13 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
           disabled={isLoading}
         >
           {isLoading ? (
-            <ActivityIndicator size="small" color={colors.white} />
+            <ActivityIndicator size="small" color={t.onBrand} />
           ) : (
             <>
               <Ionicons
                 name="checkmark-circle"
                 size={24}
-                color={colors.white}
+                color={t.onBrand}
               />
               <Text style={styles.saveButtonText}>Save Changes</Text>
             </>
@@ -505,187 +525,190 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacing.lg,
-    backgroundColor: colors.primary,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: 'bold',
-    color: colors.white,
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: spacing.lg,
-  },
-  avatarSection: {
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-  },
-  avatarContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    marginBottom: spacing.sm,
-    position: 'relative',
-  },
-  avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-  },
-  avatarPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: colors.gray200,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarEditIcon: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: colors.primary,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: colors.background,
-  },
-  avatarHint: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
-  section: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    elevation: 1,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  sectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: spacing.md,
-  },
-  inputContainer: {
-    marginBottom: spacing.md,
-  },
-  label: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: spacing.xs,
-  },
-  input: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  inputDisabled: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.gray100,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  textInput: {
-    flex: 1,
-    marginLeft: spacing.sm,
-    fontSize: fontSize.md,
-    color: colors.textPrimary,
-  },
-  disabledText: {
-    flex: 1,
-    marginLeft: spacing.sm,
-    fontSize: fontSize.md,
-    color: colors.gray500,
-  },
-  hint: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  changePasswordButton: {
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.sm,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  changePasswordButtonText: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.white,
-  },
-  saveButton: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-  },
-  saveButtonText: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.white,
-    marginLeft: spacing.sm,
-  },
-});
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: t.bg,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: spacing.lg,
+    },
+    headerButton: {
+      width: 40,
+      height: 40,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    headerTitle: {
+      fontFamily: fontFamily.display,
+      fontSize: fontSize.xl,
+      color: t.onBrand,
+    },
+    content: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: spacing.lg,
+    },
+    avatarSection: {
+      alignItems: 'center',
+      marginBottom: spacing.xl,
+    },
+    avatarContainer: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      marginBottom: spacing.sm,
+      position: 'relative',
+    },
+    avatar: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+    },
+    avatarPlaceholder: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      backgroundColor: t.line,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    avatarOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      borderRadius: 60,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    avatarEditIcon: {
+      position: 'absolute',
+      bottom: 0,
+      right: 0,
+      backgroundColor: t.brand,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 3,
+      borderColor: t.bg,
+    },
+    avatarHint: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.sm,
+      color: t.textSoft,
+    },
+    section: {
+      ...glassSurface(t),
+      padding: spacing.lg,
+      marginBottom: spacing.md,
+      elevation: 1,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
+    sectionTitle: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.lg,
+      color: t.text,
+      marginBottom: spacing.md,
+    },
+    inputContainer: {
+      marginBottom: spacing.md,
+    },
+    label: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.sm,
+      color: t.text,
+      marginBottom: spacing.xs,
+    },
+    input: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: t.bg,
+      borderRadius: borderRadius.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderWidth: 1,
+      borderColor: t.line,
+    },
+    inputDisabled: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: t.lineSoft,
+      borderRadius: borderRadius.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderWidth: 1,
+      borderColor: t.line,
+    },
+    textInput: {
+      fontFamily: fontFamily.body,
+      flex: 1,
+      marginLeft: spacing.sm,
+      fontSize: fontSize.md,
+      color: t.text,
+    },
+    disabledText: {
+      fontFamily: fontFamily.body,
+      flex: 1,
+      marginLeft: spacing.sm,
+      fontSize: fontSize.md,
+      color: t.textSoft,
+    },
+    hint: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.xs,
+      color: t.textSoft,
+      marginTop: spacing.xs,
+    },
+    changePasswordButton: {
+      backgroundColor: t.accent,
+      borderRadius: borderRadius.sm,
+      paddingVertical: spacing.md,
+      alignItems: 'center',
+      marginTop: spacing.md,
+    },
+    changePasswordButtonText: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.md,
+      color: t.onBrand,
+    },
+    saveButton: {
+      backgroundColor: t.brand,
+      borderRadius: borderRadius.md,
+      paddingVertical: spacing.md,
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      elevation: 2,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 3,
+    },
+    saveButtonText: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.lg,
+      color: t.onBrand,
+      marginLeft: spacing.sm,
+    },
+  });
 
 export default EditProfileScreen;

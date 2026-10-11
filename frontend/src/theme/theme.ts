@@ -1,85 +1,133 @@
-// Light Mode Theme with Snow Background
+import { fontFamily } from './type';
+
+/**
+ * The legacy token names, pointed at the new Aurora palette.
+ *
+ * ## Why this file still exists
+ *
+ * 26 screens and components do `import { colors } from '../theme'` and read it
+ * as a module constant. The real theme is now `palette.ts` behind `useTheme()`,
+ * which is what dark mode needs — a hook, so components re-render on a change.
+ *
+ * Rewriting 26 files at once, with a demo days away, is how you end up with a
+ * half-migrated theme and a screen nobody noticed was broken. So instead the
+ * *values* here were replaced while every *key* was kept. Consequences:
+ *
+ * * Every un-migrated screen stopped being purple the moment this file changed,
+ *   with no edit of its own. That was the point — one file, whole-app recolour.
+ * * Those screens were light-only for as long as they read `colors`, because a
+ *   module constant cannot know the mode. They have since been converted to
+ *   `useStyles(makeStyles)`, so this object is now kept for its *keys* rather
+ *   than its consumers — `LIGHT_ONLY` in `ThemeProvider.tsx` tracks what is
+ *   left, and it is empty.
+ *
+ * **Do not add keys here.** New work uses `useTheme()`. This is the floor under
+ * the migration, not a palette to build on.
+ *
+ * ## The mapping
+ *
+ * `primary` was indigo `#6366F1`, `secondary` was pink `#EC4899`. They are now
+ * the Aurora sky and cyan stops. Two deliberate choices in the translation:
+ *
+ * * **The grays went cool.** The inherited scale was Tailwind's warm gray
+ *   (`#6B7280`), which under a cyan chrome reads as dirty. These are slate, the
+ *   same family as the Aurora text tokens, so borders and placeholders sit in
+ *   the same colour world as everything else.
+ * * **`secondary` became cyan, not coral.** Coral is the Aurora accent, and the
+ *   accent is reserved for one action per screen. `secondary` is used as a
+ *   decorative fill in five places; pointing it at the accent would have made
+ *   the accent decoration and destroyed the thing it is for.
+ */
 export const colors = {
-  // Primary - Modern Blue/Purple gradient
-  primary: '#6366F1', // Indigo
-  primaryLight: '#818CF8',
-  primaryDark: '#4F46E5',
+  // Primary — Aurora sky. The middle gradient stop, used as the solid brand.
+  primary: '#0EA5E9',
+  primaryLight: '#38BDF8',
+  primaryDark: '#0369A1',
 
-  // Secondary - Accent colors
-  secondary: '#EC4899', // Pink
-  secondaryLight: '#F472B6',
+  // Secondary — Aurora cyan. Decorative only; see the note above.
+  secondary: '#22D3EE',
+  secondaryLight: '#67E8F9',
 
-  // Background - Snow theme
-  background: '#FFFAFA', // Snow white
+  // Background — a faintly cool ground, not white. Pure white beside a cyan
+  // gradient looks like a missing background.
+  background: '#F6F9FC',
   backgroundLight: '#FFFFFF',
-  backgroundCard: 'rgba(255, 255, 255, 0.9)', // Semi-transparent white
+  backgroundCard: 'rgba(255, 255, 255, 0.9)',
 
-  // Glass effect - Light mode
+  // Glass
   glass: 'rgba(255, 255, 255, 0.7)',
-  glassDark: 'rgba(0, 0, 0, 0.05)',
+  glassDark: 'rgba(15, 23, 42, 0.05)',
 
-  // Text - Dark text for light background
-  text: '#1F2937',
-  textSecondary: '#6B7280',
-  textMuted: '#9CA3AF',
-  textPrimary: '#1F2937', // Alias for compatibility
+  // Text — slate, matching the Aurora text ramp.
+  text: '#0F172A',
+  textSecondary: '#475569',
+  textMuted: '#94A3B8',
+  textPrimary: '#0F172A', // Alias for compatibility
 
-  // Status colors
-  success: '#10B981',
+  // Status colors. Unchanged in meaning, nudged to the palette's versions.
+  // These are the only warm colours in the system, which is what lets amber and
+  // red mean "something is happening" wherever they appear.
+  success: '#059669',
   successLight: '#34D399',
-  warning: '#F59E0B',
+  warning: '#D97706',
   warningLight: '#FBBF24',
-  danger: '#EF4444',
+  danger: '#DC2626',
   dangerLight: '#F87171',
-  error: '#EF4444', // Alias for compatibility
-  info: '#3B82F6',
+  error: '#DC2626', // Alias for compatibility
+  info: '#0284C7',
 
-  // Surface colors - Light surfaces
+  // Surfaces
   surface: 'rgba(255, 255, 255, 0.95)',
-  surfaceHover: 'rgba(249, 250, 251, 1)',
-  surfaceVariant: 'rgba(243, 244, 246, 1)',
+  surfaceHover: 'rgba(241, 245, 249, 1)',
+  surfaceVariant: 'rgba(241, 245, 249, 1)',
 
-  // Border - Subtle borders for light mode
-  border: 'rgba(229, 231, 235, 1)',
-  borderLight: 'rgba(243, 244, 246, 1)',
-  divider: 'rgba(229, 231, 235, 0.5)',
+  // Borders — cool, and lighter than the originals. A glass-heavy UI wants its
+  // divisions suggested rather than drawn.
+  border: 'rgba(15, 23, 42, 0.10)',
+  borderLight: 'rgba(15, 23, 42, 0.06)',
+  divider: 'rgba(15, 23, 42, 0.08)',
 
   // Shadow
-  shadow: 'rgba(0, 0, 0, 0.1)',
-  shadowDark: 'rgba(0, 0, 0, 0.2)',
+  shadow: 'rgba(15, 23, 42, 0.10)',
+  shadowDark: 'rgba(15, 23, 42, 0.20)',
 
-  // White/Black
   white: '#FFFFFF',
   black: '#000000',
 
-  // Gray scale
-  gray50: '#F9FAFB',
-  gray100: '#F3F4F6',
-  gray200: '#E5E7EB',
-  gray300: '#D1D5DB',
-  gray400: '#9CA3AF',
-  gray500: '#6B7280',
-  gray600: '#4B5563',
-  gray700: '#374151',
-  gray800: '#1F2937',
-  gray900: '#111827',
+  // Gray scale — slate, not Tailwind gray.
+  gray50: '#F8FAFC',
+  gray100: '#F1F5F9',
+  gray200: '#E2E8F0',
+  gray300: '#CBD5E1',
+  gray400: '#94A3B8',
+  gray500: '#64748B',
+  gray600: '#475569',
+  gray700: '#334155',
+  gray800: '#1E293B',
+  gray900: '#0F172A',
 
   // Overlay
-  overlay: 'rgba(0, 0, 0, 0.5)',
-  overlayLight: 'rgba(0, 0, 0, 0.3)',
+  overlay: 'rgba(15, 23, 42, 0.45)',
+  overlayLight: 'rgba(15, 23, 42, 0.28)',
 
-  // Transparent
   transparent: 'transparent',
 };
 
-// Gradient definitions - Light mode gradients
+/**
+ * Gradients. `primary` is the Aurora ramp and is what replaced
+ * indigo → violet → pink everywhere at once.
+ *
+ * Three stops that differ in luminance as much as in hue, so the fill reads as
+ * light falling across a surface rather than as two colours meeting.
+ */
 export const gradients = {
-  primary: ['#6366F1', '#8B5CF6', '#EC4899'],
-  primaryVertical: ['#6366F1', '#4F46E5'],
-  danger: ['#EF4444', '#DC2626'],
+  primary: ['#22D3EE', '#0EA5E9', '#2563EB'],
+  primaryVertical: ['#0EA5E9', '#2563EB'],
+  // The one warm gradient in the app: SOS, and nothing else.
+  danger: ['#FB7185', '#E11D48'],
   success: ['#10B981', '#059669'],
-  background: ['#FFFAFA', '#FFFFFF'], // Snow gradient
-  card: ['rgba(255, 255, 255, 0.95)', 'rgba(249, 250, 251, 1)'],
+  background: ['#F6F9FC', '#FFFFFF'],
+  card: ['rgba(255, 255, 255, 0.95)', 'rgba(248, 250, 252, 1)'],
 };
 
 export const spacing = {
@@ -118,46 +166,67 @@ export const fontWeight = {
   bold: '700' as const,
 };
 
-// Typography system
+/**
+ * The legacy typography scale, now carrying the real faces.
+ *
+ * Styles across the app spread these (`...typography.h4`), so naming the font
+ * family here is what puts Sora and Inter on every screen that was never
+ * individually converted — the same one-file leverage as the colours above.
+ *
+ * **`fontWeight` is deliberately absent from every entry.** On Android, React
+ * Native resolves a custom family by asset name: given `fontFamily: 'Sora_700Bold'`
+ * and `fontWeight: 'bold'` together it looks for a bold *variant* of that asset,
+ * finds none, and falls back unpredictably — on the one platform this app is
+ * demoed on. The weight lives in the family name, which is why five separate
+ * font files are bundled instead of one with four weights.
+ *
+ * Display sizes (h1–h3) get Sora; everything read in quantity gets Inter. h4 at
+ * 20px is the boundary and goes to Inter SemiBold, because at that size Sora
+ * starts to look like a label rather than a heading.
+ */
 export const typography = {
   h1: {
+    fontFamily: fontFamily.display,
     fontSize: 32,
-    fontWeight: '700' as const,
     lineHeight: 40,
+    letterSpacing: -0.6,
   },
   h2: {
+    fontFamily: fontFamily.display,
     fontSize: 28,
-    fontWeight: '700' as const,
     lineHeight: 36,
+    letterSpacing: -0.5,
   },
   h3: {
+    fontFamily: fontFamily.display,
     fontSize: 24,
-    fontWeight: '600' as const,
     lineHeight: 32,
+    letterSpacing: -0.4,
   },
   h4: {
+    fontFamily: fontFamily.bodySemi,
     fontSize: 20,
-    fontWeight: '600' as const,
     lineHeight: 28,
+    letterSpacing: -0.2,
   },
   body: {
+    fontFamily: fontFamily.body,
     fontSize: 16,
-    fontWeight: '400' as const,
     lineHeight: 24,
   },
   bodyLarge: {
+    fontFamily: fontFamily.body,
     fontSize: 18,
-    fontWeight: '400' as const,
     lineHeight: 26,
   },
   bodySmall: {
+    fontFamily: fontFamily.body,
     fontSize: 14,
-    fontWeight: '400' as const,
     lineHeight: 20,
   },
   caption: {
+    fontFamily: fontFamily.body,
     fontSize: 12,
-    fontWeight: '400' as const,
     lineHeight: 16,
   },
 };

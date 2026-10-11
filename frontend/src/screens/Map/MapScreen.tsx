@@ -20,11 +20,17 @@ import MapView, {
   Polyline,
   Circle,
 } from '../../components/MapComponent';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { CompositeNavigationProp } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NavigationProp } from '@react-navigation/native';
-import { colors, spacing, borderRadius, fontSize } from '../../theme';
+import { spacing, borderRadius, fontSize } from '../../theme';
+import { useTheme } from '../../theme/ThemeProvider';
+import { useStyles } from '../../theme/useStyles';
+import type { Palette } from '../../theme/palette';
+import { glassSurface } from '../../theme/surfaces';
+import { Glass } from '../../components/motion';
+import { fontFamily } from '../../theme/type';
 import { useLocationStore } from '../../store';
 import { DEFAULT_MAP_REGION } from '../../constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -38,9 +44,9 @@ import { geoService } from '../../services/geo.service';
 import RiskFlagSheet, { riskBand } from '../../components/RiskFlagSheet';
 import { RiskFlagMarker, isConfirmedFlag } from '../../components/RiskFlagMarker';
 import RouteComparisonCard, { safetyColour } from '../../components/RouteComparisonCard';
+import { TAB_BAR_CLEARANCE } from '../../navigation/metrics';
 import PlaceSearch from '../../components/PlaceSearch';
 import { AS_OF_PRESETS, asOfSummary } from '../../features/risk/scheduled';
-import { useSosController } from '../../features/guardian/GuardianProvider';
 import type { GeoResolution } from '../../types/contracts/geo';
 
 interface CrimeReportData {
@@ -113,6 +119,10 @@ const MAX_DRAWN_RADIUS_M = 5000;
 /*
  * Overlay geometry.
  *
+ * The SOS button referred to below has since been removed from this screen — see
+ * the comment at its old site in the JSX. The arrangement it forced is kept,
+ * because the search card and the FAB column still have to stack correctly.
+ *
  * Everything on top of the map is absolutely positioned, and three of those things
  * used to be placed by independent guesses that happened to collide:
  *
@@ -128,7 +138,6 @@ const MAX_DRAWN_RADIUS_M = 5000;
  * The fix is to name the sizes and derive the positions from them, so a button that
  * changes size moves the things around it instead of silently overlapping them.
  */
-const SOS_SIZE = 80;
 const FAB_SIZE = 56;
 /** Vertical gap between the two stacked right-hand buttons. Was a bare `+ 70`. */
 const FAB_GAP = 14;
@@ -196,6 +205,8 @@ interface Props {
 }
 
 const MapScreen: React.FC<Props> = ({ navigation }) => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
   const { currentLocation, getCurrentLocation } = useLocationStore();
   const [region, setRegion] = useState(DEFAULT_MAP_REGION);
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -220,7 +231,6 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   // The one shared SOS controller, mounted at the app root by
   // `GuardianProvider`. Creating one per screen is what gave this app two shake
   // listeners and two camera modals per shake.
-  const sos = useSosController();
 
   /*
    * The search card's real height, measured rather than assumed.
@@ -578,12 +588,24 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   // at the top of this file.
   const searchTop = insets.top + spacing.xs;
   const fabColumnTop = searchTop + searchHeight + spacing.sm;
-  const sosTop = insets.bottom + spacing.xl + SOS_SIZE;
+  // Every bottom overlay measures from here rather than from `insets.bottom`.
+  // The tab bar now floats *over* this screen instead of sitting below it, so
+  // the safe floor moved up by its height — and because the geometry note above
+  // derives the SOS button, the risk badge and the time control from one base,
+  // changing the base keeps all three in the same relationship.
+  const bottomFloor = insets.bottom + TAB_BAR_CLEARANCE;
+  // What the time control has to clear. It was the top of the SOS button; with
+  // that gone it is just the floor plus the badge's own row, so the control sits
+  // lower and gives the map back the strip it was using.
+  const overlayFloor = bottomFloor + spacing.xl + 28;
   // `maxWidth` rather than a `right` bound: setting both `left` and `right` on an
   // absolute element stretches it, so a badge reading "0 risk flags" would sit in a
-  // pill the width of the screen. This hugs the label and still stops short of SOS.
-  const riskBadgeMaxWidth =
-    windowWidth - spacing.lg * 2 - SOS_SIZE - spacing.sm;
+  // pill the width of the screen. This hugs the label.
+  //
+  // It used to subtract `SOS_SIZE` to stop short of the SOS button. That button
+  // is gone, so the badge gets two thirds of the width — enough for the longest
+  // real label ("31 risk flags · news 4 min ago") without ellipsis.
+  const riskBadgeMaxWidth = (windowWidth - spacing.lg * 2) * 0.66;
 
   return (
     <View style={styles.container}>
@@ -627,7 +649,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
             <Polyline
               key={route.route_id}
               coordinates={route.path.map(p => ({ latitude: p.latitude, longitude: p.longitude }))}
-              strokeColor={safetyColour(route.safety_score)}
+              strokeColor={safetyColour(route.safety_score, t)}
               strokeWidth={isSelected ? 6 : 3}
               onPress={() => setSelectedRouteIndex(index)}
               tappable={true}
@@ -665,8 +687,8 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                   center={{ latitude: flag.lat, longitude: flag.lon }}
                   radius={flag.radius_m}
                   strokeWidth={onSelected ? 2 : 1}
-                  strokeColor={withAlpha(colors.error, onSelected ? 'CC' : '55')}
-                  fillColor={withAlpha(colors.error, onSelected ? '26' : '0D')}
+                  strokeColor={withAlpha(t.danger, onSelected ? 'CC' : '55')}
+                  fillColor={withAlpha(t.danger, onSelected ? '26' : '0D')}
                   lineDashPattern={onSelected ? undefined : [8, 6]}
                   zIndex={onSelected ? 5 : 2}
                 />
@@ -773,7 +795,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       {/* Route Search Interface (Google Maps Style) */}
       {routeMode && (
         <View style={[styles.searchContainer, { top: searchTop }]}>
-          <View style={styles.searchBox}>
+          <Glass style={styles.searchBox} padding={spacing.md} radius={borderRadius.lg} intensity={30} elevated>
             {/* The way out of route mode. It lives inside the card because the
                 floating button that used to do this job sat underneath the card and
                 could not be tapped, and route mode has no other exit — a reload was
@@ -786,7 +808,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                 accessibilityRole="button"
                 accessibilityLabel="Close route planning"
               >
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
+                <Ionicons name="close" size={20} color={t.textSoft} />
               </TouchableOpacity>
             </View>
 
@@ -802,10 +824,10 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                 }}
                 onFocus={() => setActiveSearch('source')}
                 placeholder="Start location"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={t.textSoft}
                 selectTextOnFocus
               />
-              {activeSearch === 'source' && isSearching && <ActivityIndicator size="small" color={colors.primary} />}
+              {activeSearch === 'source' && isSearching && <ActivityIndicator size="small" color={t.brand} />}
             </View>
 
             <View style={styles.connectorLine} />
@@ -822,10 +844,10 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                   setActiveSearch('destination');
                 }}
                 onFocus={() => setActiveSearch('destination')}
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={t.textSoft}
                 autoFocus={true}
               />
-              {activeSearch === 'destination' && isSearching && <ActivityIndicator size="small" color={colors.primary} />}
+              {activeSearch === 'destination' && isSearching && <ActivityIndicator size="small" color={t.brand} />}
             </View>
 
             {/* Driving / walking. Re-requests immediately when a route is already shown,
@@ -855,7 +877,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                     <Ionicons
                       name={mode === 'driving' ? 'car-outline' : 'walk-outline'}
                       size={15}
-                      color={active ? colors.primaryDark : colors.textSecondary}
+                      color={active ? t.brandStrong : t.textSoft}
                     />
                     <Text style={[styles.profileChipText, active && styles.profileChipTextActive]}>
                       {mode === 'driving' ? 'Driving' : 'Walking'}
@@ -864,11 +886,11 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                 );
               })}
             </View>
-          </View>
+          </Glass>
 
           {/* Suggestions List */}
           {suggestions.length > 0 && (
-            <View style={styles.suggestionsContainer}>
+            <Glass style={styles.suggestionsContainer} padding={0} radius={borderRadius.md} elevated>
               <ScrollView keyboardShouldPersistTaps="always">
                 {suggestions.map((item, index) => (
                   <TouchableOpacity
@@ -876,39 +898,28 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                     style={styles.suggestionItem}
                     onPress={() => handleSuggestionSelect(item)}
                   >
-                    <Ionicons name="location-outline" size={20} color={colors.textSecondary} />
+                    <Ionicons name="location-outline" size={20} color={t.textSoft} />
                     <Text style={styles.suggestionText}>{item.display_name}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-            </View>
+            </Glass>
           )}
         </View>
       )}
 
-      {/* Defect 14. This button used to confirm an SOS and then pop
-          "Emergency contacts have been notified" without notifying anyone — a red
-          button that lied, on the screen a user is most likely to be looking at
-          when something is happening around them. It now runs the same shared SOS
-          controller as every other screen: real recording, real upload, real
-          alert. */}
-      {/* SOSFlow is rendered once by GuardianProvider at the app root. */}
+      {/* The 80pt red SOS button that used to sit here has been removed.
+          Removed rather than moved: it was the third way to reach the same
+          `useSosController`, after the Home screen's button and the two
+          automatic triggers in Guardian (shout and shake), and on this screen
+          it cost more than it gave. It occupied the bottom-right corner, which
+          is where the route sheet and the risk badge now live, and the whole
+          overlay geometry below was arranged around avoiding an 80pt circle.
 
-      {/* SOS Button (Hide in route mode) */}
-      {!routeMode && (
-        <TouchableOpacity
-          style={[styles.sosButton, { bottom: insets.bottom + spacing.xl }]}
-          onPress={() => sos.start('button')}
-          activeOpacity={0.8}
-        >
-          <MaterialCommunityIcons
-            name="alarm-light"
-            size={32}
-            color={colors.white}
-          />
-          <Text style={styles.sosButtonText}>SOS</Text>
-        </TouchableOpacity>
-      )}
+          Nothing about the SOS path changed — `GuardianProvider` still holds one
+          controller for the app, still armed from the first frame, and the
+          shouted phrase and the hard shake still work on this screen. */}
+      {/* SOSFlow is rendered once by GuardianProvider at the app root. */}
 
       {/* Report Button (Hide in route mode) */}
       {!routeMode && (
@@ -921,7 +932,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
             }, 100);
           }}
         >
-          <Ionicons name="warning" size={24} color={colors.white} />
+          <Ionicons name="warning" size={24} color={t.onBrand} />
         </TouchableOpacity>
       )}
 
@@ -937,14 +948,14 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
             {
               top: fabColumnTop + FAB_SIZE + FAB_GAP,
               right: spacing.lg,
-              backgroundColor: colors.primary
+              backgroundColor: t.brand
             }
           ]}
           onPress={toggleRouteMode}
           accessibilityRole="button"
           accessibilityLabel="Plan a route"
         >
-          <Ionicons name="navigate" size={24} color={colors.white} />
+          <Ionicons name="navigate" size={24} color={t.onBrand} />
         </TouchableOpacity>
       )}
 
@@ -959,7 +970,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           routes={calculatedRoutes}
           selectedIndex={selectedRouteIndex}
           onSelect={setSelectedRouteIndex}
-          bottomInset={insets.bottom}
+          bottomInset={bottomFloor}
         />
       )}
 
@@ -973,7 +984,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           style={[
             styles.riskBadge,
             {
-              bottom: insets.bottom + spacing.xl,
+              bottom: bottomFloor + spacing.xl,
               // A content-sized badge with no bound slid under the SOS button once
               // the label grew. Bounded here; the label ellipsizes instead.
               maxWidth: riskBadgeMaxWidth,
@@ -985,10 +996,10 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
               styles.riskDot,
               {
                 backgroundColor: riskError
-                  ? colors.error
+                  ? t.danger
                   : asOfOffsetHours > 0
-                    ? colors.info
-                    : colors.success,
+                    ? t.info
+                    : t.ok,
               },
             ]}
           />
@@ -1015,7 +1026,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
             hitSlop={8}
             accessibilityLabel="Refresh risk flags"
           >
-            <Ionicons name="refresh" size={16} color={colors.textSecondary} />
+            <Ionicons name="refresh" size={16} color={t.textSoft} />
           </TouchableOpacity>
           {ingestion?.mode !== 'replay' && (
             <TouchableOpacity
@@ -1026,9 +1037,9 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
               accessibilityLabel="Fetch today's news now"
             >
               {isFetchingNews ? (
-                <ActivityIndicator size="small" color={colors.primary} />
+                <ActivityIndicator size="small" color={t.brand} />
               ) : (
-                <Ionicons name="newspaper-outline" size={16} color={colors.primary} />
+                <Ionicons name="newspaper-outline" size={16} color={t.brand} />
               )}
             </TouchableOpacity>
           )}
@@ -1048,7 +1059,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           the project does not have, a dragged value fires a request per frame, and
           six taps are repeatable on stage in a way a drag is not. */}
       {!routeMode && (
-        <View style={[styles.asOfBar, { bottom: sosTop + spacing.sm }]}>
+        <View style={[styles.asOfBar, { bottom: overlayFloor + spacing.sm }]}>
           <Text style={styles.asOfLabel}>{asOfSummary(asOfOffsetHours, riskFlags, Date.now())}</Text>
           <View style={styles.asOfButtons}>
             {AS_OF_PRESETS.map(({ hours, label }) => (
@@ -1061,6 +1072,14 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                 onPress={() => setAsOfOffset(hours)}
               >
                 <Text
+                  // One line, shrinking if it has to. Six presets share the
+                  // width and "Tomorrow" is the longest; in Inter it no longer
+                  // fits the sixth of a screen the old face did, and it was
+                  // wrapping to "Tomorr / ow". Shrinking one label beats
+                  // abbreviating it or giving the row a horizontal scroll.
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
                   style={[
                     styles.asOfButtonText,
                     asOfOffsetHours === hours && styles.asOfButtonTextActive,
@@ -1084,7 +1103,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       {/* Loading Indicator */}
       {isRouting && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={t.brand} />
           <Text style={styles.loadingText}>Calculating safest route...</Text>
         </View>
       )}
@@ -1112,7 +1131,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                     </Text>
                   </View>
                   <TouchableOpacity onPress={closeModal}>
-                    <Ionicons name="close" size={28} color={colors.text} />
+                    <Ionicons name="close" size={28} color={t.text} />
                   </TouchableOpacity>
                 </View>
 
@@ -1123,7 +1142,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                     <Ionicons
                       name="time-outline"
                       size={18}
-                      color={colors.textSecondary}
+                      color={t.textSoft}
                     />
                     <Text style={styles.infoText}>
                       {formatDateTime(selectedCrime.incident_date_time)}
@@ -1135,7 +1154,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                       <Ionicons
                         name="location-outline"
                         size={18}
-                        color={colors.textSecondary}
+                        color={t.textSoft}
                       />
                       <Text style={styles.infoText}>
                         {selectedCrime.location_name}
@@ -1148,7 +1167,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                       <Ionicons
                         name="checkmark-circle"
                         size={16}
-                        color={colors.success}
+                        color={t.ok}
                       />
                       <Text style={styles.verifiedText}>Verified Report</Text>
                     </View>
@@ -1170,358 +1189,339 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  map: {
-    flex: 1,
-  },
-  // Risk layer status pill, top-left. Left, because the report and route buttons
-  // own the top-right corner.
-  riskBadge: {
-    position: 'absolute',
-    left: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: borderRadius.full,
-    elevation: 3,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-  },
-  riskDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  // `flexShrink` rather than `flex: 1`: the badge should still hug a short label
-  // rather than stretching to the full width it is now allowed.
-  riskBadgeLabel: {
-    flexShrink: 1,
-  },
-  riskBadgeText: {
-    color: colors.text,
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-  },
-  riskBadgeButton: {
-    marginLeft: spacing.sm,
-    minWidth: 20,
-    alignItems: 'center',
-  },
-  sosButton: {
-    position: 'absolute',
-    // `bottom` is set inline from the safe-area inset; this is the fallback.
-    bottom: spacing.xl,
-    right: spacing.lg,
-    backgroundColor: colors.error,
-    // From the constant the overlay maths uses, so growing the button moves the
-    // time control above it instead of being covered by it.
-    width: SOS_SIZE,
-    height: SOS_SIZE,
-    borderRadius: SOS_SIZE / 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 8,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-  },
-  sosButtonText: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginTop: 4,
-  },
-  reportButton: {
-    position: 'absolute',
-    // `top` is set inline, below the search card. See the geometry note on
-    // `fabColumnTop`; a static top here is what put it behind the card.
-    right: spacing.lg,
-    backgroundColor: colors.primary,
-    width: FAB_SIZE,
-    height: FAB_SIZE,
-    borderRadius: FAB_SIZE / 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  // Enters route mode. Keep it above the search card: it sits just below that card
-  // and the card grows when a place resolves, so without this it can end up buried.
-  //
-  // That is not hypothetical. In route mode this button used to be the only way
-  // *out*, positioned inside the route card which carries zIndex 10 and elevation 8
-  // — it lost every stacking contest, could not be tapped, and left a reload as the
-  // only escape. Found on a phone during D03's walkthrough with tsc, ESLint and Jest
-  // all green; z-order and reachability are not things they can see.
-  //
-  // Both values are needed: zIndex settles it on iOS, elevation on Android.
-  actionButton: {
-    position: 'absolute',
-    width: FAB_SIZE,
-    height: FAB_SIZE,
-    borderRadius: FAB_SIZE / 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 11,
-    elevation: 9,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  routeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  routeHeaderTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFill,  // RN 0.86 removed absoluteFillObject; absoluteFill is now the plain object
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 20,
-  },
-  loadingText: {
-    marginTop: spacing.md,
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  // The dev-only "as of" control. Sits above the SOS button rather than beside it:
-  // during a demo the presenter's thumb is on this, and a mis-tap that fired an SOS
-  // would be memorable for the wrong reason.
-  asOfBar: {
-    position: 'absolute',
-    left: spacing.md,
-    right: spacing.md,
-    backgroundColor: colors.backgroundLight,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  asOfLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  asOfButtons: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  asOfButton: {
-    flex: 1,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.surfaceVariant,
-    alignItems: 'center',
-  },
-  asOfButtonActive: {
-    backgroundColor: colors.primary,
-  },
-  asOfButtonText: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  asOfButtonTextActive: {
-    color: colors.white,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    padding: spacing.xl,
-    maxHeight: '70%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  categoryBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-  },
-  categoryText: {
-    fontSize: fontSize.md,
-    fontWeight: 'bold',
-  },
-  crimeTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-    gap: spacing.sm,
-  },
-  infoText: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-  },
-  verifiedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.successLight,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    alignSelf: 'flex-start',
-    marginTop: spacing.sm,
-    gap: spacing.xs,
-  },
-  verifiedText: {
-    fontSize: fontSize.sm,
-    color: colors.success,
-    fontWeight: '600',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.lg,
-  },
-  sectionLabel: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  description: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    lineHeight: 22,
-  },
-  searchContainer: {
-    position: 'absolute',
-    left: spacing.lg,
-    right: spacing.lg,
-    zIndex: 10,
-  },
-  searchBox: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    elevation: 8,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 40,
-  },
-  activeInputRow: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: borderRadius.sm,
-  },
-  inputDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: spacing.md,
-  },
-  sourceDot: {
-    backgroundColor: colors.primary,
-    opacity: 0.5,
-  },
-  destDot: {
-    backgroundColor: colors.error,
-  },
-  profileRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingTop: spacing.sm,
-    marginTop: spacing.xs,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-  },
-  profileChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surfaceVariant,
-  },
-  profileChipActive: { backgroundColor: colors.primaryLight },
-  profileChipText: { fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600' },
-  profileChipTextActive: { color: colors.primaryDark },
-  connectorLine: {
-    width: 2,
-    height: 20,
-    backgroundColor: colors.border,
-    marginLeft: 3, // slightly offset to align with 8px dot center
-    marginVertical: 2,
-  },
-  input: {
-    flex: 1,
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
-  suggestionsContainer: {
-    marginTop: spacing.sm,
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.md,
-    elevation: 4,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    maxHeight: 200,
-  },
-  suggestionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  suggestionText: {
-    marginLeft: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.text,
-    flex: 1,
-  },
-});
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    container: {
+      flex: 1,
+    },
+    map: {
+      flex: 1,
+    },
+    // Risk layer status pill, top-left. Left, because the report and route buttons
+    // own the top-right corner.
+    riskBadge: {
+      position: 'absolute',
+      left: spacing.lg,
+      flexDirection: 'row',
+      alignItems: 'center',
+      ...glassSurface(t),
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 6,
+      borderRadius: borderRadius.full,
+      elevation: 3,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 3,
+    },
+    riskDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginRight: 6,
+    },
+    // `flexShrink` rather than `flex: 1`: the badge should still hug a short label
+    // rather than stretching to the full width it is now allowed.
+    riskBadgeLabel: {
+      flexShrink: 1,
+    },
+    riskBadgeText: {
+      fontFamily: fontFamily.bodySemi,
+      color: t.text,
+      fontSize: fontSize.xs,
+    },
+    riskBadgeButton: {
+      marginLeft: spacing.sm,
+      minWidth: 20,
+      alignItems: 'center',
+    },
+    reportButton: {
+      position: 'absolute',
+      // `top` is set inline, below the search card. See the geometry note on
+      // `fabColumnTop`; a static top here is what put it behind the card.
+      right: spacing.lg,
+      backgroundColor: t.brand,
+      width: FAB_SIZE,
+      height: FAB_SIZE,
+      borderRadius: FAB_SIZE / 2,
+      justifyContent: 'center',
+      alignItems: 'center',
+      elevation: 4,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+    },
+    // Enters route mode. Keep it above the search card: it sits just below that card
+    // and the card grows when a place resolves, so without this it can end up buried.
+    //
+    // That is not hypothetical. In route mode this button used to be the only way
+    // *out*, positioned inside the route card which carries zIndex 10 and elevation 8
+    // — it lost every stacking contest, could not be tapped, and left a reload as the
+    // only escape. Found on a phone during D03's walkthrough with tsc, ESLint and Jest
+    // all green; z-order and reachability are not things they can see.
+    //
+    // Both values are needed: zIndex settles it on iOS, elevation on Android.
+    actionButton: {
+      position: 'absolute',
+      width: FAB_SIZE,
+      height: FAB_SIZE,
+      borderRadius: FAB_SIZE / 2,
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 11,
+      elevation: 9,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+    },
+    routeHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: spacing.sm,
+    },
+    routeHeaderTitle: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.sm,
+      color: t.text,
+    },
+    loadingOverlay: {
+      ...StyleSheet.absoluteFill,  // RN 0.86 removed absoluteFillObject; absoluteFill is now the plain object
+      backgroundColor: 'rgba(255, 255, 255, 0.7)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 20,
+    },
+    loadingText: {
+      fontFamily: fontFamily.bodySemi,
+      marginTop: spacing.md,
+      fontSize: fontSize.md,
+      color: t.brand,
+    },
+    // The dev-only "as of" control. Sits above the SOS button rather than beside it:
+    // during a demo the presenter's thumb is on this, and a mis-tap that fired an SOS
+    // would be memorable for the wrong reason.
+    asOfBar: {
+      position: 'absolute',
+      left: spacing.md,
+      right: spacing.md,
+      ...glassSurface(t),
+      borderRadius: borderRadius.lg,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderWidth: 1,
+      borderColor: t.line,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 6,
+      elevation: 4,
+    },
+    asOfLabel: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.xs,
+      color: t.textSoft,
+      marginBottom: spacing.xs,
+    },
+    asOfButtons: {
+      flexDirection: 'row',
+      gap: spacing.xs,
+    },
+    asOfButton: {
+      flex: 1,
+      paddingVertical: spacing.xs,
+      paddingHorizontal: 2,
+      borderRadius: borderRadius.sm,
+      backgroundColor: t.lineSoft,
+      alignItems: 'center',
+    },
+    asOfButtonActive: {
+      backgroundColor: t.brand,
+    },
+    asOfButtonText: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.xs,
+      color: t.textSoft,
+    },
+    asOfButtonTextActive: {
+      color: t.onBrand,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'flex-end',
+    },
+    modalContent: {
+      backgroundColor: t.surface,
+      borderTopLeftRadius: borderRadius.xl,
+      borderTopRightRadius: borderRadius.xl,
+      padding: spacing.xl,
+      maxHeight: '70%',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.lg,
+    },
+    categoryBadge: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      backgroundColor: t.bg,
+      borderRadius: borderRadius.md,
+    },
+    categoryText: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.md,
+    },
+    crimeTitle: {
+      fontFamily: fontFamily.display,
+      fontSize: fontSize.xl,
+      color: t.text,
+      marginBottom: spacing.md,
+    },
+    infoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: spacing.sm,
+      gap: spacing.sm,
+    },
+    infoText: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.md,
+      color: t.textSoft,
+    },
+    verifiedBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: t.ok,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: borderRadius.md,
+      alignSelf: 'flex-start',
+      marginTop: spacing.sm,
+      gap: spacing.xs,
+    },
+    verifiedText: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.sm,
+      color: t.ok,
+    },
+    divider: {
+      height: 1,
+      backgroundColor: t.line,
+      marginVertical: spacing.lg,
+    },
+    sectionLabel: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.md,
+      color: t.text,
+      marginBottom: spacing.sm,
+    },
+    description: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.md,
+      color: t.textSoft,
+      lineHeight: 22,
+    },
+    searchContainer: {
+      position: 'absolute',
+      left: spacing.lg,
+      right: spacing.lg,
+      zIndex: 10,
+    },
+    searchBox: {
+      // No fill, border or radius here: `Glass` draws all three. What stays is
+      // the padding and the elevation, which `Glass` applies only on request.
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      elevation: 8,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+    },
+    inputRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      height: 40,
+    },
+    activeInputRow: {
+      backgroundColor: '#f8f9fa',
+      borderRadius: borderRadius.sm,
+    },
+    inputDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginRight: spacing.md,
+    },
+    sourceDot: {
+      backgroundColor: t.brand,
+      opacity: 0.5,
+    },
+    destDot: {
+      backgroundColor: t.danger,
+    },
+    profileRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      paddingTop: spacing.sm,
+      marginTop: spacing.xs,
+      borderTopWidth: 1,
+      borderTopColor: t.lineSoft,
+    },
+    profileChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 6,
+      borderRadius: borderRadius.md,
+      backgroundColor: t.lineSoft,
+    },
+    profileChipActive: { backgroundColor: t.brandStrong },
+    profileChipText: { fontFamily: fontFamily.bodySemi, fontSize: fontSize.xs, color: t.textSoft,},
+    profileChipTextActive: { color: t.brandStrong },
+    connectorLine: {
+      width: 2,
+      height: 20,
+      backgroundColor: t.line,
+      marginLeft: 3, // slightly offset to align with 8px dot center
+      marginVertical: 2,
+    },
+    input: {
+      fontFamily: fontFamily.body,
+      flex: 1,
+      fontSize: fontSize.md,
+      color: t.text,
+    },
+    suggestionsContainer: {
+      marginTop: spacing.sm,
+      borderRadius: borderRadius.md,
+      elevation: 4,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      maxHeight: 200,
+    },
+    suggestionItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: t.line,
+    },
+    suggestionText: {
+      fontFamily: fontFamily.body,
+      marginLeft: spacing.md,
+      fontSize: fontSize.md,
+      color: t.text,
+      flex: 1,
+    },
+  });
 
 export default MapScreen;

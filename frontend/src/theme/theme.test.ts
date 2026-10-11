@@ -8,6 +8,13 @@
  * These assert the keys that screens actually reference, including the
  * compatibility aliases (`error`, `textPrimary`) that exist only because some
  * screens use a different name for the same value.
+ *
+ * Those two dead files are now deleted. They mattered more once `palette.ts`
+ * arrived: three colour objects in one directory, two of them still purple and
+ * unreachable, is a trap for whoever edits the wrong one. What remains is
+ * `palette.ts` (the real theme, via `useTheme()`) and `theme.ts` (the legacy
+ * names, remapped onto it) — and this file is what stops the second one from
+ * losing a key the screens still read.
  */
 import { colors, spacing, borderRadius, fontSize, shadows, typography } from './theme';
 

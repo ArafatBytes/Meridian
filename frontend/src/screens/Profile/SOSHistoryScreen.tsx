@@ -31,7 +31,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, borderRadius, typography } from '../../theme';
+import { spacing, borderRadius, typography } from '../../theme';
+import { useTheme } from '../../theme/ThemeProvider';
+import { useStyles } from '../../theme/useStyles';
+import type { Palette } from '../../theme/palette';
+import { glassSurface } from '../../theme/surfaces';
+import { Aurora } from '../../components/motion';
+import { fontFamily } from '../../theme/type';
 import { sosService, type SosHistoryEntry } from '../../services/sos.service';
 import { messageOf } from '../../services/casework.service';
 
@@ -52,21 +58,23 @@ function sentAt(iso: string): string {
  * resolving to "failed" — telling someone their emergency alert failed when it did
  * not is the worse of the two errors available here.
  */
-function delivery(entry: SosHistoryEntry): {
+function delivery(entry: SosHistoryEntry, t: Palette): {
   label: string;
   colour: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
 } {
   if (entry.delivered === true) {
-    return { label: 'Delivered', colour: colors.success, icon: 'checkmark-circle' };
+    return { label: 'Delivered', colour: t.ok, icon: 'checkmark-circle' };
   }
   if (entry.delivered === false) {
-    return { label: 'Not delivered', colour: colors.error, icon: 'close-circle' };
+    return { label: 'Not delivered', colour: t.danger, icon: 'close-circle' };
   }
-  return { label: 'Delivery not recorded', colour: colors.textSecondary, icon: 'help-circle' };
+  return { label: 'Delivery not recorded', colour: t.textSoft, icon: 'help-circle' };
 }
 
 const SOSHistoryScreen: React.FC = () => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
@@ -100,9 +108,13 @@ const SOSHistoryScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* The ambient field, behind everything. `glassSurface` is a
+          translucent fill and needs something to be translucent over —
+          see the note in theme/surfaces.ts. */}
+      <Aurora intensity="ambient" />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={t.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>SOS History</Text>
         <View style={{ width: 24 }} />
@@ -110,7 +122,7 @@ const SOSHistoryScreen: React.FC = () => {
 
       {entries === null ? (
         <View style={styles.centre}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={t.brand} />
         </View>
       ) : (
         <ScrollView
@@ -121,14 +133,14 @@ const SOSHistoryScreen: React.FC = () => {
         >
           {error && (
             <View style={styles.errorCard}>
-              <Ionicons name="warning-outline" size={18} color={colors.error} />
+              <Ionicons name="warning-outline" size={18} color={t.danger} />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
 
           {!error && entries.length === 0 && (
             <View style={styles.emptyCard}>
-              <Ionicons name="shield-checkmark-outline" size={40} color={colors.textSecondary} />
+              <Ionicons name="shield-checkmark-outline" size={40} color={t.textSoft} />
               <Text style={styles.emptyTitle}>No SOS alerts yet</Text>
               <Text style={styles.emptyText}>
                 When you trigger an SOS, the record of it appears here — when it was sent,
@@ -138,7 +150,7 @@ const SOSHistoryScreen: React.FC = () => {
           )}
 
           {entries.map(entry => {
-            const state = delivery(entry);
+            const state = delivery(entry, t);
             return (
               <View key={entry.id} style={styles.card}>
                 <View style={styles.cardTop}>
@@ -166,19 +178,19 @@ const SOSHistoryScreen: React.FC = () => {
                 <View style={styles.tags}>
                   {entry.video_attached && (
                     <View style={styles.tag}>
-                      <Ionicons name="videocam-outline" size={12} color={colors.textSecondary} />
+                      <Ionicons name="videocam-outline" size={12} color={t.textSoft} />
                       <Text style={styles.tagText}>Video attached</Text>
                     </View>
                   )}
                   {entry.voice_activated && (
                     <View style={styles.tag}>
-                      <Ionicons name="mic-outline" size={12} color={colors.textSecondary} />
+                      <Ionicons name="mic-outline" size={12} color={t.textSoft} />
                       <Text style={styles.tagText}>Voice activated</Text>
                     </View>
                   )}
                   {entry.police_station_count > 0 && (
                     <View style={styles.tag}>
-                      <Ionicons name="business-outline" size={12} color={colors.textSecondary} />
+                      <Ionicons name="business-outline" size={12} color={t.textSoft} />
                       <Text style={styles.tagText}>
                         {entry.police_station_count} station
                         {entry.police_station_count === 1 ? '' : 's'}
@@ -203,84 +215,82 @@ const SOSHistoryScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  headerTitle: { ...typography.h4, color: colors.text },
-  centre: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  body: { padding: spacing.lg, gap: spacing.md },
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: t.line,
+    },
+    headerTitle: { ...typography.h4, color: t.text },
+    centre: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    body: { padding: spacing.lg, gap: spacing.md },
 
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    padding: spacing.md,
-    gap: spacing.xs,
-  },
-  cardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  when: { ...typography.body, color: colors.text, fontWeight: '600', flexShrink: 1 },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: borderRadius.sm,
-  },
-  pillText: { ...typography.caption, fontWeight: '600' },
-  detail: { ...typography.bodySmall, color: colors.text },
-  coords: { ...typography.caption, color: colors.textSecondary },
-  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: 2 },
-  tag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.surfaceVariant,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-  },
-  tagText: { ...typography.caption, color: colors.textSecondary },
+    card: {
+      ...glassSurface(t),
+      padding: spacing.md,
+      gap: spacing.xs,
+    },
+    cardTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+    },
+    when: { ...typography.body, fontFamily: fontFamily.bodySemi, color: t.text, flexShrink: 1 },
+    pill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 3,
+      borderRadius: borderRadius.sm,
+    },
+    pillText: { ...typography.caption, fontFamily: fontFamily.bodySemi,},
+    detail: { ...typography.bodySmall, color: t.text },
+    coords: { ...typography.caption, color: t.textSoft },
+    tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: 2 },
+    tag: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: t.lineSoft,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderRadius: borderRadius.sm,
+    },
+    tagText: { ...typography.caption, color: t.textSoft },
 
-  errorCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: `${colors.error}11`,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-  },
-  errorText: { ...typography.bodySmall, color: colors.error, flex: 1 },
+    errorCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      backgroundColor: `${t.danger}11`,
+      borderRadius: borderRadius.md,
+      padding: spacing.md,
+    },
+    errorText: { ...typography.bodySmall, color: t.danger, flex: 1 },
 
-  emptyCard: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xxl,
-    paddingHorizontal: spacing.lg,
-  },
-  emptyTitle: { ...typography.h4, color: colors.text },
-  emptyText: { ...typography.bodySmall, color: colors.textSecondary, textAlign: 'center' },
+    emptyCard: {
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.xxl,
+      paddingHorizontal: spacing.lg,
+    },
+    emptyTitle: { ...typography.h4, color: t.text },
+    emptyText: { ...typography.bodySmall, color: t.textSoft, textAlign: 'center' },
 
-  footnote: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-    lineHeight: 16,
-  },
-});
+    footnote: {
+      ...typography.caption,
+      color: t.textSoft,
+      marginTop: spacing.sm,
+      lineHeight: 16,
+    },
+  });
 
 export default SOSHistoryScreen;

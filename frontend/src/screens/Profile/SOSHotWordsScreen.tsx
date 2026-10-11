@@ -35,7 +35,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, spacing, borderRadius, fontSize } from '../../theme';
+import { spacing, borderRadius, fontSize } from '../../theme';
+import { useTheme } from '../../theme/ThemeProvider';
+import { useStyles } from '../../theme/useStyles';
+import type { Palette } from '../../theme/palette';
+import { glassBar, glassSurface } from '../../theme/surfaces';
+import { Aurora } from '../../components/motion';
+import { fontFamily } from '../../theme/type';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store';
@@ -53,6 +59,8 @@ interface Props {
 }
 
 const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
   const { user } = useAuthStore();
   const insets = useSafeAreaInsets();
   const [hotWords, setHotWords] = useState<SOSHotWord[]>([]);
@@ -197,14 +205,14 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
   const renderHotWord = ({ item }: { item: SOSHotWord }) => (
     <View style={styles.hotWordItem}>
       <View style={styles.hotWordContent}>
-        <Ionicons name="alert-circle" size={24} color={colors.error} />
+        <Ionicons name="alert-circle" size={24} color={t.danger} />
         <Text style={styles.hotWordText}>{item.hot_word}</Text>
       </View>
       <TouchableOpacity
         onPress={() => deleteHotWord(item.id)}
         style={styles.deleteButton}
       >
-        <Ionicons name="trash-outline" size={20} color={colors.error} />
+        <Ionicons name="trash-outline" size={20} color={t.danger} />
       </TouchableOpacity>
     </View>
   );
@@ -214,13 +222,19 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      {/* The ambient field, behind everything. `glassSurface` is a translucent
+          fill and needs something to be translucent over — see the note in
+          theme/surfaces.ts. `<Aurora />` with no children is already absolutely
+          positioned and `pointerEvents="box-none"`, so as the first child it
+          sits behind the rest without touching the layout. */}
+      <Aurora intensity="ambient" />
       {/* Header with Back Button */}
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={t.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>SOS Hot Words</Text>
         <View style={styles.placeholder} />
@@ -235,14 +249,14 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
         style={styles.guardianLink}
         onPress={() => navigation.navigate('Guardian')}
       >
-        <Ionicons name="shield-checkmark-outline" size={20} color={colors.primary} />
+        <Ionicons name="shield-checkmark-outline" size={20} color={t.brand} />
         <View style={styles.guardianLinkBody}>
           <Text style={styles.guardianLinkTitle}>Arm Voice SOS</Text>
           <Text style={styles.guardianLinkSubtitle}>
             Listening, the shout threshold and the live meter are on the Guardian screen.
           </Text>
         </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        <Ionicons name="chevron-forward" size={18} color={t.textFaint} />
       </TouchableOpacity>
 
       <View style={styles.inputSection}>
@@ -250,7 +264,7 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
           <TextInput
             style={styles.input}
             placeholder="Enter SOS hot word or phrase..."
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={t.textSoft}
             value={newHotWord}
             onChangeText={setNewHotWord}
             multiline
@@ -269,9 +283,9 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
             disabled={isTranscribing}
           >
             {isTranscribing ? (
-              <ActivityIndicator size="small" color={colors.white} />
+              <ActivityIndicator size="small" color={t.onBrand} />
             ) : (
-              <Ionicons name="mic" size={24} color={colors.primary} />
+              <Ionicons name="mic" size={24} color={t.brand} />
             )}
             <Text
               style={[
@@ -291,7 +305,7 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
             onPress={addHotWord}
             disabled={loading || isTranscribing}
           >
-            <Ionicons name="add" size={24} color={colors.white} />
+            <Ionicons name="add" size={24} color={t.onBrand} />
             <Text style={styles.addButtonText}>Add Hot Word</Text>
           </TouchableOpacity>
         </View>
@@ -304,7 +318,7 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
             <Ionicons
               name="alert-circle-outline"
               size={64}
-              color={colors.gray400}
+              color={t.textFaint}
             />
             <Text style={styles.emptyStateText}>No SOS hot words yet</Text>
             <Text style={styles.emptyStateSubtext}>
@@ -328,187 +342,186 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  guardianLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.white,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    padding: spacing.lg,
-    borderRadius: borderRadius.md,
-  },
-  guardianLinkBody: { flex: 1 },
-  guardianLinkTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
-  guardianLinkSubtitle: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  backButton: {
-    padding: spacing.sm,
-  },
-  headerTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: 'bold',
-    color: colors.text,
-  },
-  placeholder: {
-    width: 40,
-  },
-  inputSection: {
-    backgroundColor: colors.white,
-    padding: spacing.lg,
-    marginTop: spacing.md,
-    marginHorizontal: spacing.lg,
-    borderRadius: borderRadius.md,
-    elevation: 2,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  inputContainer: {
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    minHeight: 80,
-    marginBottom: spacing.md,
-  },
-  input: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    textAlignVertical: 'top',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  voiceButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    gap: spacing.xs,
-  },
-  voiceButtonText: {
-    fontSize: fontSize.md,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  listeningButton: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  listeningButtonText: {
-    color: colors.white,
-  },
-  addButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    gap: spacing.xs,
-  },
-  addButtonText: {
-    fontSize: fontSize.md,
-    color: colors.white,
-    fontWeight: '600',
-  },
-  disabledButton: {
-    opacity: 0.5,
-  },
-  listSection: {
-    flex: 1,
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  listContent: {
-    paddingBottom: spacing.xl,
-  },
-  hotWordItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.white,
-    padding: spacing.lg,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.md,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  hotWordContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  hotWordText: {
-    flex: 1,
-    fontSize: fontSize.md,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  deleteButton: {
-    padding: spacing.sm,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xxl * 2,
-  },
-  emptyStateText: {
-    fontSize: fontSize.xl,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginTop: spacing.lg,
-    textAlign: 'center',
-  },
-  emptyStateSubtext: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-    textAlign: 'center',
-    paddingHorizontal: spacing.xl,
-  },
-});
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: t.bg,
+    },
+    guardianLink: {
+      ...glassSurface(t),
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      marginHorizontal: spacing.lg,
+      marginTop: spacing.md,
+      padding: spacing.lg,
+    },
+    guardianLinkBody: { flex: 1 },
+    guardianLinkTitle: { fontFamily: fontFamily.bodySemi, fontSize: fontSize.md,color: t.text },
+    guardianLinkSubtitle: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.xs,
+      color: t.textSoft,
+      marginTop: 2,
+      lineHeight: 16,
+    },
+    header: {
+      ...glassBar(t),
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.md,
+    },
+    backButton: {
+      padding: spacing.sm,
+    },
+    headerTitle: {
+      fontFamily: fontFamily.display,
+      fontSize: fontSize.xl,
+      color: t.text,
+    },
+    placeholder: {
+      width: 40,
+    },
+    inputSection: {
+      ...glassSurface(t),
+      padding: spacing.lg,
+      marginTop: spacing.md,
+      marginHorizontal: spacing.lg,
+      elevation: 2,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+    },
+    inputContainer: {
+      backgroundColor: t.bg,
+      borderRadius: borderRadius.md,
+      borderWidth: 1,
+      borderColor: t.line,
+      padding: spacing.md,
+      minHeight: 80,
+      marginBottom: spacing.md,
+    },
+    input: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.md,
+      color: t.text,
+      textAlignVertical: 'top',
+    },
+    buttonRow: {
+      flexDirection: 'row',
+      gap: spacing.md,
+    },
+    voiceButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.sm,
+      backgroundColor: t.bg,
+      borderRadius: borderRadius.md,
+      borderWidth: 1,
+      borderColor: t.brand,
+      gap: spacing.xs,
+    },
+    voiceButtonText: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.md,
+      color: t.brand,
+    },
+    listeningButton: {
+      backgroundColor: t.brand,
+      borderColor: t.brand,
+    },
+    listeningButtonText: {
+      color: t.onBrand,
+    },
+    addButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.sm,
+      backgroundColor: t.brand,
+      borderRadius: borderRadius.md,
+      gap: spacing.xs,
+    },
+    addButtonText: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.md,
+      color: t.onBrand,
+    },
+    disabledButton: {
+      opacity: 0.5,
+    },
+    listSection: {
+      flex: 1,
+      marginTop: spacing.lg,
+      paddingHorizontal: spacing.lg,
+    },
+    sectionTitle: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.lg,
+      color: t.text,
+      marginBottom: spacing.md,
+    },
+    listContent: {
+      paddingBottom: spacing.xl,
+    },
+    hotWordItem: {
+      ...glassSurface(t),
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: spacing.lg,
+      marginBottom: spacing.md,
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    hotWordContent: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    hotWordText: {
+      fontFamily: fontFamily.bodyMedium,
+      flex: 1,
+      fontSize: fontSize.md,
+      color: t.text,
+    },
+    deleteButton: {
+      padding: spacing.sm,
+    },
+    emptyState: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: spacing.xxl * 2,
+    },
+    emptyStateText: {
+      fontFamily: fontFamily.display,
+      fontSize: fontSize.xl,
+      color: t.text,
+      marginTop: spacing.lg,
+      textAlign: 'center',
+    },
+    emptyStateSubtext: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.md,
+      color: t.textSoft,
+      marginTop: spacing.sm,
+      textAlign: 'center',
+      paddingHorizontal: spacing.xl,
+    },
+  });
 
 export default SOSHotWordsScreen;

@@ -1,32 +1,61 @@
+/**
+ * Login. The first screen anyone sees, so it carries the full design language:
+ * a vivid Aurora field, the form on one pane of glass, a staggered entrance.
+ *
+ * ## `intensity="vivid"` here, `ambient` everywhere else
+ *
+ * There is almost nothing on this screen but the background, so the background
+ * is allowed to be the subject. On a content screen the same field would
+ * compete with what the user is reading — hence the two levels, and hence
+ * `Aurora` taking a prop rather than being tuned per screen.
+ *
+ * ## The dead loading branch is gone
+ *
+ * The submit button used to render an `ActivityIndicator` when `showLoading`
+ * was true, and was `disabled={showLoading}`. Neither could ever happen: the
+ * component returns `<LoadingScreen />` above this point whenever `showLoading`
+ * or `isLoadingRef.current` is set, so by the time the button renders both are
+ * false. Three pieces of state-handling that could not run.
+ *
+ * The guard that does the work — `isLoadingRef`, which blocks a second submit
+ * between the tap and the re-render — is unchanged. Only the unreachable UI
+ * went.
+ */
+
 import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
+  Pressable,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { AuthStackParamList } from '../../types';
 import { useAuthStore } from '../../store';
-import { colors, spacing, borderRadius, fontSize } from '../../theme';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../../theme/ThemeProvider';
+import { onGradient } from '../../theme/type';
+import { Aurora, Glass, Reveal, Pressable3D, ThemeToggle } from '../../components/motion';
+import { Field } from '../../components/Field';
 import LoadingScreen from './LoadingScreen';
 
-type LoginScreenNavigationProp = NativeStackNavigationProp<
-  AuthStackParamList,
-  'Login'
->;
+// @ts-ignore - generated types fight `style` in this RN version
+const Grad = LinearGradient as any;
+
+type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 
 interface Props {
   navigation: LoginScreenNavigationProp;
 }
 
 const LoginScreen: React.FC<Props> = ({ navigation }) => {
+  const { t, g, type, space, radius } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -66,7 +95,8 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
       return;
     }
 
-    // Prevent multiple clicks
+    // Prevent multiple clicks. A ref, not state: this has to be true before the
+    // next render, and a second tap can land in that gap.
     if (isLoadingRef.current) return;
 
     // Show loading screen immediately
@@ -87,7 +117,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
 
         // Now set authenticated state to trigger navigation
         setAuthenticated(user);
-      } catch (err) {
+      } catch {
         // Hide loading screen on error
         isLoadingRef.current = false;
         setShowLoading(false);
@@ -100,174 +130,132 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
   if (showLoading || isLoadingRef.current) {
     return <LoadingScreen />;
   }
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: insets.top, paddingBottom: insets.bottom + 20 },
-        ]}
-        keyboardShouldPersistTaps="handled"
+    <Aurora intensity="vivid" style={styles.fill}>
+      <KeyboardAvoidingView
+        style={styles.fill}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Sign in to continue</Text>
+        {/* Absolute so it does not take part in the centred layout below. */}
+        <View style={[styles.toggle, { top: insets.top + space.sm, right: space.lg }]}>
+          <ThemeToggle size={38} />
         </View>
 
-        <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={[styles.input, emailError ? styles.inputError : null]}
-              placeholder="Enter your email"
-              placeholderTextColor={colors.gray400}
-              value={email}
-              onChangeText={text => {
-                setEmail(text);
-                setEmailError('');
-              }}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {emailError ? (
-              <Text style={styles.errorText}>{emailError}</Text>
-            ) : null}
-          </View>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              padding: space.lg,
+              paddingTop: insets.top + space.huge,
+              paddingBottom: insets.bottom + space.xl,
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Reveal index={0} from="scale">
+            <View style={[styles.brand, { marginBottom: space.xl }]}>
+              <Grad
+                colors={g.aurora}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.mark, { borderRadius: radius.card }]}
+              >
+                <Ionicons name="shield-checkmark" size={30} color="#FFFFFF" />
+              </Grad>
+              <Text style={[type.hero, { color: t.text, marginTop: space.lg }]}>
+                Welcome back
+              </Text>
+              <Text style={[type.body, { color: t.textSoft, marginTop: space.xs }]}>
+                Sign in to continue
+              </Text>
+            </View>
+          </Reveal>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={[styles.input, passwordError ? styles.inputError : null]}
-              placeholder="Enter your password"
-              placeholderTextColor={colors.gray400}
-              value={password}
-              onChangeText={text => {
-                setPassword(text);
-                setPasswordError('');
-              }}
-              secureTextEntry
-              autoCapitalize="none"
-            />
-            {passwordError ? (
-              <Text style={styles.errorText}>{passwordError}</Text>
-            ) : null}
-          </View>
+          <Reveal index={1}>
+            <Glass padding={space.lg} radius={radius.sheet} elevated>
+              <Field
+                label="Email"
+                placeholder="you@example.com"
+                value={email}
+                onChangeText={text => {
+                  setEmail(text);
+                  setEmailError('');
+                }}
+                error={emailError}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
 
-          {error ? <Text style={styles.serverError}>{error}</Text> : null}
+              <Field
+                label="Password"
+                placeholder="At least 8 characters"
+                value={password}
+                onChangeText={text => {
+                  setPassword(text);
+                  setPasswordError('');
+                }}
+                error={passwordError}
+                secure
+                autoCapitalize="none"
+              />
 
-          <TouchableOpacity
-            style={[styles.button, showLoading && styles.buttonDisabled]}
-            onPress={handleLogin}
-            disabled={showLoading}
-          >
-            {showLoading ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <Text style={styles.buttonText}>Login</Text>
-            )}
-          </TouchableOpacity>
+              {error ? (
+                <Text
+                  style={[
+                    type.small,
+                    styles.serverError,
+                    { color: t.danger, marginBottom: space.md },
+                  ]}
+                >
+                  {error}
+                </Text>
+              ) : null}
 
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => navigation.navigate('Register')}
-            disabled={showLoading}
-          >
-            <Text style={styles.secondaryButtonText}>
-              Don't have an account? Sign Up
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+              <Pressable3D onPress={handleLogin} tilt={3} accessibilityLabel="Log in">
+                <Grad
+                  colors={g.aurora}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.button, { borderRadius: radius.md, padding: space.md }]}
+                >
+                  <Text style={[type.bodyStrong, onGradient, styles.buttonText]}>
+                    Log in
+                  </Text>
+                </Grad>
+              </Pressable3D>
+            </Glass>
+          </Reveal>
+
+          <Reveal index={2}>
+            <Pressable
+              style={[styles.secondary, { marginTop: space.xl }]}
+              onPress={() => navigation.navigate('Register')}
+            >
+              <Text style={[type.small, { color: t.textSoft }]}>
+                Don't have an account?{' '}
+                <Text style={[type.bodyStrong, { color: t.brand }]}>Sign up</Text>
+              </Text>
+            </Pressable>
+          </Reveal>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Aurora>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
-  },
-  header: {
-    marginBottom: spacing.xl,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: colors.textPrimary,
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-  },
-  form: {
-    width: '100%',
-  },
-  inputContainer: {
-    marginBottom: spacing.lg,
-  },
-  label: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: spacing.sm,
-  },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.textPrimary,
-  },
-  inputError: {
-    borderColor: colors.error,
-  },
-  errorText: {
-    color: colors.error,
-    fontSize: fontSize.sm,
-    marginTop: spacing.xs,
-  },
-  serverError: {
-    color: colors.error,
-    fontSize: fontSize.sm,
-    marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
-  secondaryButton: {
-    marginTop: spacing.lg,
-    alignItems: 'center',
-  },
-  secondaryButtonText: {
-    color: colors.primary,
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
+  fill: { flex: 1 },
+  toggle: { position: 'absolute', zIndex: 2 },
+  scrollContent: { flexGrow: 1, justifyContent: 'center' },
+  brand: { alignItems: 'center' },
+  mark: { width: 60, height: 60, alignItems: 'center', justifyContent: 'center' },
+  serverError: { textAlign: 'center' },
+  button: { alignItems: 'center' },
+  buttonText: { color: '#FFFFFF' },
+  secondary: { alignItems: 'center' },
 });
 
 export default LoginScreen;

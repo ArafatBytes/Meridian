@@ -36,7 +36,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import NotificationService from '../../services/notification.service';
-import { borderRadius, colors, fontSize, spacing } from '../../theme';
+import { borderRadius, fontSize, spacing } from '../../theme';
+import { useTheme } from '../../theme/ThemeProvider';
+import { useStyles } from '../../theme/useStyles';
+import type { Palette } from '../../theme/palette';
+import { glassBar, glassSurface } from '../../theme/surfaces';
+import { Aurora } from '../../components/motion';
+import { fontFamily } from '../../theme/type';
 import {
   blockingPushProblem,
   type AlertHistoryEntry,
@@ -69,6 +75,8 @@ const SEVERITY_STEPS: readonly { value: number; label: string; hint: string }[] 
 const QUIET_NIGHT = { start: 22, end: 7 };
 
 const AlertPreferencesScreen: React.FC<Props> = ({ navigation }) => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const [prefs, setPrefs] = useState<AlertPreferences | null>(null);
   const [systemCap, setSystemCap] = useState<number | null>(null);
@@ -168,7 +176,7 @@ const AlertPreferencesScreen: React.FC<Props> = ({ navigation }) => {
   if (loading) {
     return (
       <View style={[styles.container, styles.centred]}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={t.brand} />
       </View>
     );
   }
@@ -178,13 +186,17 @@ const AlertPreferencesScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      {/* The ambient field, behind everything. `glassSurface` is a
+          translucent fill and needs something to be translucent over —
+          see the note in theme/surfaces.ts. */}
+      <Aurora intensity="ambient" />
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={t.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Alerts</Text>
         <View style={styles.headerSpacer}>
-          {saving ? <ActivityIndicator size="small" color={colors.primary} /> : null}
+          {saving ? <ActivityIndicator size="small" color={t.brand} /> : null}
         </View>
       </View>
 
@@ -196,7 +208,7 @@ const AlertPreferencesScreen: React.FC<Props> = ({ navigation }) => {
             preferences is pointless while push cannot be delivered at all. */}
         {problem ? (
           <View style={styles.problem}>
-            <Ionicons name="alert-circle" size={18} color={colors.warning} />
+            <Ionicons name="alert-circle" size={18} color={t.warn} />
             <Text style={styles.problemText}>{problem}</Text>
           </View>
         ) : null}
@@ -204,7 +216,7 @@ const AlertPreferencesScreen: React.FC<Props> = ({ navigation }) => {
         {/* The honest limit. Stated first among the explanatory text because it
             is the one a user would otherwise assume the opposite of. */}
         <View style={styles.notice}>
-          <Ionicons name="information-circle-outline" size={18} color={colors.info} />
+          <Ionicons name="information-circle-outline" size={18} color={t.info} />
           <Text style={styles.noticeText}>
             Alerts are based on where the app last had your location — Meridian does
             not track you in the background, so it cannot warn you as you walk
@@ -281,7 +293,7 @@ const AlertPreferencesScreen: React.FC<Props> = ({ navigation }) => {
             setting, because it is one: the user cannot raise it. */}
         {systemCap !== null ? (
           <View style={styles.notice}>
-            <Ionicons name="shield-checkmark-outline" size={18} color={colors.success} />
+            <Ionicons name="shield-checkmark-outline" size={18} color={t.ok} />
             <Text style={styles.noticeText}>
               At most {systemCap} alert{systemCap === 1 ? '' : 's'} per hour, whatever
               happens. You can ask for fewer, never more.
@@ -295,9 +307,9 @@ const AlertPreferencesScreen: React.FC<Props> = ({ navigation }) => {
           disabled={testing}
         >
           {testing ? (
-            <ActivityIndicator size="small" color={colors.white} />
+            <ActivityIndicator size="small" color={t.onBrand} />
           ) : (
-            <Ionicons name="paper-plane-outline" size={18} color={colors.white} />
+            <Ionicons name="paper-plane-outline" size={18} color={t.onBrand} />
           )}
           <Text style={styles.testButtonText}>
             {testing ? 'Sending…' : 'Send me a test alert'}
@@ -319,10 +331,10 @@ const AlertPreferencesScreen: React.FC<Props> = ({ navigation }) => {
                   {
                     backgroundColor:
                       entry.delivery === 'accepted'
-                        ? colors.success
+                        ? t.ok
                         : entry.delivery === 'rejected'
-                          ? colors.error
-                          : colors.textMuted,
+                          ? t.danger
+                          : t.textFaint,
                   },
                 ]}
               />
@@ -349,9 +361,12 @@ const Row: React.FC<{
   subtitle: string;
   value: boolean;
   onChange: (value: boolean) => void;
-}> = ({ icon, title, subtitle, value, onChange }) => (
+}> = ({ icon, title, subtitle, value, onChange }) => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
+  return (
   <View style={styles.row}>
-    <Ionicons name={icon} size={22} color={colors.textSecondary} />
+    <Ionicons name={icon} size={22} color={t.textSoft} />
     <View style={styles.rowBody}>
       <Text style={styles.rowTitle}>{title}</Text>
       <Text style={styles.rowSubtitle}>{subtitle}</Text>
@@ -359,123 +374,122 @@ const Row: React.FC<{
     <Switch
       value={value}
       onValueChange={onChange}
-      trackColor={{ false: colors.border, true: colors.primaryLight }}
-      thumbColor={value ? colors.primary : colors.gray400}
+      trackColor={{ false: t.line, true: t.brandStrong }}
+      thumbColor={value ? t.brand : t.textFaint}
     />
   </View>
-);
+  );
+};
 
 export default AlertPreferencesScreen;
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  centred: { alignItems: 'center', justifyContent: 'center' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  backButton: { padding: spacing.sm },
-  headerTitle: { fontSize: fontSize.xl, fontWeight: 'bold', color: colors.text },
-  headerSpacer: { width: 40, alignItems: 'center' },
-  sectionTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: spacing.xl,
-    marginBottom: spacing.sm,
-    marginHorizontal: spacing.lg,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.white,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  rowBody: { flex: 1 },
-  rowTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
-  rowSubtitle: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 2 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: spacing.lg },
-  chip: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surfaceVariant,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  chipActive: { backgroundColor: colors.primaryLight, borderColor: colors.primary },
-  chipText: { fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary },
-  chipTextActive: { color: colors.white },
-  chipHint: { fontSize: 10, color: colors.textMuted },
-  chipHintActive: { color: colors.white, opacity: 0.85 },
-  notice: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    alignItems: 'flex-start',
-    backgroundColor: colors.surfaceVariant,
-    padding: spacing.md,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    borderRadius: borderRadius.md,
-  },
-  noticeText: { flex: 1, fontSize: fontSize.xs, color: colors.textSecondary, lineHeight: 17 },
-  problem: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    alignItems: 'flex-start',
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    padding: spacing.md,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.warning,
-  },
-  problemText: { flex: 1, fontSize: fontSize.sm, color: colors.text, lineHeight: 18 },
-  testButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.xl,
-    borderRadius: borderRadius.md,
-  },
-  testButtonDisabled: { opacity: 0.6 },
-  testButtonText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
-  empty: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginHorizontal: spacing.lg,
-    lineHeight: 17,
-  },
-  historyRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    alignItems: 'flex-start',
-    backgroundColor: colors.white,
-    padding: spacing.md,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  historyDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
-  historyBody: { flex: 1 },
-  historyText: { fontSize: fontSize.sm, color: colors.text, lineHeight: 18 },
-  historyMeta: { fontSize: 10, color: colors.textMuted, marginTop: 3 },
-});
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    centred: { alignItems: 'center', justifyContent: 'center' },
+    header: {
+      ...glassBar(t),
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.md,
+    },
+    backButton: { padding: spacing.sm },
+    headerTitle: { fontFamily: fontFamily.display, fontSize: fontSize.xl,color: t.text },
+    headerSpacer: { width: 40, alignItems: 'center' },
+    sectionTitle: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.sm,
+      color: t.textFaint,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginTop: spacing.xl,
+      marginBottom: spacing.sm,
+      marginHorizontal: spacing.lg,
+    },
+    row: {
+      ...glassSurface(t),
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.lg,
+      marginHorizontal: spacing.lg,
+      marginBottom: spacing.sm,
+    },
+    rowBody: { flex: 1 },
+    rowTitle: { fontFamily: fontFamily.bodySemi, fontSize: fontSize.md,color: t.text },
+    rowSubtitle: { fontFamily: fontFamily.body, fontSize: fontSize.xs, color: t.textSoft, marginTop: 2 },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: spacing.lg },
+    chip: {
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: borderRadius.md,
+      backgroundColor: t.lineSoft,
+      borderWidth: 1,
+      borderColor: t.lineSoft,
+    },
+    chipActive: { backgroundColor: t.brandStrong, borderColor: t.brand },
+    chipText: { fontFamily: fontFamily.bodySemi, fontSize: fontSize.sm,color: t.textSoft },
+    chipTextActive: { color: t.onBrand },
+    chipHint: { fontFamily: fontFamily.body, fontSize: 10, color: t.textFaint },
+    chipHintActive: { color: t.onBrand, opacity: 0.85 },
+    notice: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      alignItems: 'flex-start',
+      backgroundColor: t.lineSoft,
+      padding: spacing.md,
+      marginHorizontal: spacing.lg,
+      marginTop: spacing.md,
+      borderRadius: borderRadius.md,
+    },
+    noticeText: { fontFamily: fontFamily.body, flex: 1, fontSize: fontSize.xs, color: t.textSoft, lineHeight: 17 },
+    problem: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      alignItems: 'flex-start',
+      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+      padding: spacing.md,
+      marginHorizontal: spacing.lg,
+      marginTop: spacing.md,
+      borderRadius: borderRadius.md,
+      borderWidth: 1,
+      borderColor: t.warn,
+    },
+    problemText: { fontFamily: fontFamily.body, flex: 1, fontSize: fontSize.sm, color: t.text, lineHeight: 18 },
+    testButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      backgroundColor: t.brand,
+      paddingVertical: spacing.md,
+      marginHorizontal: spacing.lg,
+      marginTop: spacing.xl,
+      borderRadius: borderRadius.md,
+    },
+    testButtonDisabled: { opacity: 0.6 },
+    testButtonText: { fontFamily: fontFamily.bodySemi, color: t.onBrand, fontSize: fontSize.md,},
+    empty: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.xs,
+      color: t.textFaint,
+      marginHorizontal: spacing.lg,
+      lineHeight: 17,
+    },
+    historyRow: {
+      ...glassSurface(t),
+      flexDirection: 'row',
+      gap: spacing.sm,
+      alignItems: 'flex-start',
+      padding: spacing.md,
+      marginHorizontal: spacing.lg,
+      marginBottom: spacing.sm,
+    },
+    historyDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
+    historyBody: { flex: 1 },
+    historyText: { fontFamily: fontFamily.body, fontSize: fontSize.sm, color: t.text, lineHeight: 18 },
+    historyMeta: { fontFamily: fontFamily.body, fontSize: 10, color: t.textFaint, marginTop: 3 },
+  });
