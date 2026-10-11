@@ -1,11 +1,11 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Modal, TouchableOpacity, Alert, Animated, Easing, Platform } from 'react-native';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
-import { spacing, typography } from '../theme';
 import { useTheme } from '../theme/ThemeProvider';
 import { useStyles } from '../theme/useStyles';
 import type { Palette } from '../theme/palette';
-import { fontFamily } from '../theme/type';
+import { fontFamily, radius, space, type } from '../theme/type';
+import { Sheet } from './motion';
 import { Ionicons } from '@expo/vector-icons';
 import {
     SOS_VIDEO_BITRATE,
@@ -254,24 +254,27 @@ export const SOSCameraModal: React.FC<SOSCameraModalProps> = ({
 
     if (!permission.granted) {
         return (
-            <Modal visible={visible} animationType="fade" transparent>
-                <View style={styles.container}>
-                    <View style={styles.permissionCard}>
-                        <Ionicons name="camera" size={48} color={t.text} style={{ marginBottom: 20 }} />
-                        <Text style={styles.permissionTitle}>Camera Access Required</Text>
-                        <Text style={styles.permissionText}>Meridian needs camera access to record emergency evidence.</Text>
-                        <TouchableOpacity style={styles.button} onPress={requestPermission}>
-                            <Text style={styles.buttonText}>Enable Camera</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.button, styles.cancelButton]} onPress={onClose}>
-                            <Text style={styles.buttonTextSecondary}>Cancel</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
+            // The permission card is a dialog, so it is a `Sheet` like every
+            // other dialog in the app. It used to be a white box on a black
+            // full-screen `container` -- the viewfinder's backdrop, reused --
+            // which in dark mode was the brightest thing on the phone.
+            <Sheet visible={visible} onClose={onClose} contentStyle={styles.permissionCard}>
+                <Ionicons name="camera" size={48} color={t.textSoft} style={styles.permissionIcon} />
+                <Text style={styles.permissionTitle}>Camera Access Required</Text>
+                <Text style={styles.permissionText}>Meridian needs camera access to record emergency evidence.</Text>
+                <TouchableOpacity style={styles.button} onPress={requestPermission}>
+                    <Text style={styles.buttonText}>Enable Camera</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.button, styles.cancelButton]} onPress={onClose}>
+                    <Text style={styles.buttonTextSecondary}>Cancel</Text>
+                </TouchableOpacity>
+            </Sheet>
         );
     }
 
+    // Deliberately NOT a `Sheet`. A viewfinder is the whole screen and its
+    // backdrop is the camera feed; a translucent pane over it would be a pane
+    // over the thing the user is trying to see.
     return (
         <Modal visible={visible} animationType="fade" onRequestClose={onClose}>
             <View style={styles.container}>
@@ -294,9 +297,30 @@ export const SOSCameraModal: React.FC<SOSCameraModalProps> = ({
                     // cross-platform one and means 640x480. videoBitrate is what
                     // does the work on iOS, together with the codec passed to
                     // recordAsync.
-                    // ANDROID: neither. Let CameraX choose.
+                    // ANDROID: bitrate yes, quality no. They are separate
+                    // knobs and only one of them was at fault.
                     //
-                    // Evidence, from logcat on a Unisoc ums9230 (Vivo V2344):
+                    // Dropping the bitrate too is what made every Android clip
+                    // four seconds long. With `videoBitrate` unset, expo-camera
+                    // never calls `setTargetVideoEncodingBitRate`, so CameraX
+                    // uses its own default for the quality it chose -- and with
+                    // `videoQuality` unset that is 1080p, around 17 Mbps. That
+                    // fills the 8 MB `maxFileSize` in **3.8 seconds**, CameraX
+                    // finalises with `ERROR_FILE_SIZE_LIMIT_REACHED`, and
+                    // `ExpoCameraView.kt` resolves that case as a SUCCESS with a
+                    // uri. So the app got a valid four-second video, closed the
+                    // modal, and left the countdown frozen at 6 -- nothing
+                    // reported an error, because by the camera's lights nothing
+                    // went wrong.
+                    //
+                    // The bitrate is what keeps the clip inside the size budget;
+                    // `maxFileSize` is only the backstop. At 1.2 Mbps ten
+                    // seconds is about 1.5 MB, so the cap stops binding and the
+                    // upload is seconds rather than minutes.
+                    //
+                    // Quality stays unset, which is the part of the Vivo fix that
+                    // was right. Evidence, from logcat on a Unisoc ums9230
+                    // (Vivo V2344):
                     // the recording ran its full 10 seconds, audio was captured
                     // the whole time, and `Recorder` logged "Cached audio data
                     // while we wait for video keyframe before starting muxer"
@@ -319,11 +343,12 @@ export const SOSCameraModal: React.FC<SOSCameraModalProps> = ({
                     // treats ERROR_FILE_SIZE_LIMIT_REACHED as a successful
                     // finish — a truncated clip rather than a lost one.
                     //
-                    // iOS keeps the measured values: 4:3 at 1.2 Mbps, which is
-                    // what stopped a 10-second clip being 16.45 MB and taking
-                    // 2m34s to email.
+                    // 1.2 Mbps is the measured value that stopped a 10-second
+                    // clip being 16.45 MB and taking 2m34s to email. iOS also
+                    // pins the quality to 4:3, and needs the codec passed to
+                    // `recordAsync` for the bitrate to apply at all.
                     videoQuality={Platform.OS === 'android' ? undefined : '4:3'}
-                    videoBitrate={Platform.OS === 'android' ? undefined : SOS_VIDEO_BITRATE}
+                    videoBitrate={SOS_VIDEO_BITRATE}
                 />
 
                 <View style={styles.overlay}>
@@ -427,55 +452,40 @@ StyleSheet.create({
       color: 'rgba(255,255,255,0.6)',
       fontSize: 14,
     },
-    permissionCard: {
-      backgroundColor: 'white',
-      padding: 30,
-      borderRadius: 16,
-      alignItems: 'center',
-      width: '85%',
-      alignSelf: 'center',
-      marginTop: '50%',
-      elevation: 5,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.1,
-      shadowRadius: 12,
-    },
+    // The card's fill, radius, edge and shadow come from `Sheet` now. This is
+    // only the arrangement of what is inside it.
+    permissionCard: { alignItems: 'center' },
+    permissionIcon: { marginBottom: space.lg },
     permissionTitle: {
-      fontFamily: fontFamily.display,
-      fontSize: 20,
-      marginBottom: 10,
-      color: '#111827',
+      ...type.heading,
+      marginBottom: space.sm,
+      color: t.text,
     },
     permissionText: {
-      fontFamily: fontFamily.body,
+      ...type.body,
       textAlign: 'center',
-      color: '#6B7280',
-      marginBottom: 24,
-      lineHeight: 22,
-      fontSize: 16,
+      color: t.textSoft,
+      marginBottom: space.xl,
     },
     button: {
-      backgroundColor: '#111827',
-      paddingVertical: 14,
-      borderRadius: 12,
+      backgroundColor: t.brand,
+      paddingVertical: space.md,
+      borderRadius: radius.md,
       width: '100%',
       alignItems: 'center',
-      marginBottom: 12,
+      marginBottom: space.md,
     },
     cancelButton: {
       backgroundColor: 'transparent',
-      borderWidth: 1,
-      borderColor: '#E5E7EB',
+      borderWidth: StyleSheet.hairlineWidth * 2,
+      borderColor: t.line,
     },
     buttonText: {
-      fontFamily: fontFamily.bodySemi,
-      color: 'white',
-      fontSize: 16,
+      ...type.bodyStrong,
+      color: t.onBrand,
     },
     buttonTextSecondary: {
-      fontFamily: fontFamily.bodySemi,
-      color: '#374151',
-      fontSize: 16,
+      ...type.bodyStrong,
+      color: t.textSoft,
     }
   });

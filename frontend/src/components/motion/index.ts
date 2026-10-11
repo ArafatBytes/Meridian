@@ -8,13 +8,16 @@
 
 export { Aurora, type AuroraProps } from './Aurora';
 export { Glass, type GlassProps } from './Glass';
+export { Sheet, type SheetProps, type SheetVariant } from './Sheet';
 export { Reveal, Pressable3D, type RevealProps, type Pressable3DProps } from './Reveal';
 export { ThemeToggle, ThemeChoice, type ThemeToggleProps } from './ThemeToggle';
 export { useAnimatedValue } from './useAnimatedValue';
 export {
   BlurTargetProvider,
   BlurBackdrop,
+  ClaimBlurTarget,
   useBlurProps,
   useBlurTarget,
+  useHasBlur,
   BLUR_METHOD,
 } from './BlurTarget';

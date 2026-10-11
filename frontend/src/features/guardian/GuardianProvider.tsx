@@ -43,9 +43,14 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Accelerometer } from 'expo-sensors';
 
+import { useTheme } from '../../theme/ThemeProvider';
+import { useStyles } from '../../theme/useStyles';
+import type { Palette } from '../../theme/palette';
+import { fontFamily, radius, space, type } from '../../theme/type';
+import { Sheet } from '../../components/motion';
 import { SOSFlow } from '../sos/SOSFlow';
 import { useSOS, type SosController, type SosTrigger } from '../sos/useSOS';
 import { useGuardianStore } from './guardianStore';
@@ -269,83 +274,129 @@ export const GuardianProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       {/* The cancel window. One element that counts down, rendered above
           whatever screen is showing -- this provider wraps the navigator, so
-          "above everything" is structural rather than a z-index fight. */}
-      <Modal transparent visible={Boolean(countdown)} animationType="fade">
-        <View style={styles.backdrop}>
-          <View style={styles.card}>
-            <Text style={styles.count}>{countdown?.remaining ?? 0}</Text>
-            <Text style={styles.title}>Sending SOS</Text>
-            <Text style={styles.reason}>{countdown?.reason}</Text>
-            <Text style={styles.detail}>
-              Your location and a short video will go to your emergency contacts.
-            </Text>
-            <View style={styles.actions}>
-              <TouchableOpacity style={styles.cancel} onPress={cancelCountdown}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.send} onPress={sendNow}>
-                <Text style={styles.sendText}>Send now</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+          "above everything" is structural rather than a z-index fight.
+
+          Not dismissable, and with no `onClose`: Android's back button must not
+          cancel an SOS. There is a Cancel button, it says Cancel, and that is
+          the only way to stop it. */}
+      <Countdown countdown={countdown} onCancel={cancelCountdown} onSendNow={sendNow} />
     </SosContext.Provider>
+  );
+};
+
+/**
+ * The five seconds before an SOS goes.
+ *
+ * Its own component because it needs `useStyles`, and `GuardianProvider` is a
+ * provider: a palette change would re-render every consumer of the SOS context
+ * -- which is every screen -- to repaint one dialog.
+ *
+ * It was the last thing in the app with a hardcoded palette. White card,
+ * `#E53935` numerals, `#6B7280` body text, in a module-level `StyleSheet` that
+ * could not see the theme. In dark mode it was a white sheet in the middle of a
+ * navy app, and it is the single most important dialog in the product.
+ */
+const Countdown: React.FC<{
+  countdown: { remaining: number; reason: string } | null;
+  onCancel: () => void;
+  onSendNow: () => void;
+}> = ({ countdown, onCancel, onSendNow }) => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
+
+  return (
+    <Sheet visible={Boolean(countdown)} style={styles.pane} contentStyle={styles.centred}>
+      <Text style={styles.count}>{countdown?.remaining ?? 0}</Text>
+      <Text style={styles.title}>Sending SOS</Text>
+      <Text style={styles.reason}>{countdown?.reason}</Text>
+      <Text style={styles.detail}>
+        Your location and a short video will go to your emergency contacts.
+      </Text>
+      <View style={styles.actions}>
+        <TouchableOpacity
+          style={styles.cancel}
+          onPress={onCancel}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel the SOS"
+        >
+          <Text style={styles.cancelText}>Cancel</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.send, { backgroundColor: t.danger }]}
+          onPress={onSendNow}
+          accessibilityRole="button"
+          accessibilityLabel="Send the SOS now"
+        >
+          <Text style={styles.sendText}>Send now</Text>
+        </TouchableOpacity>
+      </View>
+    </Sheet>
   );
 };
 
 export default GuardianProvider;
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  card: {
-    width: '100%',
-    maxWidth: 380,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-  },
-  // Large, because this is read at a glance by somebody who may be in trouble
-  // and is the one number that matters: how long they have to stop it.
-  count: { fontSize: 56, fontWeight: '800', color: '#E53935', lineHeight: 62 },
-  title: { fontSize: 20, fontWeight: '700', color: '#111827', marginTop: 4 },
-  reason: {
-    fontSize: 14,
-    color: '#374151',
-    textAlign: 'center',
-    marginTop: 10,
-    lineHeight: 20,
-  },
-  detail: {
-    fontSize: 12,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 17,
-  },
-  actions: { flexDirection: 'row', gap: 12, marginTop: 20, alignSelf: 'stretch' },
-  cancel: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    alignItems: 'center',
-  },
-  cancelText: { fontSize: 16, fontWeight: '600', color: '#374151' },
-  send: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 10,
-    backgroundColor: '#E53935',
-    alignItems: 'center',
-  },
-  sendText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
-});
+const makeStyles = (t: Palette) =>
+  StyleSheet.create({
+    pane: { maxWidth: 380 },
+    centred: { alignItems: 'center' },
+    // Large, because this is read at a glance by somebody who may be in trouble
+    // and is the one number that matters: how long they have to stop it.
+    //
+    // `metric` carries tabular figures, so 5 -> 4 -> 3 does not shift the
+    // layout a pixel at a time while the person is watching the number.
+    count: {
+      ...type.metric,
+      fontSize: 56,
+      lineHeight: 62,
+      color: t.danger,
+    },
+    title: {
+      ...type.heading,
+      color: t.text,
+      marginTop: space.xs,
+    },
+    reason: {
+      ...type.small,
+      color: t.textSoft,
+      textAlign: 'center',
+      marginTop: space.sm,
+    },
+    detail: {
+      ...type.caption,
+      color: t.textFaint,
+      textAlign: 'center',
+      marginTop: space.sm,
+    },
+    actions: {
+      flexDirection: 'row',
+      gap: space.md,
+      marginTop: space.xl,
+      alignSelf: 'stretch',
+    },
+    cancel: {
+      flex: 1,
+      paddingVertical: space.md,
+      borderRadius: radius.md,
+      borderWidth: StyleSheet.hairlineWidth * 2,
+      borderColor: t.line,
+      alignItems: 'center',
+    },
+    cancelText: {
+      ...type.bodyStrong,
+      color: t.textSoft,
+    },
+    send: {
+      flex: 1,
+      paddingVertical: space.md,
+      borderRadius: radius.md,
+      alignItems: 'center',
+    },
+    // `onBrand`, not white: dark mode's `danger` is light enough that white on
+    // it is unreadable, and this is the button that must never be misread.
+    sendText: {
+      ...type.bodyStrong,
+      fontFamily: fontFamily.bodySemi,
+      color: t.onBrand,
+    },
+  });

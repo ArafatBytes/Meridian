@@ -1,11 +1,10 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useAuthStore } from '../../store';
-import { spacing } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
-import { fontFamily } from '../../theme/type';
+import { fontFamily, space } from '../../theme/type';
 
 const SplashScreen: React.FC = () => {
   const { t } = useTheme();
@@ -41,16 +40,16 @@ StyleSheet.create({
       fontFamily: fontFamily.display,
       fontSize: 42,
       color: t.onBrand,
-      marginBottom: spacing.sm,
+      marginBottom: space.sm,
     },
     subtitle: {
       fontFamily: fontFamily.body,
       fontSize: 18,
       color: t.onBrand,
-      marginBottom: spacing.xl,
+      marginBottom: space.xxl,
     },
     loader: {
-      marginTop: spacing.lg,
+      marginTop: space.xl,
     },
   });
 

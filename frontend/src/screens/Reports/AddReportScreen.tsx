@@ -23,13 +23,12 @@ import DateTimePicker, {
   DateTimePickerChangeEvent,
 } from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
-import { spacing, borderRadius, fontSize } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
-import { glassSurface } from '../../theme/surfaces';
+import { glassSurface, lift } from '../../theme/surfaces';
 import { Aurora } from '../../components/motion';
-import { fontFamily } from '../../theme/type';
+import { fontFamily, radius, space, type } from '../../theme/type';
 import { useLocationStore } from '../../store';
 import { DEFAULT_MAP_REGION } from '../../constants';
 import { crimeService, CrimeAnalysisResult } from '../../services';
@@ -645,7 +644,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
         colors={g.aurora}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+        style={[styles.header, { paddingTop: insets.top + space.lg }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -658,7 +657,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
 
       <ScrollView
         style={styles.content}
-        contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xl }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + space.xxl }}
       >
         {/* Crime Category Selection */}
         <View style={styles.section}>
@@ -1130,7 +1129,7 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
                   <ActivityIndicator
                     size="small"
                     color={t.brand}
-                    style={{ marginLeft: spacing.sm, marginRight: spacing.sm }}
+                    style={{ marginLeft: space.sm, marginRight: space.sm }}
                   />
                   <Text
                     style={[styles.selectedLocationText, styles.loadingText]}
@@ -1178,20 +1177,15 @@ StyleSheet.create({
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: spacing.lg,
-      paddingBottom: spacing.md,
-      elevation: 4,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
+      paddingHorizontal: space.xl,
+      paddingBottom: space.lg,
+      ...lift(t, 2),
     },
     backButton: {
-      padding: spacing.sm,
+      padding: space.sm,
     },
     headerTitle: {
-      fontFamily: fontFamily.display,
-      fontSize: fontSize.xl,
+      ...type.heading,
       color: t.onBrand,
     },
     placeholder: {
@@ -1201,13 +1195,12 @@ StyleSheet.create({
       flex: 1,
     },
     section: {
-      padding: spacing.lg,
+      padding: space.xl,
     },
     sectionTitle: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.lg,
-      color: t.text,
-      marginBottom: spacing.md,
+      ...type.overline,
+      color: t.textFaint,
+      marginBottom: space.md,
     },
     categoryGrid: {
       flexDirection: 'row',
@@ -1217,29 +1210,25 @@ StyleSheet.create({
     categoryCard: {
       ...glassSurface(t),
       width: '48%',
-      marginBottom: spacing.md,
-      paddingVertical: spacing.lg,
-      paddingHorizontal: spacing.sm,
+      marginBottom: space.lg,
+      paddingVertical: space.xl,
+      paddingHorizontal: space.sm,
       alignItems: 'center',
       justifyContent: 'center',
       minHeight: 100,
-      elevation: 2,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
+      ...lift(t, 1),
     },
     categoryCardActive: {
       backgroundColor: t.brand,
       borderColor: t.brand,
-      elevation: 4,
-      shadowOpacity: 0.2,
+      // The selected card lifts, and the shadow takes the brand colour: a grey
+      // shadow under a saturated fill reads as dirt rather than as depth.
+      ...lift(t, 3, t.brand),
     },
     categoryLabel: {
-      fontFamily: fontFamily.bodyMedium,
-      fontSize: fontSize.md,
+      ...type.body,
       color: t.text,
-      marginTop: spacing.sm,
+      marginTop: space.sm,
       textAlign: 'center',
     },
     categoryLabelActive: {
@@ -1248,18 +1237,17 @@ StyleSheet.create({
     },
     input: {
       ...glassSurface(t),
-      fontFamily: fontFamily.body,
-      padding: spacing.md,
-      fontSize: fontSize.md,
+      ...type.body,
+      padding: space.lg,
       color: t.text,
     },
     textArea: {
       minHeight: 120,
-      paddingTop: spacing.md,
+      paddingTop: space.lg,
     },
     dateTimeContainer: {
       flexDirection: 'row',
-      gap: spacing.md,
+      gap: space.lg,
     },
     dateTimeButton: {
       ...glassSurface(t),
@@ -1267,66 +1255,55 @@ StyleSheet.create({
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: spacing.md,
-      paddingHorizontal: spacing.lg,
-      elevation: 2,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1,
-      shadowRadius: 2,
+      paddingVertical: space.lg,
+      paddingHorizontal: space.xl,
+      ...lift(t, 1),
     },
     dateTimeText: {
-      fontFamily: fontFamily.bodyMedium,
-      fontSize: fontSize.md,
+      ...type.body,
       color: t.text,
-      marginLeft: spacing.sm,
+      marginLeft: space.sm,
     },
     pickerContainer: {
       ...glassSurface(t),
-      padding: spacing.md,
-      marginTop: spacing.md,
-      elevation: 4,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.15,
-      shadowRadius: 4,
+      padding: space.lg,
+      marginTop: space.lg,
+      ...lift(t, 2),
     },
     pickerCloseButton: {
       backgroundColor: t.brand,
-      paddingVertical: spacing.sm,
-      paddingHorizontal: spacing.xl,
-      borderRadius: borderRadius.md,
+      paddingVertical: space.sm,
+      paddingHorizontal: space.xxl,
+      borderRadius: radius.md,
       alignItems: 'center',
-      marginTop: spacing.md,
+      marginTop: space.lg,
     },
     pickerCloseButtonText: {
-      fontFamily: fontFamily.bodySemi,
+      ...type.bodyStrong,
       color: t.onBrand,
-      fontSize: fontSize.md,
     },
     mapHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: spacing.md,
+      marginBottom: space.lg,
     },
     currentLocationButton: {
       ...glassSurface(t),
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: borderRadius.full,
+      paddingHorizontal: space.lg,
+      paddingVertical: space.sm,
+      borderRadius: radius.pill,
     },
     currentLocationText: {
-      fontFamily: fontFamily.bodyMedium,
-      fontSize: fontSize.xs,
+      ...type.caption,
       color: t.brand,
-      marginLeft: spacing.xs,
+      marginLeft: space.xs,
     },
     mapContainer: {
       height: 250,
-      borderRadius: borderRadius.md,
+      borderRadius: radius.md,
       overflow: 'hidden',
       borderWidth: 2,
       borderColor: t.line,
@@ -1340,31 +1317,28 @@ StyleSheet.create({
     },
     mapOverlay: {
       position: 'absolute',
-      top: spacing.sm,
-      left: spacing.sm,
-      right: spacing.sm,
+      top: space.sm,
+      left: space.sm,
+      right: space.sm,
     },
     mapHint: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: borderRadius.md,
-      elevation: 2,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
+      // `t.surface`, not a hardcoded 95% white: this floats over the map, and
+      // in dark mode a white chip was the brightest thing on the screen.
+      backgroundColor: t.surface,
+      paddingHorizontal: space.lg,
+      paddingVertical: space.sm,
+      borderRadius: radius.md,
+      ...lift(t, 3),
     },
     mapHintText: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.sm,
+      ...type.small,
       color: t.text,
-      marginLeft: spacing.xs,
+      marginLeft: space.xs,
     },
     searchWrapper: {
-      marginBottom: spacing.md,
+      marginBottom: space.lg,
       position: 'relative',
       zIndex: 1000,
     },
@@ -1374,12 +1348,11 @@ StyleSheet.create({
     },
     searchInput: {
       ...glassSurface(t),
-      fontFamily: fontFamily.body,
+      ...type.body,
       flex: 1,
-      padding: spacing.md,
-      fontSize: fontSize.md,
+      padding: space.lg,
       color: t.text,
-      marginRight: spacing.sm,
+      marginRight: space.sm,
     },
     searchLoadingContainer: {
       position: 'absolute',
@@ -1388,12 +1361,12 @@ StyleSheet.create({
       bottom: 0,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: space.sm,
     },
     searchButton: {
       backgroundColor: t.brand,
-      padding: spacing.md,
-      borderRadius: borderRadius.md,
+      padding: space.lg,
+      borderRadius: radius.md,
       justifyContent: 'center',
       alignItems: 'center',
       width: 48,
@@ -1401,41 +1374,35 @@ StyleSheet.create({
     },
     suggestionsContainer: {
       ...glassSurface(t),
-      marginTop: spacing.xs,
-      elevation: 4,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.15,
-      shadowRadius: 4,
+      marginTop: space.xs,
+      ...lift(t, 3),
       maxHeight: 200,
     },
     suggestionItem: {
       flexDirection: 'row',
       alignItems: 'center',
-      padding: spacing.md,
+      padding: space.lg,
       borderBottomWidth: 1,
       borderBottomColor: t.line,
     },
     suggestionText: {
-      fontFamily: fontFamily.body,
+      ...type.small,
       flex: 1,
-      fontSize: fontSize.sm,
       color: t.text,
-      marginLeft: spacing.sm,
+      marginLeft: space.sm,
     },
     selectedLocationContainer: {
       ...glassSurface(t),
       flexDirection: 'row',
       alignItems: 'center',
-      padding: spacing.md,
-      marginTop: spacing.md,
+      padding: space.lg,
+      marginTop: space.lg,
     },
     selectedLocationText: {
-      fontFamily: fontFamily.body,
+      ...type.small,
       flex: 1,
-      fontSize: fontSize.sm,
       color: t.text,
-      marginLeft: spacing.sm,
+      marginLeft: space.sm,
     },
     loadingText: {
       color: t.textSoft,
@@ -1446,64 +1413,56 @@ StyleSheet.create({
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: t.brand,
-      marginHorizontal: spacing.lg,
-      marginTop: spacing.md,
-      padding: spacing.lg,
-      borderRadius: borderRadius.md,
-      elevation: 4,
-      shadowColor: t.brand,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 6,
+      marginHorizontal: space.xl,
+      marginTop: space.lg,
+      padding: space.xl,
+      borderRadius: radius.md,
+      ...lift(t, 3, t.brand),
     },
     submitButtonDisabled: {
-      backgroundColor: t.line,
+      backgroundColor: t.fillStrong,
       opacity: 0.6,
     },
     submitButtonText: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.lg,
+      ...type.bodyStrong,
       color: t.onBrand,
-      marginLeft: spacing.sm,
+      marginLeft: space.sm,
     },
     // AI Crime Detection Styles
     aiSectionContainer: {
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.md,
+      paddingHorizontal: space.xl,
+      paddingVertical: space.lg,
     },
     aiSection: {
       ...glassSurface(t),
-      padding: spacing.lg,
+      padding: space.xl,
     },
     aiHeader: {
-      marginBottom: spacing.md,
+      marginBottom: space.lg,
     },
     aiTitleRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: spacing.xs,
+      marginBottom: space.xs,
     },
     aiTitle: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.lg,
+      ...type.bodyStrong,
       color: t.text,
-      marginLeft: spacing.sm,
+      marginLeft: space.sm,
       flex: 1,
     },
     aiBadge: {
       backgroundColor: t.brand,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.xs,
-      borderRadius: borderRadius.sm,
+      paddingHorizontal: space.sm,
+      paddingVertical: space.xs,
+      borderRadius: radius.sm,
     },
     aiBadgeText: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.xs,
+      ...type.caption,
       color: t.onBrand,
     },
     aiSubtitle: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.sm,
+      ...type.small,
       color: t.textSoft,
       marginLeft: 32,
     },
@@ -1512,39 +1471,37 @@ StyleSheet.create({
       borderWidth: 2,
       borderStyle: 'dashed',
       borderColor: t.brand,
-      borderRadius: borderRadius.lg,
-      padding: spacing.xl,
+      borderRadius: radius.card,
+      padding: space.xxl,
       alignItems: 'center',
-      marginTop: spacing.md,
+      marginTop: space.lg,
     },
     cameraButtonText: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.md,
+      ...type.bodyStrong,
       color: t.text,
-      marginTop: spacing.sm,
+      marginTop: space.sm,
     },
     cameraButtonSubtext: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.sm,
+      ...type.small,
       color: t.textSoft,
-      marginTop: spacing.xs,
+      marginTop: space.xs,
     },
     imageContainer: {
       position: 'relative',
-      marginTop: spacing.md,
-      borderRadius: borderRadius.lg,
+      marginTop: space.lg,
+      borderRadius: radius.card,
       overflow: 'hidden',
     },
     capturedImage: {
       width: '100%',
       height: 250,
-      borderRadius: borderRadius.lg,
+      borderRadius: radius.card,
     },
     removeImageButton: {
       ...glassSurface(t),
       position: 'absolute',
-      top: spacing.sm,
-      right: spacing.sm,
+      top: space.sm,
+      right: space.sm,
       borderRadius: 16,
     },
     analyzingOverlay: {
@@ -1558,59 +1515,54 @@ StyleSheet.create({
       alignItems: 'center',
     },
     analyzingText: {
-      fontFamily: fontFamily.bodySemi,
+      ...type.bodyStrong,
       color: t.onBrand,
-      fontSize: fontSize.md,
-      marginTop: spacing.sm,
+      marginTop: space.sm,
     },
     aiResultsContainer: {
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.md,
+      paddingHorizontal: space.xl,
+      paddingVertical: space.lg,
     },
     aiResultsCard: {
       backgroundColor: t.ok + '10',
       borderWidth: 1,
       borderColor: t.ok,
-      borderRadius: borderRadius.lg,
-      padding: spacing.lg,
+      borderRadius: radius.card,
+      padding: space.xl,
     },
     aiResultsHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: spacing.md,
+      marginBottom: space.lg,
     },
     aiResultsTitle: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.md,
+      ...type.bodyStrong,
       color: t.ok,
-      marginLeft: spacing.sm,
+      marginLeft: space.sm,
     },
     aiResultRow: {
-      marginBottom: spacing.sm,
+      marginBottom: space.sm,
     },
     aiResultLabel: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.sm,
+      ...type.label,
       color: t.textSoft,
-      marginBottom: spacing.xs,
+      marginBottom: space.xs,
     },
     aiResultValue: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.md,
+      ...type.bodyStrong,
       color: t.text,
     },
     aiInfoBox: {
       flexDirection: 'row',
       backgroundColor: t.info + '20',
-      padding: spacing.sm,
-      borderRadius: borderRadius.sm,
-      marginTop: spacing.sm,
+      padding: space.sm,
+      borderRadius: radius.sm,
+      marginTop: space.sm,
     },
     aiInfoText: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.xs,
+      ...type.caption,
       color: t.info,
-      marginLeft: spacing.xs,
+      marginLeft: space.xs,
       flex: 1,
     },
 
@@ -1629,86 +1581,74 @@ StyleSheet.create({
     engineBadge: {
       marginLeft: 'auto',
       backgroundColor: t.brand + '20',
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.xs,
-      borderRadius: borderRadius.sm,
+      paddingHorizontal: space.sm,
+      paddingVertical: space.xs,
+      borderRadius: radius.sm,
       borderWidth: 1,
       borderColor: t.brand + '40',
     },
     engineBadgeText: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.xs,
+      ...type.caption,
       color: t.brand,
     },
     // --- D07: the cue card ----------------------------------------------------
     visionDescription: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.md,
+      ...type.body,
       color: t.text,
-      lineHeight: 22,
-      marginBottom: spacing.md,
+      marginBottom: space.lg,
     },
     cueList: {
-      marginTop: spacing.sm,
-      marginBottom: spacing.md,
+      marginTop: space.sm,
+      marginBottom: space.lg,
       borderTopWidth: 1,
       borderTopColor: t.lineSoft,
-      paddingTop: spacing.sm,
+      paddingTop: space.sm,
     },
     cueRow: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: 4,
-      gap: spacing.sm,
+      gap: space.sm,
     },
     cueLabel: {
-      fontFamily: fontFamily.body,
+      ...type.small,
       flex: 1,
-      fontSize: fontSize.sm,
       color: t.textSoft,
     },
     cueAnswer: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.sm,
+      ...type.label,
     },
     proposalBox: {
-      backgroundColor: t.lineSoft,
-      borderRadius: borderRadius.md,
-      padding: spacing.md,
-      marginBottom: spacing.md,
+      backgroundColor: t.fillSoft,
+      borderRadius: radius.md,
+      padding: space.lg,
+      marginBottom: space.lg,
     },
     proposalLabel: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.xs,
+      ...type.overline,
       color: t.textSoft,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
     },
     proposalValue: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.lg,
+      ...type.bodyStrong,
       color: t.text,
       marginTop: 2,
     },
     proposalReason: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.sm,
+      ...type.small,
       color: t.textSoft,
-      marginTop: spacing.xs,
-      lineHeight: 19,
+      marginTop: space.xs,
     },
     agreeText: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.sm,
+      ...type.small,
       color: t.ok,
-      marginTop: spacing.sm,
+      marginTop: space.sm,
     },
     disagreeText: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.sm,
+      ...type.small,
       color: t.warn,
-      marginTop: spacing.sm,
-      lineHeight: 19,
+      marginTop: space.sm,
     },
   });
 

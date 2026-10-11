@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   Linking,
-  Modal,
   View,
   Text,
   TouchableOpacity,
@@ -9,11 +8,11 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { spacing, borderRadius, fontSize } from '../theme';
 import { useTheme } from '../theme/ThemeProvider';
 import { useStyles } from '../theme/useStyles';
 import type { Palette } from '../theme/palette';
-import { fontFamily } from '../theme/type';
+import { fontFamily, radius, space, type } from '../theme/type';
+import { Sheet } from './motion';
 import type { RiskFlag } from '../types/contracts/risk';
 import {
   clockTime,
@@ -175,9 +174,10 @@ const RiskFlagSheet: React.FC<RiskFlagSheetProps> = ({ flag, asOf, onClose }) =>
   const isScheduled = isScheduledFlag(flag);
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
+    // `dismissable`: this is a detail view the user opened by tapping a pin, so
+    // a tap outside is the expected way back. Nothing is lost by closing it.
+    <Sheet visible variant="bottom" onClose={onClose} dismissable padding={0}>
+      <View style={styles.sheet}>
           {/* The one string the server produced through framing.py. */}
           <View style={styles.header}>
             <View style={[styles.severityDot, { backgroundColor: band.color }]} />
@@ -202,7 +202,7 @@ const RiskFlagSheet: React.FC<RiskFlagSheetProps> = ({ flag, asOf, onClose }) =>
                 {
                   backgroundColor: isConfirmed
                     ? `${t.ok}22`
-                    : t.lineSoft,
+                    : t.fillSoft,
                 },
               ]}
             >
@@ -356,66 +356,57 @@ const RiskFlagSheet: React.FC<RiskFlagSheetProps> = ({ flag, asOf, onClose }) =>
               the people in it — only about getting through it.
             </Text>
           </ScrollView>
-        </View>
       </View>
-    </Modal>
+    </Sheet>
   );
 };
 
 const makeStyles = (t: Palette) =>
 StyleSheet.create({
-    overlay: {
-      flex: 1,
-      justifyContent: 'flex-end',
-      backgroundColor: t.scrim,
-    },
+    // The scrim, the radius, the edge and the shadow now come from `Sheet`.
+    // What is left here is the inset, which `Sheet` cannot own: the ScrollView
+    // has to reach the pane's edges or its scrollbar sits inside the padding.
     sheet: {
-      backgroundColor: t.surface,
-      borderTopLeftRadius: borderRadius.xl,
-      borderTopRightRadius: borderRadius.xl,
-      paddingTop: spacing.md,
-      paddingHorizontal: spacing.lg,
-      paddingBottom: spacing.xl,
-      maxHeight: '75%',
+      paddingTop: space.md,
+      paddingHorizontal: space.lg,
+      paddingBottom: space.xl,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: spacing.sm,
+      marginBottom: space.sm,
     },
     severityDot: {
       width: 12,
       height: 12,
       borderRadius: 6,
-      marginRight: spacing.sm,
+      marginRight: space.sm,
     },
     statement: {
-      fontFamily: fontFamily.bodySemi,
+      ...type.bodyStrong,
       flex: 1,
-      fontSize: fontSize.lg,
       color: t.text,
     },
     closeButton: {
-      marginLeft: spacing.sm,
-      padding: spacing.xs,
+      marginLeft: space.sm,
+      padding: space.xs,
     },
     badges: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: spacing.xs,
-      marginBottom: spacing.md,
+      gap: space.xs,
+      marginBottom: space.lg,
     },
     badge: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: space.sm,
       paddingVertical: 4,
-      borderRadius: borderRadius.full,
+      borderRadius: radius.pill,
     },
     badgeText: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.xs,
+      ...type.caption,
     },
     body: {
       flexGrow: 0,
@@ -424,42 +415,37 @@ StyleSheet.create({
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: spacing.sm,
+      paddingVertical: space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: t.line,
     },
     rowLabel: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.sm,
+      ...type.small,
       color: t.textSoft,
     },
     rowValue: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.sm,
+      ...type.label,
       color: t.text,
     },
     sources: {
-      marginTop: spacing.lg,
+      marginTop: space.xl,
     },
     sourcesHeading: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.xs,
+      ...type.overline,
       color: t.textSoft,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
-      marginBottom: spacing.xs,
+      marginBottom: space.xs,
     },
     source: {
-      paddingVertical: spacing.xs,
+      paddingVertical: space.xs,
     },
     sourceId: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.sm,
+      ...type.label,
       color: t.text,
     },
     sourceTitle: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.xs,
+      ...type.caption,
       color: t.textSoft,
     },
     sourceTitleLink: {
@@ -470,11 +456,9 @@ StyleSheet.create({
       color: t.textSoft,
     },
     footnote: {
-      fontFamily: fontFamily.body,
-      marginTop: spacing.lg,
-      fontSize: fontSize.xs,
+      ...type.caption,
+      marginTop: space.xl,
       color: t.textFaint,
-      lineHeight: 16,
     },
   });
 

@@ -13,13 +13,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { ReportsStackParamList } from '../../types';
-import { spacing, borderRadius, fontSize } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
-import { glassSurface } from '../../theme/surfaces';
+import { glassSurface, lift } from '../../theme/surfaces';
 import { Aurora } from '../../components/motion';
-import { fontFamily } from '../../theme/type';
+import { fontFamily, radius, space, type } from '../../theme/type';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TAB_BAR_CLEARANCE } from '../../navigation/metrics';
 import { supabase } from '../../lib/supabase';
@@ -201,7 +200,7 @@ const ReportsScreen: React.FC<Props> = ({ navigation }) => {
         colors={g.aurora}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+        style={[styles.header, { paddingTop: insets.top + space.lg }]}>
         <Text style={styles.title}>My Reports</Text>
         <TouchableOpacity
           style={styles.addButton}
@@ -266,7 +265,7 @@ StyleSheet.create({
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      padding: spacing.lg,
+      padding: space.xl,
     },
     title: {
       fontFamily: fontFamily.display,
@@ -282,91 +281,78 @@ StyleSheet.create({
       alignItems: 'center',
     },
     list: {
-      padding: spacing.lg,
+      padding: space.xl,
     },
     reportCard: {
       ...glassSurface(t),
-      padding: spacing.md,
-      marginBottom: spacing.md,
-      elevation: 2,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1,
-      shadowRadius: 2,
+      padding: space.lg,
+      marginBottom: space.lg,
+      ...lift(t, 1),
     },
     reportHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      marginBottom: spacing.sm,
+      marginBottom: space.sm,
     },
     categoryBadge: {
       backgroundColor: t.brand,
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: space.sm,
       paddingVertical: 4,
-      borderRadius: borderRadius.sm,
+      borderRadius: radius.sm,
     },
     categoryText: {
-      fontFamily: fontFamily.bodySemi,
+      ...type.label,
       color: t.onBrand,
-      fontSize: fontSize.sm,
     },
     statusBadge: {
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: space.sm,
       paddingVertical: 4,
-      borderRadius: borderRadius.sm,
+      borderRadius: radius.sm,
     },
     statusText: {
-      fontFamily: fontFamily.bodySemi,
+      ...type.label,
       color: t.onBrand,
-      fontSize: fontSize.sm,
       textTransform: 'capitalize',
     },
     reportTitle: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.lg,
+      ...type.bodyStrong,
       color: t.text,
-      marginBottom: spacing.xs,
+      marginBottom: space.xs,
     },
     location: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.sm,
+      ...type.small,
       color: t.textSoft,
-      marginBottom: spacing.xs,
-      lineHeight: 18,
+      marginBottom: space.xs,
     },
     date: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.sm,
+      ...type.small,
       color: t.textSoft,
     },
     emptyContainer: {
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: spacing.xxl,
+      paddingVertical: space.huge,
     },
     emptyText: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.lg,
+      ...type.bodyStrong,
       color: t.textSoft,
-      marginTop: spacing.md,
+      marginTop: space.lg,
     },
     emptySubtext: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.md,
+      ...type.body,
       color: t.textSoft,
-      marginTop: spacing.sm,
+      marginTop: space.sm,
       textAlign: 'center',
     },
     loadingContainer: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingVertical: spacing.xxl,
+      paddingVertical: space.huge,
     },
     loadingText: {
-      fontFamily: fontFamily.body,
-      marginTop: spacing.md,
-      fontSize: fontSize.md,
+      ...type.body,
+      marginTop: space.lg,
       color: t.textSoft,
     },
   });

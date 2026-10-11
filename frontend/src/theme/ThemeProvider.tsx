@@ -36,6 +36,7 @@ import React, {
 } from 'react';
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SystemUI from 'expo-system-ui';
 
 import { gradientsFor, palettes, type Gradients, type Mode, type Palette } from './palette';
 import { radius, space, type } from './type';
@@ -98,6 +99,25 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const mode: Mode = preference === 'system' ? (system === 'dark' ? 'dark' : 'light') : preference;
+
+  // The window behind React Native, repainted when the mode changes.
+  //
+  // This is not belt-and-braces. Every translucent surface in the app composites
+  // over whatever is below it, and below the React tree is the Android window,
+  // whose background is `android:windowBackground` on MainActivity -- owned by
+  // `expo-splash-screen` and, before this, a white drawable with no `-night`
+  // variant. In dark mode that white showed through the glass borders and
+  // through every `Modal`, which gets its own window and so has no `Aurora`
+  // painting over it.
+  //
+  // `app.json` now sets the night colour so the *launch* is right; this makes
+  // the toggle right too, because a user switching to dark at runtime does not
+  // get a new window.
+  useEffect(() => {
+    // Fire and forget. A window background is cosmetic, and on web the module
+    // is a no-op that still resolves.
+    void SystemUI.setBackgroundColorAsync(palettes[mode].bg).catch(() => {});
+  }, [mode]);
 
   // `toggle` resolves to the opposite of what is **currently shown**, not the
   // opposite of the preference. Tapping it while on `system` must flip the

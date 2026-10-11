@@ -31,20 +31,38 @@
  * *area* — the radius circle is the honest part of the drawing, so a small dot sitting
  * at its centre reads better than a pin planted in it.
  *
- * ## `tracksViewChanges={false}` is not optional
+ * ## `tracksViewChanges` has to start true and then stop
  *
  * A `Marker` with React children re-rasterises its view on **every** parent render
- * unless this is set, and the map re-renders on pan, zoom, and every `as of` tap. With
- * ~60 flags in view that is tens of thousands of needless bitmap conversions and the
- * map visibly stutters on a phone.
+ * unless tracking is off, and the map re-renders on pan, zoom, and every `as of` tap.
+ * With ~60 flags in view that is tens of thousands of needless bitmap conversions and
+ * the map visibly stutters on a phone. So it has to end up `false`.
  *
- * The cost of turning it off: the marker image is snapshotted once, so later prop
- * changes do not repaint it. That is handled by `key` — it includes the fields that
- * change the drawing, so React replaces the marker instead of mutating it. Anything
- * added to this component's appearance must also be added to that key.
+ * It cannot *start* `false`, and that was a real bug: on Android the marker's bitmap
+ * is taken from the child view on a draw pass, and with tracking off from the first
+ * render the snapshot can happen **before the child has drawn**. What got frozen was
+ * a blank 26px circle — the `backgroundColor` had landed but the border, the digit
+ * and the dashed ring had not. On the map that reads as "the risk markers did not
+ * load", except the radius circles beside them were drawn correctly from the same
+ * array and the badge said 67 flags.
+ *
+ * It looked intermittent because it is a race with the map becoming ready. Tapping
+ * `+3h` and back appeared to fix it, and did: the `as of` change alters `status` and
+ * `severityNow`, which are in the `key`, so React replaces every marker — and the
+ * replacements mount into a map that is already drawing.
+ *
+ * So: track until the view has been laid out and drawn, then stop. `onLayout` says
+ * React Native has measured it; two frames after that the native side has had its
+ * draw pass. The timeout is a backstop, because a marker that never stops tracking
+ * is the performance bug this whole note is about.
+ *
+ * The cost of ending up `false` is unchanged: later prop changes do not repaint a
+ * settled marker. That is handled by `key` — it includes the fields that change the
+ * drawing, so React replaces the marker instead of mutating it. Anything added to
+ * this component's appearance must also be added to that key.
  */
 
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Marker } from 'react-native-maps';
 
@@ -71,6 +89,29 @@ const RiskFlagMarkerComponent: React.FC<RiskFlagMarkerProps> = ({ flag, onPress 
   const confirmed = isConfirmedFlag(flag);
   const scheduled = isScheduledFlag(flag);
 
+  // True until the dot has been drawn, then false forever. See the note above.
+  const [tracking, setTracking] = useState(true);
+  const settled = useRef(false);
+
+  const settle = useCallback(() => {
+    if (settled.current) return;
+    settled.current = true;
+    // Two frames, not one. `onLayout` fires when React Native has measured the
+    // view; the native marker copies it on the following draw. Stopping in the
+    // same tick can beat that draw and freeze the half-painted bitmap, which is
+    // the whole defect.
+    requestAnimationFrame(() => requestAnimationFrame(() => setTracking(false)));
+  }, []);
+
+  useEffect(() => {
+    // The backstop. If `onLayout` never arrives -- a marker scrolled far off
+    // screen, a map that never finishes initialising -- this still ends the
+    // tracking, because 60 markers rasterising on every pan is the cost this
+    // component exists to avoid.
+    const timer = setTimeout(settle, 1_000);
+    return () => clearTimeout(timer);
+  }, [settle]);
+
   return (
     <Marker
       coordinate={{ latitude: flag.lat, longitude: flag.lon }}
@@ -83,7 +124,7 @@ const RiskFlagMarkerComponent: React.FC<RiskFlagMarkerProps> = ({ flag, onPress 
         confirmed ? `confirmed, ${flag.sourceCount} sources` : 'unconfirmed, 1 source'
       }`}
       anchor={{ x: 0.5, y: 0.5 }}
-      tracksViewChanges={false}
+      tracksViewChanges={tracking}
       onPress={() => onPress(flag)}
       accessibilityLabel={`${scheduled ? 'Scheduled. ' : ''}${flag.mobilityStatement}. ${
         confirmed
@@ -92,6 +133,7 @@ const RiskFlagMarkerComponent: React.FC<RiskFlagMarkerProps> = ({ flag, onPress 
       }`}
     >
       <View
+        onLayout={settle}
         style={[
           styles.dot,
           {

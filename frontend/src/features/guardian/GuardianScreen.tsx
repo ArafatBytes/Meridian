@@ -802,7 +802,7 @@ StyleSheet.create({
     rowTitle: { ...typeScale.bodyStrong, color: t.text },
     rowSubtitle: { ...typeScale.caption, color: t.textSoft, marginTop: 2, lineHeight: 16 },
     statusBox: {
-      backgroundColor: t.lineSoft,
+      backgroundColor: t.fillSoft,
       borderRadius: radiusScale.sm,
       padding: space.md,
       gap: 4,
@@ -847,7 +847,7 @@ StyleSheet.create({
     meterTrack: {
       height: 10,
       borderRadius: 5,
-      backgroundColor: t.lineSoft,
+      backgroundColor: t.fillSoft,
       overflow: 'visible',
       justifyContent: 'center',
     },
@@ -886,7 +886,7 @@ StyleSheet.create({
     },
     stepperHint: { ...typeScale.caption, color: t.textFaint, marginTop: 4 },
     heardBox: {
-      backgroundColor: t.lineSoft,
+      backgroundColor: t.fillSoft,
       borderRadius: radiusScale.sm,
       padding: space.md,
     },

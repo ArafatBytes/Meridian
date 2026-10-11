@@ -7,9 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   TextInput,
-  Modal,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   TouchableWithoutFeedback,
@@ -36,13 +34,12 @@ import { Ionicons } from '@expo/vector-icons';
 // regression, not a broken feature.
 import * as Contacts from 'expo-contacts/legacy';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { spacing, borderRadius, fontSize } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
-import { glassBar, glassSurface } from '../../theme/surfaces';
-import { Aurora } from '../../components/motion';
-import { fontFamily } from '../../theme/type';
+import { glassBar, glassSurface, lift } from '../../theme/surfaces';
+import { Aurora, Sheet } from '../../components/motion';
+import { fontFamily, radius, space, type } from '../../theme/type';
 import { useAuthStore } from '../../store';
 import { supabase } from '../../lib/supabase';
 import { EmergencyContact } from '../../types';
@@ -308,7 +305,7 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
           see the note in theme/surfaces.ts. */}
       <Aurora intensity="ambient" />
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+      <View style={[styles.header, { paddingTop: insets.top + space.lg }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -331,8 +328,13 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
         ListEmptyComponent={renderEmptyState}
       />
 
-      {/* Add Buttons */}
-      <View style={[styles.buttonContainer]}>
+      {/* Add Buttons.
+          `insets.bottom` because this bar is flush with the screen edge and
+          the phone's gesture strip lives there: without it the buttons are
+          half under the home indicator and the bottom of their labels is
+          clipped. The tab bar is not a factor -- this is a pushed screen, and
+          the bar slides away on those. */}
+      <View style={[styles.buttonContainer, { paddingBottom: insets.bottom + space.sm }]}>
         <TouchableOpacity
           style={styles.addButton}
           onPress={pickContactFromDevice}
@@ -354,19 +356,17 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Manual Add Modal */}
-      <Modal
+      {/* Manual Add Modal.
+          `avoidKeyboard` because it is a form; not `dismissable`, because a
+          stray tap on the scrim would throw away a half-typed contact. */}
+      <Sheet
         visible={isModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsModalVisible(false)}
+        variant="bottom"
+        onClose={() => setIsModalVisible(false)}
+        avoidKeyboard
+        padding={0}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>Add Emergency Contact</Text>
@@ -432,10 +432,8 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
                   </TouchableOpacity>
                 </ScrollView>
               </View>
-            </View>
           </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
-      </Modal>
+      </Sheet>
     </View>
   );
 };
@@ -457,22 +455,21 @@ StyleSheet.create({
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: spacing.lg,
-      paddingBottom: spacing.md,
+      paddingHorizontal: space.xl,
+      paddingBottom: space.lg,
     },
     backButton: {
-      padding: spacing.sm,
+      padding: space.sm,
     },
     headerTitle: {
-      fontFamily: fontFamily.display,
-      fontSize: fontSize.xl,
+      ...type.heading,
       color: t.text,
     },
     placeholder: {
       width: 40,
     },
     listContent: {
-      padding: spacing.lg,
+      padding: space.xl,
     },
     listContentEmpty: {
       flex: 1,
@@ -481,18 +478,16 @@ StyleSheet.create({
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: spacing.xl,
+      paddingHorizontal: space.xxl,
     },
     emptyStateTitle: {
-      fontFamily: fontFamily.display,
-      fontSize: fontSize.xl,
+      ...type.heading,
       color: t.text,
-      marginTop: spacing.lg,
-      marginBottom: spacing.sm,
+      marginTop: space.xl,
+      marginBottom: space.sm,
     },
     emptyStateText: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.md,
+      ...type.body,
       color: t.textSoft,
       textAlign: 'center',
     },
@@ -500,13 +495,9 @@ StyleSheet.create({
       ...glassSurface(t),
       flexDirection: 'row',
       alignItems: 'center',
-      padding: spacing.lg,
-      marginBottom: spacing.md,
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 2,
+      padding: space.xl,
+      marginBottom: space.lg,
+      ...lift(t, 1),
     },
     contactAvatar: {
       width: 50,
@@ -518,36 +509,33 @@ StyleSheet.create({
     },
     contactInfo: {
       flex: 1,
-      marginLeft: spacing.md,
+      marginLeft: space.lg,
     },
     contactName: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.lg,
+      ...type.bodyStrong,
       color: t.text,
-      marginBottom: spacing.xs,
+      marginBottom: space.xs,
     },
     contactPhone: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.md,
+      ...type.body,
       color: t.textSoft,
       marginBottom: 2,
     },
     contactEmail: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.sm,
+      ...type.small,
       color: t.textSoft,
     },
     deleteButton: {
-      padding: spacing.sm,
+      padding: space.sm,
     },
     buttonContainer: {
       ...glassSurface(t),
       flexDirection: 'row',
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.sm,
+      paddingHorizontal: space.xl,
+      paddingVertical: space.sm,
       borderTopWidth: 1,
       borderTopColor: t.line,
-      gap: spacing.sm,
+      gap: space.sm,
     },
     addButton: {
       flex: 1,
@@ -555,81 +543,69 @@ StyleSheet.create({
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: t.brand,
-      paddingVertical: spacing.md,
-      paddingHorizontal: spacing.sm,
-      borderRadius: borderRadius.md,
+      paddingVertical: space.lg,
+      paddingHorizontal: space.sm,
+      borderRadius: radius.md,
     },
     manualButton: {
       backgroundColor: t.accent,
     },
     addButtonText: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.md,
+      ...type.bodyStrong,
       color: t.onBrand,
-      marginLeft: spacing.sm,
+      marginLeft: space.sm,
     },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'flex-end',
-    },
+    // `Sheet` owns the scrim, the material and the shape. This is the inset,
+    // which it cannot own: the ScrollView inside has to reach the pane's edges
+    // or its scroll indicator sits in the middle of the padding.
     modalContent: {
-      ...glassSurface(t),
-      borderTopLeftRadius: borderRadius.xl,
-      borderTopRightRadius: borderRadius.xl,
-      padding: spacing.xl,
-      paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.xxl,
-      maxHeight: '80%',
+      padding: space.xxl,
+      paddingBottom: Platform.OS === 'ios' ? space.xxl : space.huge,
     },
     modalHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: spacing.xl,
+      marginBottom: space.xxl,
     },
     modalTitle: {
-      fontFamily: fontFamily.display,
-      fontSize: fontSize.xl,
+      ...type.heading,
       color: t.text,
     },
     inputContainer: {
-      marginBottom: spacing.lg,
+      marginBottom: space.xl,
     },
     inputLabel: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.md,
+      ...type.bodyStrong,
       color: t.text,
-      marginBottom: spacing.sm,
+      marginBottom: space.sm,
     },
     input: {
-      fontFamily: fontFamily.body,
+      ...type.body,
       backgroundColor: t.bg,
       borderWidth: 1,
       borderColor: t.line,
-      borderRadius: borderRadius.md,
-      padding: spacing.md,
-      fontSize: fontSize.md,
+      borderRadius: radius.md,
+      padding: space.lg,
       color: t.text,
     },
     inputHint: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.sm,
+      ...type.small,
       color: t.textSoft,
-      marginTop: spacing.xs,
+      marginTop: space.xs,
     },
     saveButton: {
       backgroundColor: t.brand,
-      padding: spacing.lg,
-      borderRadius: borderRadius.md,
+      padding: space.xl,
+      borderRadius: radius.md,
       alignItems: 'center',
-      marginTop: spacing.md,
+      marginTop: space.lg,
     },
     saveButtonDisabled: {
       opacity: 0.6,
     },
     saveButtonText: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.lg,
+      ...type.bodyStrong,
       color: t.onBrand,
     },
   });

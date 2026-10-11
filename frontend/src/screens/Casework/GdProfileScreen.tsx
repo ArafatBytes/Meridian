@@ -21,13 +21,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { spacing, borderRadius, fontSize } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
 import { glassSurface } from '../../theme/surfaces';
 import { Aurora } from '../../components/motion';
-import { fontFamily } from '../../theme/type';
+import { fontFamily, radius, space, type } from '../../theme/type';
 import caseworkService, { GdProfile } from '../../services/casework.service';
 
 interface Props {
@@ -132,7 +131,7 @@ const GdProfileScreen: React.FC<Props> = ({ navigation }) => {
           fill and needs something to be translucent over — see the note in
           theme/surfaces.ts. */}
       <Aurora intensity="ambient" />
-      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+      <View style={[styles.header, { paddingTop: insets.top + space.sm }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
           <Ionicons name="arrow-back" size={24} color={t.text} />
         </TouchableOpacity>
@@ -141,7 +140,7 @@ const GdProfileScreen: React.FC<Props> = ({ navigation }) => {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + spacing.xl }]}
+        contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + space.xxl }]}
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.intro}>
@@ -203,53 +202,47 @@ StyleSheet.create({
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: spacing.md,
-      paddingBottom: spacing.sm,
+      paddingHorizontal: space.lg,
+      paddingBottom: space.sm,
     },
     back: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-    headerTitle: { fontFamily: fontFamily.bodySemi, color: t.text, fontSize: fontSize.lg,},
-    body: { paddingHorizontal: spacing.md },
+    headerTitle: {      ...type.bodyStrong, color: t.text,},
+    body: { paddingHorizontal: space.lg },
     intro: {
-      fontFamily: fontFamily.body,
+      ...type.small,
       color: t.textSoft,
-      fontSize: fontSize.sm,
-      lineHeight: 20,
-      marginBottom: spacing.lg,
+      marginBottom: space.xl,
     },
-    field: { marginBottom: spacing.md },
-    labelBn: { fontFamily: fontFamily.bodySemi, color: t.text, fontSize: fontSize.md,},
+    field: { marginBottom: space.lg },
+    labelBn: {      ...type.bodyStrong, color: t.text,},
     labelEn: {
-      fontFamily: fontFamily.body,
+      ...type.caption,
       color: t.textFaint,
-      fontSize: fontSize.xs,
       marginTop: 2,
-      marginBottom: spacing.xs,
+      marginBottom: space.xs,
     },
     input: {
       ...glassSurface(t),
-      fontFamily: fontFamily.body,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm + 2,
+      ...type.body,
+      paddingHorizontal: space.lg,
+      paddingVertical: space.sm + 2,
       color: t.text,
-      fontSize: fontSize.md,
     },
     inputMultiline: { minHeight: 76, textAlignVertical: 'top' },
     note: {
-      fontFamily: fontFamily.body,
+      ...type.caption,
       color: t.textFaint,
-      fontSize: fontSize.xs,
-      lineHeight: 18,
-      marginTop: spacing.sm,
-      marginBottom: spacing.lg,
+      marginTop: space.sm,
+      marginBottom: space.xl,
     },
     save: {
       backgroundColor: t.brand,
-      borderRadius: borderRadius.md,
-      paddingVertical: spacing.md,
+      borderRadius: radius.md,
+      paddingVertical: space.lg,
       alignItems: 'center',
     },
     saveDisabled: { opacity: 0.6 },
-    saveText: { fontFamily: fontFamily.bodySemi, color: t.onBrand, fontSize: fontSize.md,},
+    saveText: {      ...type.bodyStrong, color: t.onBrand,},
   });
 
 export default GdProfileScreen;

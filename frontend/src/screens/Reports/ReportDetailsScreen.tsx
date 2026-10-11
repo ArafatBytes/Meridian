@@ -14,13 +14,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { ReportsStackParamList } from '../../types';
-import { spacing, borderRadius, fontSize } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
-import { glassSurface } from '../../theme/surfaces';
+import { glassSurface, lift } from '../../theme/surfaces';
 import { Aurora } from '../../components/motion';
-import { fontFamily } from '../../theme/type';
+import { fontFamily, radius, space, type } from '../../theme/type';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, MAP_PROVIDER } from '../../components/MapComponent';
 import { crimeService } from '../../services/crime.service';
@@ -206,7 +205,7 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
         colors={g.aurora}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+        style={[styles.header, { paddingTop: insets.top + space.lg }]}>
         <TouchableOpacity
           style={styles.headerButton}
           onPress={() => navigation.goBack()}
@@ -223,7 +222,7 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
         style={styles.content}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + spacing.lg },
+          { paddingBottom: insets.bottom + space.xl },
         ]}
       >
         {/* Status Badge */}
@@ -423,19 +422,18 @@ StyleSheet.create({
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: t.brand,
-      borderRadius: borderRadius.lg,
-      paddingVertical: spacing.md,
-      paddingHorizontal: spacing.md,
-      marginHorizontal: spacing.md,
-      marginTop: spacing.lg,
-      marginBottom: spacing.xl,
+      borderRadius: radius.card,
+      paddingVertical: space.lg,
+      paddingHorizontal: space.lg,
+      marginHorizontal: space.lg,
+      marginTop: space.xl,
+      marginBottom: space.xxl,
     },
-    gdButtonText: { flex: 1, marginLeft: spacing.md },
-    gdButtonTitle: { fontFamily: fontFamily.bodySemi, color: t.onBrand, fontSize: fontSize.md,},
+    gdButtonText: { flex: 1, marginLeft: space.lg },
+    gdButtonTitle: {      ...type.bodyStrong, color: t.onBrand,},
     gdButtonSubtitle: {
-      fontFamily: fontFamily.body,
+      ...type.caption,
       color: 'rgba(255,255,255,0.8)',
-      fontSize: fontSize.xs,
       marginTop: 2,
     },
     container: {
@@ -449,9 +447,8 @@ StyleSheet.create({
       backgroundColor: t.bg,
     },
     loadingText: {
-      fontFamily: fontFamily.body,
-      marginTop: spacing.md,
-      fontSize: fontSize.md,
+      ...type.body,
+      marginTop: space.lg,
       color: t.textSoft,
     },
     errorContainer: {
@@ -459,44 +456,41 @@ StyleSheet.create({
       justifyContent: 'center',
       alignItems: 'center',
       backgroundColor: t.bg,
-      padding: spacing.xl,
+      padding: space.xxl,
     },
     errorText: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.lg,
+      ...type.body,
       color: t.danger,
       textAlign: 'center',
-      marginTop: spacing.md,
-      marginBottom: spacing.lg,
+      marginTop: space.lg,
+      marginBottom: space.xl,
     },
     retryButton: {
       backgroundColor: t.brand,
-      paddingHorizontal: spacing.xl,
-      paddingVertical: spacing.md,
-      borderRadius: borderRadius.md,
-      marginBottom: spacing.md,
+      paddingHorizontal: space.xxl,
+      paddingVertical: space.lg,
+      borderRadius: radius.md,
+      marginBottom: space.lg,
     },
     retryButtonText: {
-      fontFamily: fontFamily.bodySemi,
+      ...type.bodyStrong,
       color: t.onBrand,
-      fontSize: fontSize.md,
     },
     backButton: {
-      backgroundColor: t.line,
-      paddingHorizontal: spacing.xl,
-      paddingVertical: spacing.md,
-      borderRadius: borderRadius.md,
+      backgroundColor: t.fillStrong,
+      paddingHorizontal: space.xxl,
+      paddingVertical: space.lg,
+      borderRadius: radius.md,
     },
     backButtonText: {
-      fontFamily: fontFamily.bodySemi,
+      ...type.bodyStrong,
       color: t.text,
-      fontSize: fontSize.md,
     },
     header: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      padding: spacing.lg,
+      padding: space.xl,
     },
     headerButton: {
       width: 40,
@@ -505,126 +499,106 @@ StyleSheet.create({
       alignItems: 'center',
     },
     headerTitle: {
-      fontFamily: fontFamily.display,
-      fontSize: fontSize.xl,
+      ...type.heading,
       color: t.onBrand,
     },
     content: {
       flex: 1,
     },
     scrollContent: {
-      padding: spacing.lg,
+      padding: space.xl,
     },
     statusBadge: {
       alignSelf: 'flex-start',
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: borderRadius.md,
-      marginBottom: spacing.lg,
+      paddingHorizontal: space.lg,
+      paddingVertical: space.sm,
+      borderRadius: radius.md,
+      marginBottom: space.xl,
     },
     statusText: {
-      fontFamily: fontFamily.bodySemi,
+      ...type.bodyStrong,
       color: t.onBrand,
-      fontSize: fontSize.md,
       letterSpacing: 1,
     },
     section: {
       ...glassSurface(t),
-      padding: spacing.md,
-      marginBottom: spacing.md,
-      elevation: 1,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1,
-      shadowRadius: 2,
+      padding: space.lg,
+      marginBottom: space.lg,
+      ...lift(t, 1),
     },
     sectionHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: spacing.sm,
+      marginBottom: space.sm,
     },
     sectionTitle: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.lg,
+      ...type.bodyStrong,
       color: t.text,
-      marginLeft: spacing.sm,
+      marginLeft: space.sm,
     },
     categoryValue: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.lg,
+      ...type.bodyStrong,
       color: t.brand,
       textTransform: 'capitalize',
     },
     contentText: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.md,
+      ...type.body,
       color: t.text,
-      lineHeight: 22,
     },
     coordinatesText: {
-      fontSize: fontSize.sm,
+      ...type.small,
       color: t.textSoft,
-      marginTop: spacing.xs,
+      marginTop: space.xs,
+      // The one deliberate exception to the type scale: a latitude and a
+      // longitude are read digit by digit against each other, and a
+      // proportional face makes that harder than it needs to be.
       fontFamily: 'monospace',
     },
     mapContainer: {
       height: 200,
-      borderRadius: borderRadius.md,
+      borderRadius: radius.md,
       overflow: 'hidden',
-      marginBottom: spacing.md,
-      elevation: 2,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.15,
-      shadowRadius: 3,
+      marginBottom: space.lg,
+      ...lift(t, 2),
     },
     map: {
       flex: 1,
     },
     timestampSection: {
       ...glassSurface(t),
-      padding: spacing.md,
-      elevation: 1,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1,
-      shadowRadius: 2,
+      padding: space.lg,
+      ...lift(t, 1),
     },
     timestampRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: spacing.xs,
+      marginBottom: space.xs,
     },
     timestampLabel: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.sm,
+      ...type.small,
       color: t.textSoft,
-      marginLeft: spacing.xs,
+      marginLeft: space.xs,
     },
     timestampValue: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.sm,
+      ...type.small,
       color: t.text,
     },
     // --- D07: evidence photo -------------------------------------------------
     evidenceImage: {
       width: '100%',
       height: 220,
-      borderRadius: borderRadius.md,
-      backgroundColor: t.lineSoft,
+      borderRadius: radius.md,
+      backgroundColor: t.fillSoft,
     },
     evidenceCaption: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.md,
+      ...type.body,
       color: t.text,
-      lineHeight: 22,
-      marginTop: spacing.md,
+      marginTop: space.lg,
     },
     evidenceMeta: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.xs,
+      ...type.caption,
       color: t.textSoft,
-      marginTop: spacing.xs,
+      marginTop: space.xs,
     },
   });
 

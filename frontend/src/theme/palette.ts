@@ -93,6 +93,30 @@ export interface Palette {
   line: string;
   lineSoft: string;
 
+  // ---- Fills ----------------------------------------------------------
+  /**
+   * A quiet filled chip: an icon disc, a field well, a segmented track.
+   *
+   * This exists because `lineSoft` was being used for it in 33 places, and
+   * `lineSoft` is *ink* — `rgba(15, 23, 42, 0.06)` in light mode. As a border
+   * that is correct; as a fill it darkens whatever is behind it, so on the
+   * Aurora field every well came out a muddy grey-blue instead of a pale
+   * recess. A fill token has to be a fill in both modes, which means it cannot
+   * be the line token at a lower alpha.
+   *
+   * Near-opaque on purpose. A translucent chip on a glass card is sampling the
+   * card's own fill sampling the Aurora blobs, and three translucent layers is
+   * where a palette turns to mud.
+   */
+  fillSoft: string;
+  /**
+   * One step stronger: the unfilled half of a progress bar, a slider track.
+   *
+   * Needs to be visible *against* `fillSoft`, because a track usually sits
+   * inside a well.
+   */
+  fillStrong: string;
+
   // ---- State ----------------------------------------------------------
   // The only warm colours in the system. Severity bands read against these.
   ok: string;
@@ -141,6 +165,11 @@ export const light: Palette = {
   line: 'rgba(15, 23, 42, 0.10)',
   lineSoft: 'rgba(15, 23, 42, 0.06)',
 
+  // Pale cool grey, not ink-at-low-alpha. Slate 100/200, which keeps wells in
+  // the same colour family as the text ramp and the borders.
+  fillSoft: '#EDF2F8',
+  fillStrong: '#DBE3EC',
+
   ok: '#059669',
   warn: '#D97706',
   danger: '#DC2626',
@@ -187,6 +216,11 @@ export const dark: Palette = {
 
   line: 'rgba(148, 163, 184, 0.18)',
   lineSoft: 'rgba(148, 163, 184, 0.10)',
+
+  // Lightening the navy rather than darkening it: on a dark ground a recess
+  // reads as *less* dark, which is the opposite of the light-mode instinct.
+  fillSoft: 'rgba(148, 163, 184, 0.13)',
+  fillStrong: 'rgba(148, 163, 184, 0.24)',
 
   // Lightened for contrast against navy. The same hues, so a user switching
   // modes does not have to relearn what amber means.

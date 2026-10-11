@@ -178,7 +178,7 @@ export const ThemeChoice: React.FC = () => {
         styles.segment,
         {
           borderRadius: radius.pill,
-          backgroundColor: t.lineSoft,
+          backgroundColor: t.fillSoft,
           borderColor: t.line,
         },
       ]}
@@ -192,7 +192,9 @@ export const ThemeChoice: React.FC = () => {
               width: segment,
               borderRadius: radius.pill,
               backgroundColor: t.surface,
-              shadowColor: t.shadow,
+              // Inline because the shadow colour is a palette value and this
+              // sheet is module-level. `lift` would be the same declaration.
+              boxShadow: [{ offsetX: 0, offsetY: 2, blurRadius: 8, color: t.shadow }],
               transform: [
                 {
                   translateX: slide.interpolate({
@@ -262,10 +264,6 @@ const styles = StyleSheet.create({
     left: 4,
     top: 4,
     bottom: 4,
-    shadowOpacity: 1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
   },
   segmentItem: {
     flex: 1,

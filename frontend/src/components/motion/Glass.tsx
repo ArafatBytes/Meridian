@@ -34,7 +34,7 @@
  */
 
 import React from 'react';
-import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -108,20 +108,26 @@ export const Glass: React.FC<GlassProps> = ({
     backgroundColor: t.glassFill,
   };
 
+  // `boxShadow`, not `elevation`, and that is the whole fix for the grey wash
+  // that used to sit on every elevated pane in light mode.
+  //
+  // Android's `elevation` renders the shadow into the same region as the view
+  // and then draws the view over it. With an opaque background you never see
+  // it; with `glassFill` at 62% you see 38% of a shadow spread across the
+  // *inside* of the card. That is what made the Guardian card on Home look
+  // like it had a dark film over it, and no amount of tuning the number fixes
+  // it -- 6 was already a compromise and it still showed.
+  //
+  // `boxShadow` is a Fabric style prop (RN 0.86, new architecture is on here)
+  // that draws outside the border box on both platforms, like CSS. So one
+  // declaration replaces the Platform.select, and the translucent fill has
+  // nothing behind it but the backdrop.
   const shadow: ViewStyle = elevated
-    ? Platform.select({
-        ios: {
-          shadowColor: t.shadow,
-          shadowOpacity: 1,
-          shadowRadius: 22,
-          shadowOffset: { width: 0, height: 10 },
-        },
-        // Android's elevation also draws a background behind the view, which
-        // would sit under the translucent fill and grey it out. 6 is enough to
-        // lift the pane without the fill muddying.
-        android: { elevation: 6 },
-        default: {},
-      })!
+    ? {
+        boxShadow: [
+          { offsetX: 0, offsetY: 10, blurRadius: 22, color: t.shadow },
+        ],
+      }
     : {};
 
   return (

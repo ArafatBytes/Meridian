@@ -31,13 +31,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { spacing, borderRadius, typography } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
 import { glassSurface } from '../../theme/surfaces';
 import { Aurora } from '../../components/motion';
-import { fontFamily } from '../../theme/type';
+import { fontFamily, radius, space, type } from '../../theme/type';
 import { sosService, type SosHistoryEntry } from '../../services/sos.service';
 import { messageOf } from '../../services/casework.service';
 
@@ -126,7 +125,7 @@ const SOSHistoryScreen: React.FC = () => {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + spacing.xl }]}
+          contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + space.xxl }]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
@@ -222,73 +221,73 @@ StyleSheet.create({
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.md,
+      paddingHorizontal: space.xl,
+      paddingVertical: space.lg,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: t.line,
     },
-    headerTitle: { ...typography.h4, color: t.text },
+    headerTitle: { ...type.heading, color: t.text },
     centre: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    body: { padding: spacing.lg, gap: spacing.md },
+    body: { padding: space.xl, gap: space.lg },
 
     card: {
       ...glassSurface(t),
-      padding: spacing.md,
-      gap: spacing.xs,
+      padding: space.lg,
+      gap: space.xs,
     },
     cardTop: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      gap: spacing.sm,
+      gap: space.sm,
     },
-    when: { ...typography.body, fontFamily: fontFamily.bodySemi, color: t.text, flexShrink: 1 },
+    when: { ...type.body, fontFamily: fontFamily.bodySemi, color: t.text, flexShrink: 1 },
     pill: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: space.sm,
       paddingVertical: 3,
-      borderRadius: borderRadius.sm,
+      borderRadius: radius.sm,
     },
-    pillText: { ...typography.caption, fontFamily: fontFamily.bodySemi,},
-    detail: { ...typography.bodySmall, color: t.text },
-    coords: { ...typography.caption, color: t.textSoft },
-    tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: 2 },
+    pillText: { ...type.caption, fontFamily: fontFamily.bodySemi,},
+    detail: { ...type.small, color: t.text },
+    coords: { ...type.caption, color: t.textSoft },
+    tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginTop: 2 },
     tag: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      backgroundColor: t.lineSoft,
-      paddingHorizontal: spacing.sm,
+      backgroundColor: t.fillSoft,
+      paddingHorizontal: space.sm,
       paddingVertical: 2,
-      borderRadius: borderRadius.sm,
+      borderRadius: radius.sm,
     },
-    tagText: { ...typography.caption, color: t.textSoft },
+    tagText: { ...type.caption, color: t.textSoft },
 
     errorCard: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.sm,
+      gap: space.sm,
       backgroundColor: `${t.danger}11`,
-      borderRadius: borderRadius.md,
-      padding: spacing.md,
+      borderRadius: radius.md,
+      padding: space.lg,
     },
-    errorText: { ...typography.bodySmall, color: t.danger, flex: 1 },
+    errorText: { ...type.small, color: t.danger, flex: 1 },
 
     emptyCard: {
       alignItems: 'center',
-      gap: spacing.sm,
-      paddingVertical: spacing.xxl,
-      paddingHorizontal: spacing.lg,
+      gap: space.sm,
+      paddingVertical: space.huge,
+      paddingHorizontal: space.xl,
     },
-    emptyTitle: { ...typography.h4, color: t.text },
-    emptyText: { ...typography.bodySmall, color: t.textSoft, textAlign: 'center' },
+    emptyTitle: { ...type.heading, color: t.text },
+    emptyText: { ...type.small, color: t.textSoft, textAlign: 'center' },
 
     footnote: {
-      ...typography.caption,
+      ...type.caption,
       color: t.textSoft,
-      marginTop: spacing.sm,
+      marginTop: space.sm,
       lineHeight: 16,
     },
   });

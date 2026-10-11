@@ -56,10 +56,38 @@
  * ## What gets no blur, and why that is fine
  *
  * A surface with no provider above it gets `{}` from `useBlurProps()` — no
- * method, no target, no warning, and the fill, edge and sheen carry it. That
- * covers the tab bar, which is a sibling of the navigator and so has no screen's
- * backdrop in scope. A floating bar over a scrolling list is also where a live
- * blur costs the most frames, so it is the trade one would pick anyway.
+ * method, no target, no warning, and the fill, edge and sheen carry it.
+ *
+ * ## The tab bar needed a second level of this
+ *
+ * The bar is rendered by `Tab.Navigator`'s `tabBar` prop, which puts it beside
+ * the screen container rather than inside a screen — so no screen's `Aurora` is
+ * in scope and the bar came out **opaque on Android**, which is defect #1 on the
+ * UI list.
+ *
+ * It cannot simply be wrapped: anything that is an ancestor of both the bar and
+ * the thing it blurs is the arrangement that overflowed the render thread above.
+ * What works is two providers at two levels:
+ *
+ * ```
+ * BlurTargetProvider                 (MainNavigator)  ← the bar reads THIS one
+ *   Tab.Navigator
+ *     ClaimBlurTarget                (per screen)     ← the bar blurs THIS view
+ *       Screen
+ *         Aurora → BlurTargetProvider + BlurBackdrop  ← Glass reads THIS one
+ *           blobs
+ *         Glass…
+ *     TabBar → BlurView                               ← sibling, never inside
+ * ```
+ *
+ * The inner provider shadows the outer one for everything inside a screen, so
+ * `Glass` keeps blurring the blobs and needs no change. The bar sits outside
+ * every screen, sees the outer provider, and blurs the focused screen whole.
+ * Its `BlurView` is a sibling of that view, not a descendant, so the rule holds.
+ *
+ * `ClaimBlurTarget` only claims while its screen is **focused**. A tab navigator
+ * keeps all four screens mounted, and without that the bar would blur whichever
+ * one happened to mount last.
  *
  * ## Why `ready` exists
  *
@@ -77,11 +105,12 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
-import { Platform, StyleSheet, type View, type ViewProps } from 'react-native';
+import { Platform, StyleSheet, View, type ViewProps } from 'react-native';
 import { BlurTargetView } from 'expo-blur';
 
 import type { BlurMethod } from 'expo-blur';
@@ -159,6 +188,65 @@ export const BlurBackdrop: React.FC<ViewProps> = ({ children, style, ...rest }) 
       // has no native node to hand out a handle for.
       collapsable={false}
       style={style ?? StyleSheet.absoluteFill}
+      {...rest}
+    >
+      {children}
+    </BlurTargetView>
+  );
+};
+
+/**
+ * Publishes *this* view to the nearest **ancestor** provider while `active`.
+ *
+ * Unlike `BlurBackdrop`, which is the one backdrop its provider will ever have,
+ * these compete: four of them sit under the provider in `MainNavigator` and the
+ * focused one wins. That is the point — see the diagram at the top of the file.
+ *
+ * With no provider above, it renders a plain `View` rather than throwing.
+ * `BlurBackdrop` throws because a backdrop with no provider is a mistake; this
+ * one is used in the navigator, and nothing says a navigator must be wrapped.
+ *
+ * iOS also gets the plain `View`: the native effect view needs no target, so a
+ * `BlurTargetView` there is a native view that does nothing.
+ */
+export const ClaimBlurTarget: React.FC<ViewProps & { active: boolean }> = ({
+  active,
+  children,
+  style,
+  ...rest
+}) => {
+  const context = useContext(BlurTargetContext);
+  const node = useRef<View | null>(null);
+
+  // A layout effect, not the ref callback. `BlurTargetView` takes a ref
+  // *object*, not a callback, and in any case `active` flips long after mount —
+  // when the user changes tab. Both the effect and `onLayout` end in
+  // `markReady`, which is what re-renders the consumers so `BlurView` resolves
+  // the handle on an update. See "Why `ready` exists" above.
+  const claim = useCallback(() => {
+    if (!context || !active || !node.current) return;
+    context.target.current = node.current;
+    context.markReady();
+  }, [context, active]);
+
+  useLayoutEffect(claim, [claim]);
+
+  if (!context || Platform.OS === 'ios') {
+    return (
+      <View style={style} {...rest}>
+        {children}
+      </View>
+    );
+  }
+
+  return (
+    <BlurTargetView
+      ref={node}
+      onLayout={claim}
+      // A layout-only view is dropped on Android and has no native node to hand
+      // out a handle for. Same reason as `BlurBackdrop`.
+      collapsable={false}
+      style={style}
       {...rest}
     >
       {children}

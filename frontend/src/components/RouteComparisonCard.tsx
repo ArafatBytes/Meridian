@@ -59,11 +59,10 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Glass } from './motion';
 
-import { borderRadius, fontSize, spacing } from '../theme';
 import { useTheme } from '../theme/ThemeProvider';
 import { useStyles } from '../theme/useStyles';
 import type { Palette } from '../theme/palette';
-import { fontFamily } from '../theme/type';
+import { fontFamily, radius, space, type } from '../theme/type';
 import type { RouteResponse } from '../services/route.service';
 
 export interface RouteComparisonCardProps {
@@ -132,11 +131,11 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
       style={[
         styles.card,
         expanded ? styles.cardExpanded : styles.cardCollapsed,
-        { bottom: bottomInset + spacing.md },
+        { bottom: bottomInset + space.lg },
       ]}
       contentStyle={styles.body}
-      radius={borderRadius.xl}
-      padding={spacing.md}
+      radius={radius.card}
+      padding={space.lg}
       intensity={26}
       elevated
     >
@@ -347,7 +346,7 @@ StyleSheet.create({
     // `Glass` draws the fill, the border and the radius now, so this carries
     // placement only. The two height caps are the whole point of the rework:
     // collapsed leaves two thirds of the map visible, expanded is a sheet.
-    card: { position: 'absolute', left: spacing.md, right: spacing.md },
+    card: { position: 'absolute', left: space.lg, right: space.lg },
     // The cap goes on the SHELL, not on the inner content box. A percentage
     // resolves against the parent's definite height, and the shell is
     // absolutely positioned with an auto height — so `maxHeight: '34%'` on a
@@ -361,58 +360,56 @@ StyleSheet.create({
     // clipped by `overflow: 'hidden'` instead of becoming scrollable.
     body: { flexShrink: 1 },
     scroll: { flexShrink: 1 },
-    scrollBody: { paddingBottom: spacing.xs },
+    scrollBody: { paddingBottom: space.xs },
     toggle: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: 4,
-      paddingTop: spacing.sm,
-      marginTop: spacing.xs,
+      paddingTop: space.sm,
+      marginTop: space.xs,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: t.line,
     },
-    toggleText: { fontFamily: fontFamily.bodySemi, fontSize: fontSize.xs, color: t.brand },
-    tabs: { gap: spacing.sm, paddingBottom: spacing.sm },
+    toggleText: {      ...type.caption, color: t.brand },
+    tabs: { gap: space.sm, paddingBottom: space.sm },
     tab: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.xs,
-      borderRadius: borderRadius.md,
-      backgroundColor: t.lineSoft,
+      paddingHorizontal: space.lg,
+      paddingVertical: space.xs,
+      borderRadius: radius.md,
+      backgroundColor: t.fillSoft,
       alignItems: 'center',
     },
     tabActive: { backgroundColor: t.brandStrong },
-    tabText: { fontFamily: fontFamily.bodySemi, fontSize: fontSize.xs, color: t.textSoft,},
+    tabText: {      ...type.caption, color: t.textSoft,},
     tabTextActive: { color: t.brandStrong },
-    tabScore: { fontFamily: fontFamily.bodySemi, fontSize: fontSize.xs,},
+    tabScore: {      ...type.caption, },
     stats: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      paddingVertical: spacing.sm,
+      paddingVertical: space.sm,
       borderTopWidth: 1,
       borderBottomWidth: 1,
       borderColor: t.lineSoft,
     },
     stat: { alignItems: 'center', flex: 1 },
-    statValue: { fontFamily: fontFamily.bodySemi, fontSize: fontSize.sm,color: t.text },
+    statValue: {      ...type.label, color: t.text },
     statLabel: { fontFamily: fontFamily.body, fontSize: 10, color: t.textFaint },
     explanation: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.sm,
+      ...type.small,
       color: t.text,
-      lineHeight: 19,
-      paddingTop: spacing.sm,
+      paddingTop: space.sm,
     },
     caveat: {
       flexDirection: 'row',
-      gap: spacing.xs,
+      gap: space.xs,
       alignItems: 'flex-start',
-      paddingTop: spacing.xs,
+      paddingTop: space.xs,
     },
-    caveatText: { fontFamily: fontFamily.body, flex: 1, fontSize: fontSize.xs, color: t.textSoft, lineHeight: 16 },
-    flagList: { marginTop: spacing.sm },
-    flagRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start', paddingVertical: 3 },
+    caveatText: {      ...type.caption, flex: 1, color: t.textSoft, lineHeight: 16 },
+    flagList: { marginTop: space.sm },
+    flagRow: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start', paddingVertical: 3 },
     flagDot: { width: 9, height: 9, borderRadius: 5, borderWidth: 1.5, marginTop: 4 },
-    flagText: { fontFamily: fontFamily.body, flex: 1, fontSize: fontSize.xs, color: t.text, lineHeight: 16 },
+    flagText: {      ...type.caption, flex: 1, color: t.text, lineHeight: 16 },
     flagMeta: { color: t.textFaint },
   });
