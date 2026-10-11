@@ -512,3 +512,39 @@ describe('the blur target is never an ancestor of a blur view', () => {
     expect(navigator.slice(claimStart, claimEnd)).not.toContain('Tab.Navigator');
   });
 });
+
+describe('the map follows the app theme, not the phone', () => {
+  /**
+   * `MapView` defaults its colour scheme to the device setting, so a map in a
+   * light-themed app goes charcoal on a phone that is in dark mode. The prop
+   * fixes it; the `key` is what makes a later theme change take, because
+   * Android reads the scheme once at map creation and ignores every update.
+   *
+   * Both are invisible in review and invisible on a phone whose own setting
+   * agrees with the app's, which is why they are a test.
+   */
+  const offenders: string[] = [];
+
+  for (const file of sourceFiles()) {
+    const rel = path.relative(SRC, file).split(path.sep).join('/');
+    // The component that documents the rule, and the web stub that renders a
+    // placeholder rather than a map.
+    if (rel.startsWith('components/MapComponent')) continue;
+
+    const source = fs.readFileSync(file, 'utf8');
+
+    // The opening JSX tag. The leading `\s` is what separates it from
+    // `useRef<MapView>(null)`, where the `>` follows the name immediately -- a
+    // type argument, not an element, and the reason the first spelling of this
+    // test failed on the very screen it was written for.
+    for (const match of source.matchAll(/<MapView\s[^>]*>/g)) {
+      const props = match[0];
+      if (!props.includes('userInterfaceStyle={mode}')) offenders.push(`${rel}: no scheme`);
+      if (!props.includes('key={mode}')) offenders.push(`${rel}: no remount`);
+    }
+  }
+
+  it('so every MapView is passed the resolved mode, and remounts with it', () => {
+    expect(offenders).toEqual([]);
+  });
+});
