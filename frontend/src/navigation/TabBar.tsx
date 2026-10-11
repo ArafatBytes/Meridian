@@ -141,17 +141,22 @@ export const TabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, naviga
           borderRadius: radius.pill,
           borderColor: t.glassBorder,
           // Translucent only when something is actually blurring behind it.
-          // This bar is a sibling of the navigator, so no screen's backdrop is
-          // in scope and `useBlurProps()` correctly gives it nothing — at which
-          // point `glassFill` would just be a window onto the scrolling list.
+          //
+          // On iOS that is always; on Android it is true as long as
+          // `MainNavigator` is wrapping each screen in a `ClaimBlurTarget`, so
+          // the focused screen is in scope to be sampled. `barFill` stays as the
+          // fallback and is opaque on purpose: without a blur, `glassFill` is
+          // just a window onto the list scrolling underneath.
           backgroundColor: hasBlur ? t.glassFill : t.barFill,
-          shadowColor: t.shadow,
+          // `boxShadow` rather than `elevation`: see the note in `Glass.tsx`.
+          // An elevation shadow under a translucent bar shows *through* it.
+          boxShadow: [{ offsetX: 0, offsetY: 8, blurRadius: 20, color: t.shadow }],
         },
       ]}
     >
-      {/* Only when a blur will actually happen. On Android this bar has no
-          backdrop in scope, and a method-less BlurView would just paint another
-          translucent layer over `barFill` — lighter, no depth, one more view. */}
+      {/* Only when a blur will actually happen. A method-less BlurView would
+          just paint another translucent layer over `barFill` — lighter, no
+          depth, one more view. */}
       {hasBlur ? (
         <BlurView
           intensity={Platform.OS === 'android' ? 44 : 34}
@@ -307,11 +312,6 @@ const styles = StyleSheet.create({
     height: BAR_HEIGHT,
     borderWidth: StyleSheet.hairlineWidth * 2,
     overflow: 'hidden',
-    ...Platform.select({
-      ios: { shadowOpacity: 1, shadowRadius: 20, shadowOffset: { width: 0, height: 10 } },
-      android: { elevation: 10 },
-      default: {},
-    }),
   },
   sheen: { position: 'absolute', left: 0, right: 0, top: 0, height: '55%' },
   row: { flex: 1, flexDirection: 'row', alignItems: 'center' },

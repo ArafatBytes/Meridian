@@ -656,7 +656,7 @@ StyleSheet.create({
       lineHeight: 28,
       marginTop: spacing.sm,
       minHeight: 200,
-      backgroundColor: t.lineSoft,
+      backgroundColor: t.fillSoft,
       borderRadius: borderRadius.md,
       padding: spacing.sm,
     },
@@ -734,7 +734,7 @@ StyleSheet.create({
 
     input: {
       fontFamily: fontFamily.body,
-      backgroundColor: t.lineSoft,
+      backgroundColor: t.fillSoft,
       borderWidth: 1,
       borderColor: t.line,
       borderRadius: borderRadius.md,

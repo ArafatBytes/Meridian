@@ -259,7 +259,7 @@ StyleSheet.create({
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      backgroundColor: t.lineSoft,
+      backgroundColor: t.fillSoft,
       paddingHorizontal: spacing.sm,
       paddingVertical: 2,
       borderRadius: borderRadius.sm,

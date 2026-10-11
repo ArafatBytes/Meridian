@@ -226,7 +226,7 @@ const HomeScreen: React.FC = () => {
                   <View
                     style={[
                       styles.actionIcon,
-                      { backgroundColor: t.lineSoft, borderRadius: radius.md },
+                      { backgroundColor: t.fillSoft, borderRadius: radius.md },
                     ]}
                   >
                     {action.icon}
@@ -435,7 +435,7 @@ const ProtectionCard: React.FC<{
                       ? t.warnSoft
                       : row.on
                         ? t.okSoft
-                        : t.lineSoft,
+                        : t.fillSoft,
                   },
                 ]}
               >

@@ -62,6 +62,16 @@
       "expo-secure-store",
       "expo-asset",
       "expo-font",
+      "expo-system-ui",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F6F9FC",
+          "dark": {
+            "backgroundColor": "#070B14"
+          }
+        }
+      ],
       [
         "expo-speech-recognition",
         {

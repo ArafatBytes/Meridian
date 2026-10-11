@@ -378,7 +378,7 @@ StyleSheet.create({
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.xs,
       borderRadius: borderRadius.md,
-      backgroundColor: t.lineSoft,
+      backgroundColor: t.fillSoft,
       alignItems: 'center',
     },
     tabActive: { backgroundColor: t.brandStrong },

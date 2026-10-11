@@ -231,6 +231,83 @@ describe('the Android blur contract', () => {
   });
 });
 
+describe('every dialog is a Sheet', () => {
+  /**
+   * The defect this exists for.
+   *
+   * Eight modals, each a hand-rolled `<Modal transparent>` around a
+   * `<View backgroundColor: t.surface>` with its own radius, its own padding and
+   * its own scrim. None of them carried the glass material, so opening any
+   * dialog dropped the user out of the new UI and into the old one — and the
+   * SOS countdown, the single most important dialog in the product, was not
+   * even themed: a white card with `#E53935` numerals, in a module-level
+   * `StyleSheet` that could not see the mode.
+   *
+   * `components/motion/Sheet.tsx` is now the one modal container. Everything
+   * else goes through it, so the material, the scrim and the two shapes are
+   * decided in one place.
+   *
+   * ## The exceptions, and why each is one
+   *
+   * A full-screen *takeover* is not a dialog. Its backdrop is its own content —
+   * a camera feed — and a translucent pane over that is a pane over the thing
+   * the user is looking at.
+   */
+  const ALLOWED = [
+    // The one place `Modal` is supposed to appear.
+    'components/motion/Sheet.tsx',
+    // The viewfinder. Full-screen over a live camera feed; see the note there.
+    'components/SOSCameraModal.tsx',
+  ];
+
+  const offenders: string[] = [];
+
+  for (const file of sourceFiles()) {
+    const rel = path.relative(SRC, file).split(path.sep).join('/');
+    if (ALLOWED.includes(rel)) continue;
+    if (fs.readFileSync(file, 'utf8').includes('<Modal')) offenders.push(rel);
+  }
+
+  it('so no screen rolls its own', () => {
+    expect(offenders).toEqual([]);
+  });
+
+  it('and the viewfinder is the only full-screen exception left', () => {
+    // Narrower than the allow-list: SOSCameraModal may keep ONE `Modal`, the
+    // camera. Its permission card is a dialog and went through `Sheet`.
+    const camera = fs.readFileSync(
+      path.join(SRC, 'components/SOSCameraModal.tsx'),
+      'utf8',
+    );
+    expect(camera.split('<Modal').length - 1).toBe(1);
+    expect(camera).toContain('<Sheet');
+  });
+
+  it('keeps the scrim in one place', () => {
+    // Every dialog's backdrop used to be its own literal, which is how four of
+    // them ended up at three different opacities. `Sheet` reads `t.scrim`, and
+    // because nothing else renders a `Modal` (above), nothing else needs one.
+    //
+    // Scoped to styles *named* like a backdrop on purpose. A literal black at
+    // 50% is also the right answer for dimming a photo — the avatar picker and
+    // the "analysing" overlay both do it, over an image, inside the page — and
+    // those are not scrims.
+    const sheet = fs.readFileSync(path.join(SRC, 'components/motion/Sheet.tsx'), 'utf8');
+    expect(sheet).toContain('t.scrim');
+
+    const hardcoded: string[] = [];
+    for (const file of sourceFiles()) {
+      const rel = path.relative(SRC, file).split(path.sep).join('/');
+      if (rel === 'components/motion/Sheet.tsx') continue;
+      const source = fs.readFileSync(file, 'utf8');
+      if (/(modalOverlay|backdrop|scrim)\s*:\s*\{[^}]*rgba\(0/i.test(source)) {
+        hardcoded.push(rel);
+      }
+    }
+    expect(hardcoded).toEqual([]);
+  });
+});
+
 describe('glassSurface is only used over something', () => {
   /**
    * `glassSurface` is a translucent fill. Over the Aurora field it reads as
@@ -276,8 +353,9 @@ describe('the blur target is never an ancestor of a blur view', () => {
    * terminal, which is what makes it worth a test rather than a comment.
    *
    * The fix is structural: `BlurTargetProvider` publishes context and renders
-   * no view, so it cannot be an ancestor of both. Only `BlurBackdrop` renders
-   * the target. These assertions hold that shape.
+   * no view, so it cannot be an ancestor of both. Only `BlurBackdrop` and
+   * `ClaimBlurTarget` render the target, and `ClaimBlurTarget` is only ever
+   * wrapped around a screen. These assertions hold that shape.
    */
   const source = fs.readFileSync(
     path.join(SRC, 'components/motion/BlurTarget.tsx'),
@@ -297,16 +375,58 @@ describe('the blur target is never an ancestor of a blur view', () => {
     expect(provider).toContain('<BlurTargetContext.Provider value={value}>{children}');
   });
 
-  it('renders the target only inside BlurBackdrop', () => {
-    const backdrop = source.slice(source.indexOf('export const BlurBackdrop'));
+  it('renders the target from BlurBackdrop and ClaimBlurTarget, and nowhere else', () => {
+    const backdrop = source.slice(
+      source.indexOf('export const BlurBackdrop'),
+      source.indexOf('export const ClaimBlurTarget'),
+    );
+    const claim = source.slice(source.indexOf('export const ClaimBlurTarget'));
     expect(backdrop).toContain('<BlurTargetView');
-    // One place in the whole app renders it.
-    expect(source.split('<BlurTargetView').length - 1).toBe(1);
+    expect(claim).toContain('<BlurTargetView');
+    // Those two, and only those two.
+    expect(source.split('<BlurTargetView').length - 1).toBe(2);
+  });
+
+  it('is the only file in the app that mounts a target view', () => {
+    // Stronger than counting inside one file: the crash came from a target
+    // mounted somewhere convenient, and the two components here are the only
+    // arrangements that have been reasoned about.
+    const elsewhere = sourceFiles().filter(
+      file =>
+        !file.endsWith(`motion${path.sep}BlurTarget.tsx`) &&
+        fs.readFileSync(file, 'utf8').includes('<BlurTargetView'),
+    );
+    expect(elsewhere.map(f => path.relative(SRC, f))).toEqual([]);
   });
 
   it('is not mounted around the app root', () => {
     // App.tsx wrapping the navigator is exactly how the first version shipped.
     const app = fs.readFileSync(path.join(SRC, '..', 'App.tsx'), 'utf8');
     expect(app).not.toContain('BlurTargetProvider');
+  });
+
+  /**
+   * The tab bar's own arrangement, which is the second way to rebuild the crash.
+   *
+   * The bar is rendered by `Tab.Navigator`'s `tabBar` prop, so it lives *inside*
+   * the navigator. Wrapping the navigator in a `ClaimBlurTarget` to give the bar
+   * something to sample would therefore make the bar a descendant of the view it
+   * blurs — the original bug with a new spelling. The wrapper has to go around
+   * each screen instead, which leaves the bar a sibling.
+   */
+  it('claims each screen, never the navigator that holds the bar', () => {
+    const navigator = fs.readFileSync(
+      path.join(SRC, 'navigation/MainNavigator.tsx'),
+      'utf8',
+    );
+    expect(navigator).toContain('<BlurTargetProvider>');
+    expect(navigator).toContain('<ClaimBlurTarget');
+
+    // The provider is allowed to be an ancestor of the bar: it renders no view.
+    // The claim is not, so no `<Tab.Navigator` may appear inside one.
+    const claimStart = navigator.indexOf('<ClaimBlurTarget');
+    const claimEnd = navigator.indexOf('</ClaimBlurTarget>');
+    expect(claimEnd).toBeGreaterThan(claimStart);
+    expect(navigator.slice(claimStart, claimEnd)).not.toContain('Tab.Navigator');
   });
 });

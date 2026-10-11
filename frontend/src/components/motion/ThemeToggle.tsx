@@ -178,7 +178,7 @@ export const ThemeChoice: React.FC = () => {
         styles.segment,
         {
           borderRadius: radius.pill,
-          backgroundColor: t.lineSoft,
+          backgroundColor: t.fillSoft,
           borderColor: t.line,
         },
       ]}

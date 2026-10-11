@@ -5,16 +5,22 @@
  * Separate from `useSOS` so that a screen adds SOS with one element rather than
  * forty lines of copied JSX — which is how `MapScreen` ended up with a red button
  * and no implementation behind it (defect 14).
+ *
+ * Both dialogs are `Sheet`s, so they are made of the same material as the rest
+ * of the app. They used to be bare `<View backgroundColor: t.surface>` cards,
+ * which is why opening one dropped the user out of the new UI and into a grey
+ * box — see the note at the top of `Sheet.tsx`.
  */
 import React from 'react';
-import { View, Text, StyleSheet, Modal, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { spacing, borderRadius, typography, shadows } from '../../theme';
+
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
-import { fontFamily } from '../../theme/type';
+import { fontFamily, radius, space, type } from '../../theme/type';
+import { Sheet } from '../../components/motion';
 import { TAB_BAR_HEIGHT } from '../../navigation/metrics';
 import { SOSCameraModal } from '../../components/SOSCameraModal';
 import type { SosController } from './useSOS';
@@ -76,38 +82,44 @@ export const SOSFlow: React.FC<{ sos: SosController }> = ({ sos }) => {
         modal through all of it means the person cannot look at the map, their
         contacts, or anything else, at the one moment they most need to. Hiding
         it leaves the upload exactly where it was and moves it to the pill below.
+
+        `onClose` is `minimize`, so Android's back button puts it in the corner
+        rather than doing nothing. The scrim is not tappable: a stray touch
+        should not hide a send in progress.
       */}
-      <Modal transparent visible={sos.sending && !sos.minimized} onRequestClose={sos.minimize}>
-        <View style={styles.overlay}>
-          <View style={styles.card}>
-            <ActivityIndicator size="large" color={t.danger} />
-            <Text style={styles.title}>
-              {sos.stage === 'sending' ? 'Alerting your contacts...' : 'Uploading Evidence...'}
-            </Text>
+      <Sheet
+        visible={sos.sending && !sos.minimized}
+        onClose={sos.minimize}
+        padding={space.xl}
+        contentStyle={styles.centred}
+        style={styles.busyPane}
+      >
+        <ActivityIndicator size="large" color={t.danger} />
+        <Text style={styles.title}>
+          {sos.stage === 'sending' ? 'Alerting your contacts...' : 'Uploading Evidence...'}
+        </Text>
 
-            <View style={styles.barTrack}>
-              <View style={[styles.barFill, { width: `${sos.progress}%` }]} />
-            </View>
-            <Text style={styles.percent}>{sos.progress}% Completed</Text>
-
-            <Text style={styles.subtitle}>
-              {sos.stage === 'sending'
-                ? 'Evidence uploaded. Sending the alert — do not close the app.'
-                : 'Please do not close the app'}
-            </Text>
-
-            <TouchableOpacity
-              style={styles.hide}
-              onPress={sos.minimize}
-              accessibilityRole="button"
-              accessibilityLabel="Hide this and keep using the app. Sending continues."
-            >
-              <Ionicons name="chevron-down" size={16} color={t.textSoft} />
-              <Text style={styles.hideText}>Keep using the app</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.barTrack}>
+          <View style={[styles.barFill, { width: `${sos.progress}%` }]} />
         </View>
-      </Modal>
+        <Text style={styles.percent}>{sos.progress}% Completed</Text>
+
+        <Text style={styles.subtitle}>
+          {sos.stage === 'sending'
+            ? 'Evidence uploaded. Sending the alert — do not close the app.'
+            : 'Please do not close the app'}
+        </Text>
+
+        <TouchableOpacity
+          style={styles.hide}
+          onPress={sos.minimize}
+          accessibilityRole="button"
+          accessibilityLabel="Hide this and keep using the app. Sending continues."
+        >
+          <Ionicons name="chevron-down" size={16} color={t.textSoft} />
+          <Text style={styles.hideText}>Keep using the app</Text>
+        </TouchableOpacity>
+      </Sheet>
 
       {/*
         The send, in a corner. Bottom left on purpose: the SOS button is bottom
@@ -126,10 +138,7 @@ export const SOSFlow: React.FC<{ sos: SosController }> = ({ sos }) => {
       */}
       {sos.sending && sos.minimized && (
         <TouchableOpacity
-          style={[
-            styles.pill,
-            { bottom: Math.max(insets.bottom, 10) + TAB_BAR_HEIGHT + spacing.sm },
-          ]}
+          style={[styles.pill, { bottom: Math.max(insets.bottom, 10) + TAB_BAR_HEIGHT + space.sm }]}
           onPress={sos.expand}
           activeOpacity={0.85}
           accessibilityRole="button"
@@ -153,78 +162,69 @@ export const SOSFlow: React.FC<{ sos: SosController }> = ({ sos }) => {
         important moment in the product behind a grey system dialog that could
         not show the counts as anything but a sentence with a newline in it.
       */}
-      <Modal
-        transparent
-        animationType="fade"
-        visible={result !== null}
-        onRequestClose={sos.dismissResult}
-      >
-        <View style={styles.overlay}>
-          <View style={styles.resultCard}>
-            <View style={[styles.badge, ok ? styles.badgeOk : styles.badgeFail]}>
-              <Ionicons
-                name={ok ? 'checkmark-circle' : 'alert-circle'}
-                size={44}
-                color={ok ? t.ok : t.danger}
+      <Sheet visible={result !== null} onClose={sos.dismissResult} contentStyle={styles.centred}>
+        <View style={[styles.badge, { backgroundColor: ok ? t.okSoft : t.dangerSoft }]}>
+          <Ionicons
+            name={ok ? 'checkmark-circle' : 'alert-circle'}
+            size={44}
+            color={ok ? t.ok : t.danger}
+          />
+        </View>
+
+        <Text style={styles.resultTitle}>{ok ? 'Help is on the way' : 'Alert not sent'}</Text>
+
+        {ok && result ? (
+          <>
+            <Text style={styles.resultLead}>
+              {result.contactsNotified > 0
+                ? 'Your location has gone out to your emergency contacts.'
+                : 'Your location was recorded, but nobody was reachable.'}
+            </Text>
+
+            <View style={styles.facts}>
+              <Fact
+                icon="people"
+                label="Contacts notified"
+                value={String(result.contactsNotified)}
+                muted={result.contactsNotified === 0}
+              />
+              <Fact
+                icon="shield-checkmark"
+                label="Police stations nearby"
+                value={String(result.policeStationsFound)}
+                muted={result.policeStationsFound === 0}
+              />
+              <Fact
+                icon="videocam"
+                label="Video"
+                value={result.videoAttached ? 'Attached' : 'Not recorded'}
+                muted={!result.videoAttached}
               />
             </View>
 
-            <Text style={styles.resultTitle}>{ok ? 'Help is on the way' : 'Alert not sent'}</Text>
-
-            {ok && result ? (
-              <>
-                <Text style={styles.resultLead}>
-                  {result.contactsNotified > 0
-                    ? 'Your location has gone out to your emergency contacts.'
-                    : 'Your location was recorded, but nobody was reachable.'}
-                </Text>
-
-                <View style={styles.facts}>
-                  <Fact
-                    icon="people"
-                    label="Contacts notified"
-                    value={String(result.contactsNotified)}
-                    muted={result.contactsNotified === 0}
-                  />
-                  <Fact
-                    icon="shield-checkmark"
-                    label="Police stations nearby"
-                    value={String(result.policeStationsFound)}
-                    muted={result.policeStationsFound === 0}
-                  />
-                  <Fact
-                    icon="videocam"
-                    label="Video"
-                    value={result.videoAttached ? 'Attached' : 'Not recorded'}
-                    muted={!result.videoAttached}
-                  />
-                </View>
-
-                {/*
-                  Said plainly rather than hidden. Zero contacts means the alert
-                  reached nobody, which the person needs to know now — not the
-                  next time they need it.
-                */}
-                {result.contactsNotified === 0 && (
-                  <Text style={styles.resultNote}>
-                    Add an emergency contact in your profile so the next alert reaches someone.
-                  </Text>
-                )}
-              </>
-            ) : (
-              <Text style={styles.resultLead}>{result?.message}</Text>
+            {/*
+              Said plainly rather than hidden. Zero contacts means the alert
+              reached nobody, which the person needs to know now — not the
+              next time they need it.
+            */}
+            {result.contactsNotified === 0 && (
+              <Text style={styles.resultNote}>
+                Add an emergency contact in your profile so the next alert reaches someone.
+              </Text>
             )}
+          </>
+        ) : (
+          <Text style={styles.resultLead}>{result?.message}</Text>
+        )}
 
-            <TouchableOpacity
-              style={[styles.button, ok ? styles.buttonOk : styles.buttonFail]}
-              onPress={sos.dismissResult}
-              accessibilityRole="button"
-            >
-              <Text style={styles.buttonText}>{ok ? 'Done' : 'Close'}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: ok ? t.ok : t.danger }]}
+          onPress={sos.dismissResult}
+          accessibilityRole="button"
+        >
+          <Text style={styles.buttonText}>{ok ? 'Done' : 'Close'}</Text>
+        </TouchableOpacity>
+      </Sheet>
     </>
   );
 };
@@ -233,45 +233,36 @@ export const SOSFlow: React.FC<{ sos: SosController }> = ({ sos }) => {
  * Themed, not module-level.
  *
  * Every colour is a palette token rather than a literal, which is what makes
- * these three surfaces follow the mode. Note the absence of `fontWeight`
- * throughout: the weight lives in the family name, because on Android a custom
- * family paired with a weight resolves to a variant that is not bundled and
- * falls back to Roboto. `theme.ui.test.ts` fails the build on that pairing.
+ * these surfaces follow the mode. Note the absence of `fontWeight` throughout:
+ * the weight lives in the family name, because on Android a custom family
+ * paired with a weight resolves to a variant that is not bundled and falls back
+ * to Roboto. `theme.ui.test.ts` fails the build on that pairing.
  */
 const makeStyles = (t: Palette) =>
   StyleSheet.create({
-    overlay: {
-      flex: 1,
-      backgroundColor: t.scrim,
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: spacing.lg,
-    },
-    card: {
-      backgroundColor: t.surface,
-      padding: spacing.xl,
-      borderRadius: borderRadius.md,
-      alignItems: 'center',
-      ...shadows.lg,
-    },
+    centred: { alignItems: 'center' },
+    // Narrower than a `Sheet` would be by default: a progress card is a line of
+    // text and a bar, and at 420 it reads as a mostly-empty box.
+    busyPane: { maxWidth: 340 },
+
     title: {
-      ...typography.h4,
-      fontFamily: fontFamily.bodySemi,
+      ...type.heading,
       color: t.text,
-      marginTop: spacing.md,
+      marginTop: space.md,
+      textAlign: 'center',
     },
     subtitle: {
-      ...typography.bodySmall,
+      ...type.small,
       color: t.textSoft,
       textAlign: 'center',
     },
     barTrack: {
       width: 200,
       height: 8,
-      backgroundColor: t.lineSoft,
+      backgroundColor: t.fillStrong,
       borderRadius: 4,
-      marginTop: spacing.md,
-      marginBottom: spacing.xs,
+      marginTop: space.md,
+      marginBottom: space.xs,
       overflow: 'hidden',
     },
     barFill: {
@@ -280,50 +271,50 @@ const makeStyles = (t: Palette) =>
       borderRadius: 4,
     },
     percent: {
-      ...typography.caption,
+      ...type.caption,
       color: t.textSoft,
-      marginBottom: spacing.sm,
+      marginBottom: space.sm,
     },
     hide: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: spacing.md,
-      paddingVertical: spacing.sm,
-      paddingHorizontal: spacing.md,
-      borderRadius: borderRadius.full,
-      backgroundColor: t.lineSoft,
+      marginTop: space.lg,
+      paddingVertical: space.sm,
+      paddingHorizontal: space.md,
+      borderRadius: radius.pill,
+      backgroundColor: t.fillSoft,
     },
     hideText: {
-      ...typography.bodySmall,
-      fontFamily: fontFamily.bodySemi,
+      ...type.label,
       color: t.textSoft,
-      marginLeft: spacing.xs,
+      marginLeft: space.xs,
     },
 
     // ------------------------------------------------------------- the pill --
     pill: {
       position: 'absolute',
-      left: spacing.lg,
+      left: space.lg,
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: t.surface,
-      borderRadius: borderRadius.full,
-      paddingVertical: spacing.sm,
-      paddingHorizontal: spacing.md,
-      borderWidth: 1,
+      borderRadius: radius.pill,
+      paddingVertical: space.sm,
+      paddingHorizontal: space.md,
+      borderWidth: StyleSheet.hairlineWidth * 2,
       borderColor: t.line,
-      ...shadows.lg,
+      // `boxShadow`, not `elevation`: see the note in `Glass.tsx`.
+      boxShadow: [{ offsetX: 0, offsetY: 6, blurRadius: 16, color: t.shadow }],
     },
     // A fixed width, not content-sized: "Uploading evidence" and "Alerting
     // contacts" are different lengths, and a pill that resized itself mid-send
     // would twitch at the stage change.
     pillBody: {
       width: 128,
-      marginHorizontal: spacing.sm,
+      marginHorizontal: space.sm,
     },
     pillLabel: {
-      ...typography.caption,
+      ...type.caption,
       fontFamily: fontFamily.bodySemi,
       color: t.text,
     },
@@ -331,7 +322,7 @@ const makeStyles = (t: Palette) =>
       height: 3,
       marginTop: 4,
       borderRadius: 2,
-      backgroundColor: t.line,
+      backgroundColor: t.fillStrong,
       overflow: 'hidden',
     },
     pillFill: {
@@ -340,7 +331,7 @@ const makeStyles = (t: Palette) =>
       borderRadius: 2,
     },
     pillPercent: {
-      ...typography.caption,
+      ...type.caption,
       fontFamily: fontFamily.bodySemi,
       color: t.textSoft,
       // Room for "100%" so the pill does not shrink as the number grows.
@@ -349,17 +340,6 @@ const makeStyles = (t: Palette) =>
     },
 
     // ----------------------------------------------------------- the outcome --
-    resultCard: {
-      width: '100%',
-      maxWidth: 360,
-      backgroundColor: t.surface,
-      borderRadius: borderRadius.lg,
-      paddingHorizontal: spacing.lg,
-      paddingTop: spacing.lg,
-      paddingBottom: spacing.md,
-      alignItems: 'center',
-      ...shadows.xl,
-    },
     // A tinted disc rather than a bare glyph: it gives the icon a size of its
     // own so the sheet reads as one object at a glance, which matters when the
     // person looking at it is not calm. The tints are the palette's own soft
@@ -367,54 +347,47 @@ const makeStyles = (t: Palette) =>
     badge: {
       width: 72,
       height: 72,
-      borderRadius: borderRadius.full,
+      borderRadius: radius.pill,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: spacing.md,
-    },
-    badgeOk: {
-      backgroundColor: t.okSoft,
-    },
-    badgeFail: {
-      backgroundColor: t.dangerSoft,
+      marginBottom: space.md,
     },
     resultTitle: {
-      ...typography.h4,
-      fontFamily: fontFamily.bodySemi,
+      ...type.title,
       color: t.text,
       textAlign: 'center',
     },
     resultLead: {
-      ...typography.bodySmall,
+      ...type.small,
       color: t.textSoft,
       textAlign: 'center',
-      marginTop: spacing.xs,
+      marginTop: space.xs,
     },
     facts: {
       alignSelf: 'stretch',
-      marginTop: spacing.md,
+      marginTop: space.md,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: t.line,
     },
     fact: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: spacing.sm + 2,
+      paddingVertical: space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: t.line,
     },
     factIcon: {
-      marginRight: spacing.sm,
+      marginRight: space.sm,
     },
     // `flex: 1` on the label, so the value stays pinned to the right edge
     // however long the label is — a column, not three words that drift.
     factLabel: {
-      ...typography.bodySmall,
+      ...type.small,
       color: t.textSoft,
       flex: 1,
     },
     factValue: {
-      ...typography.bodySmall,
+      ...type.small,
       fontFamily: fontFamily.bodySemi,
       color: t.text,
     },
@@ -423,29 +396,22 @@ const makeStyles = (t: Palette) =>
       color: t.textFaint,
     },
     resultNote: {
-      ...typography.caption,
+      ...type.caption,
       color: t.warn,
       textAlign: 'center',
-      marginTop: spacing.sm,
+      marginTop: space.sm,
     },
     button: {
       alignSelf: 'stretch',
-      marginTop: spacing.md,
-      paddingVertical: spacing.md - 2,
-      borderRadius: borderRadius.md,
+      marginTop: space.lg,
+      paddingVertical: space.md,
+      borderRadius: radius.md,
       alignItems: 'center',
-    },
-    buttonOk: {
-      backgroundColor: t.ok,
-    },
-    buttonFail: {
-      backgroundColor: t.danger,
     },
     // `onBrand`, not white: in dark mode `ok` and `danger` are light enough that
     // white text on them is unreadable, and `onBrand` is the token that flips.
     buttonText: {
-      ...typography.body,
-      fontFamily: fontFamily.bodySemi,
+      ...type.bodyStrong,
       color: t.onBrand,
     },
   });

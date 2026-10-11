@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   Text,
   Alert,
-  Modal,
   ScrollView,
   ActivityIndicator,
   TextInput,
@@ -29,8 +28,8 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
 import { glassSurface } from '../../theme/surfaces';
-import { Glass } from '../../components/motion';
-import { fontFamily } from '../../theme/type';
+import { Glass, Sheet } from '../../components/motion';
+import { fontFamily, space } from '../../theme/type';
 import { useLocationStore } from '../../store';
 import { DEFAULT_MAP_REGION } from '../../constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1109,13 +1108,14 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       )}
 
       {/* Crime Details Modal */}
-      <Modal
+      {/* A detail the user opened by tapping a pin, so `dismissable`. */}
+      <Sheet
         visible={isModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={closeModal}
+        variant="bottom"
+        onClose={closeModal}
+        dismissable
+        padding={space.xl}
       >
-        <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             {selectedCrime && (
               <>
@@ -1183,8 +1183,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
               </>
             )}
           </View>
-        </View>
-      </Modal>
+      </Sheet>
     </View>
   );
 };
@@ -1334,7 +1333,7 @@ StyleSheet.create({
       paddingVertical: spacing.xs,
       paddingHorizontal: 2,
       borderRadius: borderRadius.sm,
-      backgroundColor: t.lineSoft,
+      backgroundColor: t.fillSoft,
       alignItems: 'center',
     },
     asOfButtonActive: {
@@ -1348,17 +1347,11 @@ StyleSheet.create({
     asOfButtonTextActive: {
       color: t.onBrand,
     },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'flex-end',
-    },
+    // The scrim, the fill, the radius, the edge and the shadow are `Sheet`'s
+    // now. `maxHeight` stays: a crime report can be long, and the map behind it
+    // is the context the user is reading it against.
     modalContent: {
-      backgroundColor: t.surface,
-      borderTopLeftRadius: borderRadius.xl,
-      borderTopRightRadius: borderRadius.xl,
-      padding: spacing.xl,
-      maxHeight: '70%',
+      maxHeight: '100%',
     },
     modalHeader: {
       flexDirection: 'row',
@@ -1411,7 +1404,7 @@ StyleSheet.create({
     },
     divider: {
       height: 1,
-      backgroundColor: t.line,
+      backgroundColor: t.fillStrong,
       marginVertical: spacing.lg,
     },
     sectionLabel: {
@@ -1480,7 +1473,7 @@ StyleSheet.create({
       paddingHorizontal: spacing.md,
       paddingVertical: 6,
       borderRadius: borderRadius.md,
-      backgroundColor: t.lineSoft,
+      backgroundColor: t.fillSoft,
     },
     profileChipActive: { backgroundColor: t.brandStrong },
     profileChipText: { fontFamily: fontFamily.bodySemi, fontSize: fontSize.xs, color: t.textSoft,},
@@ -1488,7 +1481,7 @@ StyleSheet.create({
     connectorLine: {
       width: 2,
       height: 20,
-      backgroundColor: t.line,
+      backgroundColor: t.fillStrong,
       marginLeft: 3, // slightly offset to align with 8px dot center
       marginVertical: 2,
     },

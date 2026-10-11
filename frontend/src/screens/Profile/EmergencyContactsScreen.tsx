@@ -7,9 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   TextInput,
-  Modal,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   TouchableWithoutFeedback,
@@ -41,7 +39,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
 import { glassBar, glassSurface } from '../../theme/surfaces';
-import { Aurora } from '../../components/motion';
+import { Aurora, Sheet } from '../../components/motion';
 import { fontFamily } from '../../theme/type';
 import { useAuthStore } from '../../store';
 import { supabase } from '../../lib/supabase';
@@ -354,19 +352,17 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Manual Add Modal */}
-      <Modal
+      {/* Manual Add Modal.
+          `avoidKeyboard` because it is a form; not `dismissable`, because a
+          stray tap on the scrim would throw away a half-typed contact. */}
+      <Sheet
         visible={isModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsModalVisible(false)}
+        variant="bottom"
+        onClose={() => setIsModalVisible(false)}
+        avoidKeyboard
+        padding={0}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>Add Emergency Contact</Text>
@@ -432,10 +428,8 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
                   </TouchableOpacity>
                 </ScrollView>
               </View>
-            </View>
           </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
-      </Modal>
+      </Sheet>
     </View>
   );
 };
@@ -568,18 +562,12 @@ StyleSheet.create({
       color: t.onBrand,
       marginLeft: spacing.sm,
     },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'flex-end',
-    },
+    // `Sheet` owns the scrim, the material and the shape. This is the inset,
+    // which it cannot own: the ScrollView inside has to reach the pane's edges
+    // or its scroll indicator sits in the middle of the padding.
     modalContent: {
-      ...glassSurface(t),
-      borderTopLeftRadius: borderRadius.xl,
-      borderTopRightRadius: borderRadius.xl,
       padding: spacing.xl,
       paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.xxl,
-      maxHeight: '80%',
     },
     modalHeader: {
       flexDirection: 'row',

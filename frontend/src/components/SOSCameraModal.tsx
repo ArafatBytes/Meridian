@@ -5,7 +5,8 @@ import { spacing, typography } from '../theme';
 import { useTheme } from '../theme/ThemeProvider';
 import { useStyles } from '../theme/useStyles';
 import type { Palette } from '../theme/palette';
-import { fontFamily } from '../theme/type';
+import { fontFamily, radius, space, type } from '../theme/type';
+import { Sheet } from './motion';
 import { Ionicons } from '@expo/vector-icons';
 import {
     SOS_VIDEO_BITRATE,
@@ -254,24 +255,27 @@ export const SOSCameraModal: React.FC<SOSCameraModalProps> = ({
 
     if (!permission.granted) {
         return (
-            <Modal visible={visible} animationType="fade" transparent>
-                <View style={styles.container}>
-                    <View style={styles.permissionCard}>
-                        <Ionicons name="camera" size={48} color={t.text} style={{ marginBottom: 20 }} />
-                        <Text style={styles.permissionTitle}>Camera Access Required</Text>
-                        <Text style={styles.permissionText}>Meridian needs camera access to record emergency evidence.</Text>
-                        <TouchableOpacity style={styles.button} onPress={requestPermission}>
-                            <Text style={styles.buttonText}>Enable Camera</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.button, styles.cancelButton]} onPress={onClose}>
-                            <Text style={styles.buttonTextSecondary}>Cancel</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
+            // The permission card is a dialog, so it is a `Sheet` like every
+            // other dialog in the app. It used to be a white box on a black
+            // full-screen `container` -- the viewfinder's backdrop, reused --
+            // which in dark mode was the brightest thing on the phone.
+            <Sheet visible={visible} onClose={onClose} contentStyle={styles.permissionCard}>
+                <Ionicons name="camera" size={48} color={t.textSoft} style={styles.permissionIcon} />
+                <Text style={styles.permissionTitle}>Camera Access Required</Text>
+                <Text style={styles.permissionText}>Meridian needs camera access to record emergency evidence.</Text>
+                <TouchableOpacity style={styles.button} onPress={requestPermission}>
+                    <Text style={styles.buttonText}>Enable Camera</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.button, styles.cancelButton]} onPress={onClose}>
+                    <Text style={styles.buttonTextSecondary}>Cancel</Text>
+                </TouchableOpacity>
+            </Sheet>
         );
     }
 
+    // Deliberately NOT a `Sheet`. A viewfinder is the whole screen and its
+    // backdrop is the camera feed; a translucent pane over it would be a pane
+    // over the thing the user is trying to see.
     return (
         <Modal visible={visible} animationType="fade" onRequestClose={onClose}>
             <View style={styles.container}>
@@ -449,55 +453,40 @@ StyleSheet.create({
       color: 'rgba(255,255,255,0.6)',
       fontSize: 14,
     },
-    permissionCard: {
-      backgroundColor: 'white',
-      padding: 30,
-      borderRadius: 16,
-      alignItems: 'center',
-      width: '85%',
-      alignSelf: 'center',
-      marginTop: '50%',
-      elevation: 5,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.1,
-      shadowRadius: 12,
-    },
+    // The card's fill, radius, edge and shadow come from `Sheet` now. This is
+    // only the arrangement of what is inside it.
+    permissionCard: { alignItems: 'center' },
+    permissionIcon: { marginBottom: space.lg },
     permissionTitle: {
-      fontFamily: fontFamily.display,
-      fontSize: 20,
-      marginBottom: 10,
-      color: '#111827',
+      ...type.heading,
+      marginBottom: space.sm,
+      color: t.text,
     },
     permissionText: {
-      fontFamily: fontFamily.body,
+      ...type.body,
       textAlign: 'center',
-      color: '#6B7280',
-      marginBottom: 24,
-      lineHeight: 22,
-      fontSize: 16,
+      color: t.textSoft,
+      marginBottom: space.xl,
     },
     button: {
-      backgroundColor: '#111827',
-      paddingVertical: 14,
-      borderRadius: 12,
+      backgroundColor: t.brand,
+      paddingVertical: space.md,
+      borderRadius: radius.md,
       width: '100%',
       alignItems: 'center',
-      marginBottom: 12,
+      marginBottom: space.md,
     },
     cancelButton: {
       backgroundColor: 'transparent',
-      borderWidth: 1,
-      borderColor: '#E5E7EB',
+      borderWidth: StyleSheet.hairlineWidth * 2,
+      borderColor: t.line,
     },
     buttonText: {
-      fontFamily: fontFamily.bodySemi,
-      color: 'white',
-      fontSize: 16,
+      ...type.bodyStrong,
+      color: t.onBrand,
     },
     buttonTextSecondary: {
-      fontFamily: fontFamily.bodySemi,
-      color: '#374151',
-      fontSize: 16,
+      ...type.bodyStrong,
+      color: t.textSoft,
     }
   });

@@ -1457,7 +1457,7 @@ StyleSheet.create({
       shadowRadius: 6,
     },
     submitButtonDisabled: {
-      backgroundColor: t.line,
+      backgroundColor: t.fillStrong,
       opacity: 0.6,
     },
     submitButtonText: {
@@ -1672,7 +1672,7 @@ StyleSheet.create({
       fontSize: fontSize.sm,
     },
     proposalBox: {
-      backgroundColor: t.lineSoft,
+      backgroundColor: t.fillSoft,
       borderRadius: borderRadius.md,
       padding: spacing.md,
       marginBottom: spacing.md,

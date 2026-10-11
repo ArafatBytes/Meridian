@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   Linking,
-  Modal,
   View,
   Text,
   TouchableOpacity,
@@ -13,7 +12,8 @@ import { spacing, borderRadius, fontSize } from '../theme';
 import { useTheme } from '../theme/ThemeProvider';
 import { useStyles } from '../theme/useStyles';
 import type { Palette } from '../theme/palette';
-import { fontFamily } from '../theme/type';
+import { fontFamily, space } from '../theme/type';
+import { Sheet } from './motion';
 import type { RiskFlag } from '../types/contracts/risk';
 import {
   clockTime,
@@ -175,9 +175,10 @@ const RiskFlagSheet: React.FC<RiskFlagSheetProps> = ({ flag, asOf, onClose }) =>
   const isScheduled = isScheduledFlag(flag);
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
+    // `dismissable`: this is a detail view the user opened by tapping a pin, so
+    // a tap outside is the expected way back. Nothing is lost by closing it.
+    <Sheet visible variant="bottom" onClose={onClose} dismissable padding={0}>
+      <View style={styles.sheet}>
           {/* The one string the server produced through framing.py. */}
           <View style={styles.header}>
             <View style={[styles.severityDot, { backgroundColor: band.color }]} />
@@ -202,7 +203,7 @@ const RiskFlagSheet: React.FC<RiskFlagSheetProps> = ({ flag, asOf, onClose }) =>
                 {
                   backgroundColor: isConfirmed
                     ? `${t.ok}22`
-                    : t.lineSoft,
+                    : t.fillSoft,
                 },
               ]}
             >
@@ -356,27 +357,20 @@ const RiskFlagSheet: React.FC<RiskFlagSheetProps> = ({ flag, asOf, onClose }) =>
               the people in it — only about getting through it.
             </Text>
           </ScrollView>
-        </View>
       </View>
-    </Modal>
+    </Sheet>
   );
 };
 
 const makeStyles = (t: Palette) =>
 StyleSheet.create({
-    overlay: {
-      flex: 1,
-      justifyContent: 'flex-end',
-      backgroundColor: t.scrim,
-    },
+    // The scrim, the radius, the edge and the shadow now come from `Sheet`.
+    // What is left here is the inset, which `Sheet` cannot own: the ScrollView
+    // has to reach the pane's edges or its scrollbar sits inside the padding.
     sheet: {
-      backgroundColor: t.surface,
-      borderTopLeftRadius: borderRadius.xl,
-      borderTopRightRadius: borderRadius.xl,
-      paddingTop: spacing.md,
-      paddingHorizontal: spacing.lg,
-      paddingBottom: spacing.xl,
-      maxHeight: '75%',
+      paddingTop: space.md,
+      paddingHorizontal: space.lg,
+      paddingBottom: space.xl,
     },
     header: {
       flexDirection: 'row',

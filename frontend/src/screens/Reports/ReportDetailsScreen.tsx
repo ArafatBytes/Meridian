@@ -482,7 +482,7 @@ StyleSheet.create({
       fontSize: fontSize.md,
     },
     backButton: {
-      backgroundColor: t.line,
+      backgroundColor: t.fillStrong,
       paddingHorizontal: spacing.xl,
       paddingVertical: spacing.md,
       borderRadius: borderRadius.md,
@@ -611,7 +611,7 @@ StyleSheet.create({
       width: '100%',
       height: 220,
       borderRadius: borderRadius.md,
-      backgroundColor: t.lineSoft,
+      backgroundColor: t.fillSoft,
     },
     evidenceCaption: {
       fontFamily: fontFamily.body,

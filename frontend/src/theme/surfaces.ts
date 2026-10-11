@@ -80,7 +80,10 @@ export function glassBar(t: Palette): ViewStyle {
  */
 export function inset(t: Palette): ViewStyle {
   return {
-    backgroundColor: t.lineSoft,
+    // `fillSoft`, not `lineSoft`. The latter is ink at 6%, so in light mode it
+    // darkened the Aurora field behind the well instead of sitting on it as a
+    // pale recess. See the note on `fillSoft` in `palette.ts`.
+    backgroundColor: t.fillSoft,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: t.line,
     borderRadius: radius.md,

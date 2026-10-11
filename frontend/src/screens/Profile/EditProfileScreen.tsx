@@ -574,7 +574,7 @@ StyleSheet.create({
       width: 120,
       height: 120,
       borderRadius: 60,
-      backgroundColor: t.line,
+      backgroundColor: t.fillStrong,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -651,7 +651,7 @@ StyleSheet.create({
     inputDisabled: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: t.lineSoft,
+      backgroundColor: t.fillSoft,
       borderRadius: borderRadius.sm,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
