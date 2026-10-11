@@ -52,7 +52,11 @@ import { Accelerometer } from 'expo-sensors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import { borderRadius, colors, fontSize, spacing } from '../../theme';
+import { useTheme } from '../../theme/ThemeProvider';
+import { useStyles } from '../../theme/useStyles';
+import type { Palette } from '../../theme/palette';
+import { radius as radiusScale, space, type as typeScale } from '../../theme/type';
+import { Aurora, Glass, Reveal } from '../../components/motion';
 import type { ProfileStackParamList } from '../../types';
 import { downloadOfflineModel } from '../voice/recognizer';
 import {
@@ -104,6 +108,8 @@ function useShakeMeter(active: boolean): number {
 
 export const GuardianScreen: React.FC<Props> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
 
   const {
     zoneAlertsEnabled,
@@ -269,17 +275,17 @@ export const GuardianScreen: React.FC<Props> = ({ navigation }) => {
   const shakeReady = shakeMagnitude >= shakeThresholdG;
 
   return (
-    <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+    <Aurora intensity="ambient" style={styles.container}>
+      <View style={[styles.header, { paddingTop: insets.top + space.md }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={t.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Guardian</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView
-        contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xxl }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + space.xxl }}
         refreshControl={<RefreshControl refreshing={false} onRefresh={loadZoneState} />}
       >
         <Text style={styles.intro}>
@@ -290,285 +296,293 @@ export const GuardianScreen: React.FC<Props> = ({ navigation }) => {
 
         {/* ============================= ZONES ============================= */}
         <Text style={styles.sectionTitle}>Risk zone alerts</Text>
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <Ionicons name="navigate-circle-outline" size={22} color={colors.textSecondary} />
-            <View style={styles.rowBody}>
-              <Text style={styles.rowTitle}>Warn me as I approach</Text>
-              <Text style={styles.rowSubtitle}>
-                Works with the app closed. The phone&apos;s own geofencing watches the
-                zones, so this costs very little battery.
-              </Text>
-            </View>
-            {zoneBusy ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <Switch
-                value={zoneAlertsEnabled}
-                onValueChange={onToggleZones}
-                trackColor={{ false: colors.border, true: colors.primaryLight }}
-                thumbColor={zoneAlertsEnabled ? colors.primary : colors.gray400}
-              />
-            )}
-          </View>
-
-          {zoneStatus ? (
-            <View style={styles.statusBox}>
-              <StatusLine
-                label="System monitoring"
-                // Three states, not two. "Not running" because nothing qualified
-                // is a correct, healthy outcome — the OS is not asked to watch an
-                // empty region set — and showing it in warning yellow beside
-                // "Zones being watched: 0" made a working app look broken. Which
-                // is exactly what happened on the first run away from Dhaka.
-                value={
-                  zoneStatus.monitoring
-                    ? 'Active'
-                    : zoneStatus.permission === 'granted' && zoneStatus.regionCount === 0
-                      ? 'Idle — nothing nearby to watch'
-                      : 'Not running'
-                }
-                good={
-                  zoneStatus.monitoring ||
-                  (zoneStatus.permission === 'granted' && zoneStatus.regionCount === 0)
-                }
-              />
-              <StatusLine
-                label="Location permission"
-                value={
-                  zoneStatus.permission === 'granted'
-                    ? 'All the time'
-                    : zoneStatus.permission === 'no-background'
-                      ? 'Only while app is open'
-                      : 'Not granted'
-                }
-                good={zoneStatus.permission === 'granted'}
-              />
-              <StatusLine
-                label="Zones being watched"
-                value={String(zoneStatus.regionCount)}
-                // Zero is only a problem if we were never allowed to look. With
-                // permission granted it means there is no live flag within about
-                // 19 km, which is the honest answer and not a fault.
-                good={zoneStatus.regionCount > 0 || zoneStatus.permission === 'granted'}
-              />
-              {zoneStatus.dropped > 0 ? (
-                <StatusLine
-                  label="Not watched (over the limit)"
-                  value={String(zoneStatus.dropped)}
-                  good={false}
-                />
-              ) : null}
-              {/* The "0 zones" case needs its own sentence. Without it the user
-                  is left reading "0 skipped for that reason" and concluding the
-                  feature is broken, when the truth is that there is no live flag
-                  within reach of where they are standing. */}
-              {zoneStatus.regionCount === 0 && zoneStatus.permission === 'granted' ? (
-                <Text style={styles.statusNote}>
-                  No live risk flag within about 19 km of you, so there is nothing to
-                  watch. This is working correctly — zone alerts stay on and will pick
-                  up flags as soon as you are near some, or next time you open the app.
+        <Reveal index={0}>
+          <Glass style={styles.card} contentStyle={styles.cardBody}>
+            <View style={styles.row}>
+              <Ionicons name="navigate-circle-outline" size={22} color={t.textSoft} />
+              <View style={styles.rowBody}>
+                <Text style={styles.rowTitle}>Warn me as I approach</Text>
+                <Text style={styles.rowSubtitle}>
+                  Works with the app closed. The phone&apos;s own geofencing watches the
+                  zones, so this costs very little battery.
                 </Text>
+              </View>
+              {zoneBusy ? (
+                <ActivityIndicator size="small" color={t.brand} />
               ) : (
-                <Text style={styles.statusNote}>
-                  Historical-pattern zones are never watched — they cover kilometres and
-                  never expire, so a geofence on one would fire every time you left the
-                  house. {zoneStatus.skipped.chronic} skipped for that reason,{' '}
-                  {zoneStatus.skipped.lowSeverity} as too minor to interrupt you.
-                </Text>
+                <Switch
+                  value={zoneAlertsEnabled}
+                  onValueChange={onToggleZones}
+                  trackColor={{ false: t.line, true: t.brandStrong }}
+                  thumbColor={zoneAlertsEnabled ? t.brand : t.textFaint}
+                />
               )}
             </View>
-          ) : null}
 
-          <View style={styles.buttonRow}>
+            {zoneStatus ? (
+              <View style={styles.statusBox}>
+                <StatusLine
+                  label="System monitoring"
+                  // Three states, not two. "Not running" because nothing qualified
+                  // is a correct, healthy outcome — the OS is not asked to watch an
+                  // empty region set — and showing it in warning yellow beside
+                  // "Zones being watched: 0" made a working app look broken. Which
+                  // is exactly what happened on the first run away from Dhaka.
+                  value={
+                    zoneStatus.monitoring
+                      ? 'Active'
+                      : zoneStatus.permission === 'granted' && zoneStatus.regionCount === 0
+                        ? 'Idle — nothing nearby to watch'
+                        : 'Not running'
+                  }
+                  good={
+                    zoneStatus.monitoring ||
+                    (zoneStatus.permission === 'granted' && zoneStatus.regionCount === 0)
+                  }
+                />
+                <StatusLine
+                  label="Location permission"
+                  value={
+                    zoneStatus.permission === 'granted'
+                      ? 'All the time'
+                      : zoneStatus.permission === 'no-background'
+                        ? 'Only while app is open'
+                        : 'Not granted'
+                  }
+                  good={zoneStatus.permission === 'granted'}
+                />
+                <StatusLine
+                  label="Zones being watched"
+                  value={String(zoneStatus.regionCount)}
+                  // Zero is only a problem if we were never allowed to look. With
+                  // permission granted it means there is no live flag within about
+                  // 19 km, which is the honest answer and not a fault.
+                  good={zoneStatus.regionCount > 0 || zoneStatus.permission === 'granted'}
+                />
+                {zoneStatus.dropped > 0 ? (
+                  <StatusLine
+                    label="Not watched (over the limit)"
+                    value={String(zoneStatus.dropped)}
+                    good={false}
+                  />
+                ) : null}
+                {/* The "0 zones" case needs its own sentence. Without it the user
+                    is left reading "0 skipped for that reason" and concluding the
+                    feature is broken, when the truth is that there is no live flag
+                    within reach of where they are standing. */}
+                {zoneStatus.regionCount === 0 && zoneStatus.permission === 'granted' ? (
+                  <Text style={styles.statusNote}>
+                    No live risk flag within about 19 km of you, so there is nothing to
+                    watch. This is working correctly — zone alerts stay on and will pick
+                    up flags as soon as you are near some, or next time you open the app.
+                  </Text>
+                ) : (
+                  <Text style={styles.statusNote}>
+                    Historical-pattern zones are never watched — they cover kilometres and
+                    never expire, so a geofence on one would fire every time you left the
+                    house. {zoneStatus.skipped.chronic} skipped for that reason,{' '}
+                    {zoneStatus.skipped.lowSeverity} as too minor to interrupt you.
+                  </Text>
+                )}
+              </View>
+            ) : null}
+
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={onRefreshZones}
+                disabled={zoneBusy}
+              >
+                <Ionicons name="refresh" size={16} color={t.brand} />
+                <Text style={styles.secondaryButtonText}>Refresh zones</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => Linking.openSettings()}
+              >
+                <Ionicons name="settings-outline" size={16} color={t.brand} />
+                <Text style={styles.secondaryButtonText}>Permissions</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* The only way to show this feature indoors. A real crossing needs the
+                person to physically walk through a boundary hundreds of metres
+                wide, which is not a step anybody can run in front of an audience. */}
             <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={onRefreshZones}
+              style={[styles.testButton, zoneBusy && styles.testButtonDisabled]}
+              onPress={onTestZoneAlert}
               disabled={zoneBusy}
             >
-              <Ionicons name="refresh" size={16} color={colors.primary} />
-              <Text style={styles.secondaryButtonText}>Refresh zones</Text>
+              <Ionicons name="flash-outline" size={18} color={t.onBrand} />
+              <Text style={styles.testButtonText}>Test the nearest zone now</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() => Linking.openSettings()}
-            >
-              <Ionicons name="settings-outline" size={16} color={colors.primary} />
-              <Text style={styles.secondaryButtonText}>Permissions</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* The only way to show this feature indoors. A real crossing needs the
-              person to physically walk through a boundary hundreds of metres
-              wide, which is not a step anybody can run in front of an audience. */}
-          <TouchableOpacity
-            style={[styles.testButton, zoneBusy && styles.testButtonDisabled]}
-            onPress={onTestZoneAlert}
-            disabled={zoneBusy}
-          >
-            <Ionicons name="flash-outline" size={18} color={colors.white} />
-            <Text style={styles.testButtonText}>Test the nearest zone now</Text>
-          </TouchableOpacity>
-          <Text style={styles.statusNote}>
-            Runs the real alert — same zones, same six-hour debounce, same
-            notification. Only the &quot;you moved&quot; part is simulated.
-          </Text>
-        </View>
+            <Text style={styles.statusNote}>
+              Runs the real alert — same zones, same six-hour debounce, same
+              notification. Only the &quot;you moved&quot; part is simulated.
+            </Text>
+          </Glass>
+        </Reveal>
 
         {/* ============================= VOICE ============================= */}
         <Text style={styles.sectionTitle}>Voice SOS — shout a hot word</Text>
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <Ionicons
-              name={meters.listening ? 'mic' : 'mic-off-outline'}
-              size={22}
-              color={meters.listening ? colors.error : colors.textSecondary}
-            />
-            <View style={styles.rowBody}>
-              <Text style={styles.rowTitle}>
-                {meters.listening ? 'Listening on this device' : 'Listen for my phrase'}
-              </Text>
-              <Text style={styles.rowSubtitle}>
-                Only while the app is open — Android does not let any app hold the
-                microphone in the background. No audio leaves the phone.
-              </Text>
+        <Reveal index={1}>
+          <Glass style={styles.card} contentStyle={styles.cardBody}>
+            <View style={styles.row}>
+              <Ionicons
+                name={meters.listening ? 'mic' : 'mic-off-outline'}
+                size={22}
+                color={meters.listening ? t.danger : t.textSoft}
+              />
+              <View style={styles.rowBody}>
+                <Text style={styles.rowTitle}>
+                  {meters.listening ? 'Listening on this device' : 'Listen for my phrase'}
+                </Text>
+                <Text style={styles.rowSubtitle}>
+                  Only while the app is open — Android does not let any app hold the
+                  microphone in the background. No audio leaves the phone.
+                </Text>
+              </View>
+              <Switch
+                value={voiceArmed}
+                onValueChange={onToggleVoice}
+                trackColor={{ false: t.line, true: t.brandStrong }}
+                thumbColor={voiceArmed ? t.danger : t.textFaint}
+              />
             </View>
-            <Switch
-              value={voiceArmed}
-              onValueChange={onToggleVoice}
-              trackColor={{ false: colors.border, true: colors.primaryLight }}
-              thumbColor={voiceArmed ? colors.error : colors.gray400}
+
+            {meters.unavailable ? (
+              <View style={styles.problem}>
+                <Ionicons name="alert-circle" size={16} color={t.warn} />
+                <Text style={styles.problemText}>{meters.unavailable}</Text>
+              </View>
+            ) : null}
+
+            {meters.unavailable?.includes('language pack') ? (
+              <TouchableOpacity style={styles.secondaryButton} onPress={onDownloadPack}>
+                <Ionicons name="cloud-download-outline" size={16} color={t.brand} />
+                <Text style={styles.secondaryButtonText}>Install an offline language pack</Text>
+              </TouchableOpacity>
+            ) : null}
+
+            {/* The meter. Without it the shout threshold is unsettable: the scale is
+                Android's RMS value, not decibels, and it means something different
+                on every microphone. */}
+            <Meter
+              label="Loudness now"
+              value={meters.loudness}
+              peak={meters.peakLoudness}
+              min={-2}
+              max={10}
+              threshold={shoutThreshold}
+              ready={shoutReady}
+              idle={!meters.listening}
             />
-          </View>
+            <Stepper
+              label="Shout threshold"
+              value={shoutThreshold}
+              onChange={setShoutThreshold}
+              min={SHOUT_RANGE.min}
+              max={SHOUT_RANGE.max}
+              step={0.5}
+              hint="Arm it, speak normally, then shout. Set the line between the two."
+            />
 
-          {meters.unavailable ? (
-            <View style={styles.problem}>
-              <Ionicons name="alert-circle" size={16} color={colors.warning} />
-              <Text style={styles.problemText}>{meters.unavailable}</Text>
-            </View>
-          ) : null}
+            {meters.listening ? (
+              <View style={styles.heardBox}>
+                <Text style={styles.heardLabel}>Heard · stays on this phone</Text>
+                <Text style={styles.heardText} numberOfLines={2}>
+                  {meters.heard ? `“${meters.heard}”` : 'Say something…'}
+                </Text>
+              </View>
+            ) : null}
 
-          {meters.unavailable?.includes('language pack') ? (
-            <TouchableOpacity style={styles.secondaryButton} onPress={onDownloadPack}>
-              <Ionicons name="cloud-download-outline" size={16} color={colors.primary} />
-              <Text style={styles.secondaryButtonText}>Install an offline language pack</Text>
+            {meters.error ? (
+              <View style={styles.problem}>
+                <Ionicons name="information-circle-outline" size={16} color={t.info} />
+                <Text style={styles.problemText}>{meters.error}</Text>
+              </View>
+            ) : null}
+
+            <TouchableOpacity
+              style={styles.linkRow}
+              onPress={() => navigation.navigate('SOSHotWords')}
+            >
+              <Ionicons name="list-outline" size={16} color={t.brand} />
+              <Text style={styles.linkText}>Manage my hot words</Text>
+              <Ionicons name="chevron-forward" size={16} color={t.textFaint} />
             </TouchableOpacity>
-          ) : null}
-
-          {/* The meter. Without it the shout threshold is unsettable: the scale is
-              Android's RMS value, not decibels, and it means something different
-              on every microphone. */}
-          <Meter
-            label="Loudness now"
-            value={meters.loudness}
-            peak={meters.peakLoudness}
-            min={-2}
-            max={10}
-            threshold={shoutThreshold}
-            ready={shoutReady}
-            idle={!meters.listening}
-          />
-          <Stepper
-            label="Shout threshold"
-            value={shoutThreshold}
-            onChange={setShoutThreshold}
-            min={SHOUT_RANGE.min}
-            max={SHOUT_RANGE.max}
-            step={0.5}
-            hint="Arm it, speak normally, then shout. Set the line between the two."
-          />
-
-          {meters.listening ? (
-            <View style={styles.heardBox}>
-              <Text style={styles.heardLabel}>Heard · stays on this phone</Text>
-              <Text style={styles.heardText} numberOfLines={2}>
-                {meters.heard ? `“${meters.heard}”` : 'Say something…'}
-              </Text>
-            </View>
-          ) : null}
-
-          {meters.error ? (
-            <View style={styles.problem}>
-              <Ionicons name="information-circle-outline" size={16} color={colors.info} />
-              <Text style={styles.problemText}>{meters.error}</Text>
-            </View>
-          ) : null}
-
-          <TouchableOpacity
-            style={styles.linkRow}
-            onPress={() => navigation.navigate('SOSHotWords')}
-          >
-            <Ionicons name="list-outline" size={16} color={colors.primary} />
-            <Text style={styles.linkText}>Manage my hot words</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
-        </View>
+          </Glass>
+        </Reveal>
 
         {/* ============================= SHAKE ============================= */}
         <Text style={styles.sectionTitle}>Shake SOS</Text>
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <Ionicons name="phone-portrait-outline" size={22} color={colors.textSecondary} />
-            <View style={styles.rowBody}>
-              <Text style={styles.rowTitle}>Shake hard to call for help</Text>
-              <Text style={styles.rowSubtitle}>
-                Only while the app is open. Nothing is recorded until it triggers.
-              </Text>
+        <Reveal index={2}>
+          <Glass style={styles.card} contentStyle={styles.cardBody}>
+            <View style={styles.row}>
+              <Ionicons name="phone-portrait-outline" size={22} color={t.textSoft} />
+              <View style={styles.rowBody}>
+                <Text style={styles.rowTitle}>Shake hard to call for help</Text>
+                <Text style={styles.rowSubtitle}>
+                  Only while the app is open. Nothing is recorded until it triggers.
+                </Text>
+              </View>
+              <Switch
+                value={shakeEnabled}
+                onValueChange={setShakeEnabled}
+                trackColor={{ false: t.line, true: t.brandStrong }}
+                thumbColor={shakeEnabled ? t.danger : t.textFaint}
+              />
             </View>
-            <Switch
-              value={shakeEnabled}
-              onValueChange={setShakeEnabled}
-              trackColor={{ false: colors.border, true: colors.primaryLight }}
-              thumbColor={shakeEnabled ? colors.error : colors.gray400}
-            />
-          </View>
 
-          <Meter
-            label="Shake force now"
-            value={shakeMagnitude}
-            peak={shakeMagnitude}
-            min={0}
-            max={SHAKE_RANGE.max + 2}
-            threshold={shakeThresholdG}
-            ready={shakeReady}
-            unit="g"
-          />
-          <Stepper
-            label="Shake threshold"
-            value={shakeThresholdG}
-            onChange={setShakeThresholdG}
-            min={SHAKE_RANGE.min}
-            max={SHAKE_RANGE.max}
-            step={0.5}
-            unit="g"
-            hint="Shake as you would in an emergency, read the peak, then set the line below it. Resting is about 1g."
-          />
-        </View>
+            <Meter
+              label="Shake force now"
+              value={shakeMagnitude}
+              peak={shakeMagnitude}
+              min={0}
+              max={SHAKE_RANGE.max + 2}
+              threshold={shakeThresholdG}
+              ready={shakeReady}
+              unit="g"
+            />
+            <Stepper
+              label="Shake threshold"
+              value={shakeThresholdG}
+              onChange={setShakeThresholdG}
+              min={SHAKE_RANGE.min}
+              max={SHAKE_RANGE.max}
+              step={0.5}
+              unit="g"
+              hint="Shake as you would in an emergency, read the peak, then set the line below it. Resting is about 1g."
+            />
+          </Glass>
+        </Reveal>
 
         {/* ========================== THE SAFETY NET ======================= */}
         <Text style={styles.sectionTitle}>When something triggers</Text>
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <Ionicons name="timer-outline" size={22} color={colors.textSecondary} />
-            <View style={styles.rowBody}>
-              <Text style={styles.rowTitle}>5-second cancel window</Text>
-              <Text style={styles.rowSubtitle}>
-                Still automatic — no tap needed. Turn this off to send the instant a
-                trigger fires, once you trust your thresholds.
-              </Text>
+        <Reveal index={3}>
+          <Glass style={styles.card} contentStyle={styles.cardBody}>
+            <View style={styles.row}>
+              <Ionicons name="timer-outline" size={22} color={t.textSoft} />
+              <View style={styles.rowBody}>
+                <Text style={styles.rowTitle}>5-second cancel window</Text>
+                <Text style={styles.rowSubtitle}>
+                  Still automatic — no tap needed. Turn this off to send the instant a
+                  trigger fires, once you trust your thresholds.
+                </Text>
+              </View>
+              <Switch
+                value={confirmCountdown}
+                onValueChange={setConfirmCountdown}
+                trackColor={{ false: t.line, true: t.brandStrong }}
+                thumbColor={confirmCountdown ? t.brand : t.textFaint}
+              />
             </View>
-            <Switch
-              value={confirmCountdown}
-              onValueChange={setConfirmCountdown}
-              trackColor={{ false: colors.border, true: colors.primaryLight }}
-              thumbColor={confirmCountdown ? colors.primary : colors.gray400}
-            />
-          </View>
-          <Text style={styles.statusNote}>
-            Either way, an SOS records a short video, takes your location, and emails
-            your emergency contacts. Set those up first or there is nobody to alert.
-          </Text>
-        </View>
+            <Text style={styles.statusNote}>
+              Either way, an SOS records a short video, takes your location, and emails
+              your emergency contacts. Set those up first or there is nobody to alert.
+            </Text>
+          </Glass>
+        </Reveal>
 
         {/* ============================ ZONE LOG =========================== */}
         <Text style={styles.sectionTitle}>Zone alert history</Text>
@@ -585,7 +599,7 @@ export const GuardianScreen: React.FC<Props> = ({ navigation }) => {
                 <View
                   style={[
                     styles.logDot,
-                    { backgroundColor: event.notified ? colors.success : colors.textMuted },
+                    { backgroundColor: event.notified ? t.ok : t.textFaint },
                   ]}
                 />
                 <View style={styles.rowBody}>
@@ -605,13 +619,13 @@ export const GuardianScreen: React.FC<Props> = ({ navigation }) => {
                 setZoneLog([]);
               }}
             >
-              <Ionicons name="trash-outline" size={16} color={colors.primary} />
+              <Ionicons name="trash-outline" size={16} color={t.brand} />
               <Text style={styles.secondaryButtonText}>Clear history</Text>
             </TouchableOpacity>
           </>
         )}
       </ScrollView>
-    </View>
+    </Aurora>
   );
 };
 
@@ -623,19 +637,23 @@ const StatusLine: React.FC<{ label: string; value: string; good: boolean }> = ({
   label,
   value,
   good,
-}) => (
+}) => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
+  return (
   <View style={styles.statusLine}>
     <Ionicons
       name={good ? 'checkmark-circle' : 'close-circle'}
       size={14}
-      color={good ? colors.success : colors.warning}
+      color={good ? t.ok : t.warn}
     />
     <Text style={styles.statusLabel}>{label}</Text>
-    <Text style={[styles.statusValue, { color: good ? colors.success : colors.warning }]}>
+    <Text style={[styles.statusValue, { color: good ? t.ok : t.warn }]}>
       {value}
     </Text>
   </View>
-);
+  );
+};
 
 /**
  * A live bar with the threshold drawn on it.
@@ -655,6 +673,8 @@ const Meter: React.FC<{
   unit?: string;
   idle?: boolean;
 }> = ({ label, value, peak, min, max, threshold, ready, unit = '', idle = false }) => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
   const pct = (input: number) =>
     Math.max(0, Math.min(100, ((input - min) / (max - min)) * 100));
   return (
@@ -672,7 +692,7 @@ const Meter: React.FC<{
             styles.meterFill,
             {
               width: `${idle ? 0 : pct(value)}%`,
-              backgroundColor: ready && !idle ? colors.error : colors.primary,
+              backgroundColor: ready && !idle ? t.danger : t.brand,
             },
           ]}
         />
@@ -694,7 +714,10 @@ const Stepper: React.FC<{
   step: number;
   unit?: string;
   hint?: string;
-}> = ({ label, value, onChange, min, max, step, unit = '', hint }) => (
+}> = ({ label, value, onChange, min, max, step, unit = '', hint }) => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
+  return (
   <View style={styles.stepperWrap}>
     <View style={styles.stepperRow}>
       <Text style={styles.stepperLabel}>{label}</Text>
@@ -704,7 +727,7 @@ const Stepper: React.FC<{
           onPress={() => onChange(Math.max(min, Number((value - step).toFixed(1))))}
           disabled={value <= min}
         >
-          <Ionicons name="remove" size={18} color={colors.primary} />
+          <Ionicons name="remove" size={18} color={t.brand} />
         </TouchableOpacity>
         <Text style={styles.stepperValue}>
           {value.toFixed(1)}
@@ -715,199 +738,199 @@ const Stepper: React.FC<{
           onPress={() => onChange(Math.min(max, Number((value + step).toFixed(1))))}
           disabled={value >= max}
         >
-          <Ionicons name="add" size={18} color={colors.primary} />
+          <Ionicons name="add" size={18} color={t.brand} />
         </TouchableOpacity>
       </View>
     </View>
     {hint ? <Text style={styles.stepperHint}>{hint}</Text> : null}
   </View>
-);
+  );
+};
 
 export default GuardianScreen;
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  backButton: { padding: spacing.sm },
-  headerTitle: { fontSize: fontSize.xl, fontWeight: 'bold', color: colors.text },
-  headerSpacer: { width: 40 },
-  intro: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    lineHeight: 17,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-  },
-  sectionTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: spacing.xl,
-    marginBottom: spacing.sm,
-    marginHorizontal: spacing.lg,
-  },
-  card: {
-    backgroundColor: colors.white,
-    marginHorizontal: spacing.lg,
-    padding: spacing.lg,
-    borderRadius: borderRadius.md,
-    gap: spacing.sm,
-  },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  rowBody: { flex: 1 },
-  rowTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
-  rowSubtitle: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 2, lineHeight: 16 },
-  statusBox: {
-    backgroundColor: colors.surfaceVariant,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    gap: 4,
-  },
-  statusLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  statusLabel: { flex: 1, fontSize: fontSize.xs, color: colors.textSecondary },
-  statusValue: { fontSize: fontSize.xs, fontWeight: '700' },
-  statusNote: {
-    fontSize: 11,
-    color: colors.textMuted,
-    lineHeight: 15,
-    marginTop: spacing.xs,
-  },
-  buttonRow: { flexDirection: 'row', gap: spacing.sm },
-  secondaryButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  secondaryButtonText: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '600' },
-  problem: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    alignItems: 'flex-start',
-    backgroundColor: colors.surfaceVariant,
-    padding: spacing.md,
-    borderRadius: borderRadius.sm,
-  },
-  problemText: { flex: 1, fontSize: fontSize.xs, color: colors.text, lineHeight: 17 },
-  meterWrap: { gap: 4, marginTop: spacing.xs },
-  meterHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  meterLabel: { fontSize: fontSize.xs, color: colors.textSecondary },
-  meterValue: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    color: colors.text,
-    fontVariant: ['tabular-nums'],
-  },
-  meterValueHot: { color: colors.error },
-  meterTrack: {
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.surfaceVariant,
-    overflow: 'visible',
-    justifyContent: 'center',
-  },
-  meterFill: { height: 10, borderRadius: 5 },
-  meterPeak: {
-    position: 'absolute',
-    width: 2,
-    height: 10,
-    backgroundColor: colors.textMuted,
-  },
-  meterThreshold: {
-    position: 'absolute',
-    width: 3,
-    height: 18,
-    borderRadius: 2,
-    backgroundColor: colors.text,
-  },
-  stepperWrap: { marginTop: spacing.sm },
-  stepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  stepperLabel: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
-  stepperControls: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  stepperButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperValue: {
-    minWidth: 48,
-    textAlign: 'center',
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.text,
-    fontVariant: ['tabular-nums'],
-  },
-  stepperHint: { fontSize: 11, color: colors.textMuted, marginTop: 4, lineHeight: 15 },
-  heardBox: {
-    backgroundColor: colors.surfaceVariant,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-  },
-  heardLabel: {
-    fontSize: 10,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  heardText: { fontSize: fontSize.sm, color: colors.text, marginTop: 2, fontStyle: 'italic' },
-  testButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    marginTop: spacing.xs,
-  },
-  testButtonDisabled: { opacity: 0.6 },
-  testButtonText: { color: colors.white, fontSize: fontSize.sm, fontWeight: '700' },
-  linkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-  },
-  linkText: { flex: 1, fontSize: fontSize.sm, color: colors.primary, fontWeight: '600' },
-  empty: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginHorizontal: spacing.lg,
-    lineHeight: 17,
-  },
-  logRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    alignItems: 'flex-start',
-    backgroundColor: colors.white,
-    padding: spacing.md,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  logDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
-  logText: { fontSize: fontSize.sm, color: colors.text, lineHeight: 18 },
-  logMeta: { fontSize: 10, color: colors.textMuted, marginTop: 3 },
-});
+/**
+ * Styles, as a factory rather than a module constant.
+ *
+ * `StyleSheet.create` at module scope cannot see the theme, which is why every
+ * un-migrated screen in this app is light-only. This one takes the palette and
+ * is memoised per mode inside the component, so Guardian follows the dark/light
+ * toggle — and it is the screen that most needs to, because it is the one a user
+ * opens at night.
+ *
+ * Type comes from `typeScale`, so the Sora/Inter pairing and the tabular figures
+ * on the meters arrive with it. The meter readouts in particular have to be
+ * tabular: they update several times a second, and a proportional digit set
+ * makes the number jitter sideways while you are trying to read a threshold off
+ * it.
+ */
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    container: { flex: 1 },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: space.lg,
+      paddingBottom: space.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: t.line,
+    },
+    backButton: { padding: space.sm },
+    headerTitle: { ...typeScale.heading, color: t.text },
+    headerSpacer: { width: 40 },
+    intro: {
+      ...typeScale.small,
+      color: t.textSoft,
+      marginHorizontal: space.lg,
+      marginTop: space.md,
+    },
+    sectionTitle: {
+      ...typeScale.overline,
+      color: t.textFaint,
+      marginTop: space.xl,
+      marginBottom: space.sm,
+      marginHorizontal: space.lg,
+    },
+    // The card is now a `Glass` pane; this carries only its placement. Padding
+    // and the inter-row gap moved to `cardBody`, because `style` on `Glass`
+    // lands on the shell that holds the blur, not on the content.
+    card: { marginHorizontal: space.lg },
+    cardBody: { gap: space.sm },
+    row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+    rowBody: { flex: 1 },
+    rowTitle: { ...typeScale.bodyStrong, color: t.text },
+    rowSubtitle: { ...typeScale.caption, color: t.textSoft, marginTop: 2, lineHeight: 16 },
+    statusBox: {
+      backgroundColor: t.lineSoft,
+      borderRadius: radiusScale.sm,
+      padding: space.md,
+      gap: 4,
+    },
+    statusLine: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+    statusLabel: { flex: 1, ...typeScale.caption, color: t.textSoft },
+    statusValue: { ...typeScale.caption, fontFamily: typeScale.label.fontFamily },
+    statusNote: {
+      ...typeScale.caption,
+      color: t.textFaint,
+      marginTop: space.xs,
+    },
+    buttonRow: { flexDirection: 'row', gap: space.sm },
+    secondaryButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: space.xs,
+      paddingVertical: space.sm,
+      borderRadius: radiusScale.pill,
+      borderWidth: StyleSheet.hairlineWidth * 2,
+      borderColor: t.brand,
+    },
+    secondaryButtonText: { ...typeScale.label, color: t.brand },
+    problem: {
+      flexDirection: 'row',
+      gap: space.sm,
+      alignItems: 'flex-start',
+      backgroundColor: t.warnSoft,
+      padding: space.md,
+      borderRadius: radiusScale.sm,
+    },
+    problemText: { flex: 1, ...typeScale.small, color: t.text },
+    meterWrap: { gap: 4, marginTop: space.xs },
+    meterHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+    meterLabel: { ...typeScale.caption, color: t.textSoft },
+    // Tabular, and it matters here more than anywhere: this number changes ~7
+    // times a second while the user watches it to pick a threshold.
+    meterValue: { ...typeScale.metricSmall, fontSize: 13, color: t.text },
+    meterValueHot: { color: t.danger },
+    meterTrack: {
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: t.lineSoft,
+      overflow: 'visible',
+      justifyContent: 'center',
+    },
+    meterFill: { height: 10, borderRadius: 5 },
+    meterPeak: {
+      position: 'absolute',
+      width: 2,
+      height: 10,
+      backgroundColor: t.textFaint,
+    },
+    meterThreshold: {
+      position: 'absolute',
+      width: 3,
+      height: 18,
+      borderRadius: 2,
+      backgroundColor: t.text,
+    },
+    stepperWrap: { marginTop: space.sm },
+    stepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    stepperLabel: { ...typeScale.bodyStrong, color: t.text },
+    stepperControls: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+    stepperButton: {
+      width: 34,
+      height: 34,
+      borderRadius: radiusScale.pill,
+      borderWidth: StyleSheet.hairlineWidth * 2,
+      borderColor: t.brand,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    stepperValue: {
+      minWidth: 52,
+      textAlign: 'center',
+      ...typeScale.metricSmall,
+      color: t.text,
+    },
+    stepperHint: { ...typeScale.caption, color: t.textFaint, marginTop: 4 },
+    heardBox: {
+      backgroundColor: t.lineSoft,
+      borderRadius: radiusScale.sm,
+      padding: space.md,
+    },
+    heardLabel: { ...typeScale.overline, color: t.textFaint },
+    heardText: { ...typeScale.small, color: t.text, marginTop: 2, fontStyle: 'italic' },
+    testButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: space.sm,
+      backgroundColor: t.brand,
+      paddingVertical: space.md,
+      borderRadius: radiusScale.md,
+      marginTop: space.xs,
+    },
+    testButtonDisabled: { opacity: 0.6 },
+    testButtonText: { ...typeScale.label, color: t.onBrand },
+    linkRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space.sm,
+      paddingTop: space.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: t.lineSoft,
+    },
+    linkText: { flex: 1, ...typeScale.bodyStrong, color: t.brand },
+    empty: {
+      ...typeScale.small,
+      color: t.textFaint,
+      marginHorizontal: space.lg,
+    },
+    logRow: {
+      flexDirection: 'row',
+      gap: space.sm,
+      alignItems: 'flex-start',
+      backgroundColor: t.glassFill,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.glassBorder,
+      padding: space.md,
+      marginHorizontal: space.lg,
+      marginBottom: space.sm,
+      borderRadius: radiusScale.md,
+    },
+    logDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
+    logText: { ...typeScale.small, color: t.text },
+    logMeta: { ...typeScale.caption, color: t.textFaint, marginTop: 3 },
+  });

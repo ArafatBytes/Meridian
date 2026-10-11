@@ -1,7 +1,11 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Modal, TouchableOpacity, Alert, Animated, Easing, Platform } from 'react-native';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
-import { colors, spacing, typography } from '../theme';
+import { spacing, typography } from '../theme';
+import { useTheme } from '../theme/ThemeProvider';
+import { useStyles } from '../theme/useStyles';
+import type { Palette } from '../theme/palette';
+import { fontFamily } from '../theme/type';
 import { Ionicons } from '@expo/vector-icons';
 import {
     SOS_VIDEO_BITRATE,
@@ -22,6 +26,8 @@ export const SOSCameraModal: React.FC<SOSCameraModalProps> = ({
     onVideoRecorded,
     onError,
 }) => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
     const [permission, requestPermission] = useCameraPermissions();
     // `recordAsync` records audio by default, and on Android that needs the
     // RECORD_AUDIO **runtime** grant -- declaring it in the manifest is not
@@ -251,7 +257,7 @@ export const SOSCameraModal: React.FC<SOSCameraModalProps> = ({
             <Modal visible={visible} animationType="fade" transparent>
                 <View style={styles.container}>
                     <View style={styles.permissionCard}>
-                        <Ionicons name="camera" size={48} color={colors.textPrimary} style={{ marginBottom: 20 }} />
+                        <Ionicons name="camera" size={48} color={t.text} style={{ marginBottom: 20 }} />
                         <Text style={styles.permissionTitle}>Camera Access Required</Text>
                         <Text style={styles.permissionText}>Meridian needs camera access to record emergency evidence.</Text>
                         <TouchableOpacity style={styles.button} onPress={requestPermission}>
@@ -344,130 +350,132 @@ export const SOSCameraModal: React.FC<SOSCameraModalProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
     container: {
-        flex: 1,
-        backgroundColor: 'black',
+      flex: 1,
+      backgroundColor: 'black',
     },
     camera: {
-        ...StyleSheet.absoluteFill,  // RN 0.86 removed absoluteFillObject; absoluteFill is now the plain object
+      ...StyleSheet.absoluteFill,  // RN 0.86 removed absoluteFillObject; absoluteFill is now the plain object
     },
     overlay: {
-        ...StyleSheet.absoluteFill,  // RN 0.86 removed absoluteFillObject; absoluteFill is now the plain object
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'space-between',
-        padding: 30,
+      ...StyleSheet.absoluteFill,  // RN 0.86 removed absoluteFillObject; absoluteFill is now the plain object
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'space-between',
+      padding: 30,
     },
     topBar: {
-        alignItems: 'center',
-        marginTop: 60,
+      alignItems: 'center',
+      marginTop: 60,
     },
     badge: {
-        backgroundColor: 'rgba(239, 68, 68, 0.9)',
-        paddingVertical: 8,
-        paddingHorizontal: 20,
-        borderRadius: 30,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
+      backgroundColor: 'rgba(239, 68, 68, 0.9)',
+      paddingVertical: 8,
+      paddingHorizontal: 20,
+      borderRadius: 30,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.2)',
     },
     badgeText: {
-        color: 'white',
-        fontWeight: '600',
-        fontSize: 13,
-        letterSpacing: 2,
+      fontFamily: fontFamily.bodySemi,
+      color: 'white',
+      fontSize: 13,
+      letterSpacing: 2,
     },
     centerContent: {
-        alignItems: 'center',
-        justifyContent: 'center',
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     timerLarge: {
-        color: 'white',
-        fontSize: 120,
-        fontWeight: '200',
-        fontVariant: ['tabular-nums'],
-        textShadowColor: 'rgba(0,0,0,0.3)',
-        textShadowOffset: { width: 0, height: 2 },
-        textShadowRadius: 4,
+      color: 'white',
+      fontSize: 120,
+      fontWeight: '200',
+      fontVariant: ['tabular-nums'],
+      textShadowColor: 'rgba(0,0,0,0.3)',
+      textShadowOffset: { width: 0, height: 2 },
+      textShadowRadius: 4,
     },
     recordingIndicator: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 10,
-        backgroundColor: 'rgba(0,0,0,0.3)',
-        paddingVertical: 8,
-        paddingHorizontal: 16,
-        borderRadius: 20,
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 10,
+      backgroundColor: 'rgba(0,0,0,0.3)',
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 20,
     },
     redDot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-        backgroundColor: '#F87171',
-        marginRight: 10,
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: '#F87171',
+      marginRight: 10,
     },
     recordingText: {
-        color: '#E5E7EB',
-        fontSize: 16,
-        fontWeight: '500',
-        letterSpacing: 0.5,
+      fontFamily: fontFamily.bodyMedium,
+      color: '#E5E7EB',
+      fontSize: 16,
+      letterSpacing: 0.5,
     },
     bottomBar: {
-        alignItems: 'center',
-        marginBottom: 50,
+      alignItems: 'center',
+      marginBottom: 50,
     },
     footerText: {
-        color: 'rgba(255,255,255,0.6)',
-        fontSize: 14,
-        fontWeight: '500',
+      fontFamily: fontFamily.bodyMedium,
+      color: 'rgba(255,255,255,0.6)',
+      fontSize: 14,
     },
     permissionCard: {
-        backgroundColor: 'white',
-        padding: 30,
-        borderRadius: 16,
-        alignItems: 'center',
-        width: '85%',
-        alignSelf: 'center',
-        marginTop: '50%',
-        elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
+      backgroundColor: 'white',
+      padding: 30,
+      borderRadius: 16,
+      alignItems: 'center',
+      width: '85%',
+      alignSelf: 'center',
+      marginTop: '50%',
+      elevation: 5,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 12,
     },
     permissionTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        marginBottom: 10,
-        color: '#111827',
+      fontFamily: fontFamily.display,
+      fontSize: 20,
+      marginBottom: 10,
+      color: '#111827',
     },
     permissionText: {
-        textAlign: 'center',
-        color: '#6B7280',
-        marginBottom: 24,
-        lineHeight: 22,
-        fontSize: 16,
+      fontFamily: fontFamily.body,
+      textAlign: 'center',
+      color: '#6B7280',
+      marginBottom: 24,
+      lineHeight: 22,
+      fontSize: 16,
     },
     button: {
-        backgroundColor: '#111827',
-        paddingVertical: 14,
-        borderRadius: 12,
-        width: '100%',
-        alignItems: 'center',
-        marginBottom: 12,
+      backgroundColor: '#111827',
+      paddingVertical: 14,
+      borderRadius: 12,
+      width: '100%',
+      alignItems: 'center',
+      marginBottom: 12,
     },
     cancelButton: {
-        backgroundColor: 'transparent',
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
+      backgroundColor: 'transparent',
+      borderWidth: 1,
+      borderColor: '#E5E7EB',
     },
     buttonText: {
-        color: 'white',
-        fontWeight: '600',
-        fontSize: 16,
+      fontFamily: fontFamily.bodySemi,
+      color: 'white',
+      fontSize: 16,
     },
     buttonTextSecondary: {
-        color: '#374151',
-        fontWeight: '600',
-        fontSize: 16,
+      fontFamily: fontFamily.bodySemi,
+      color: '#374151',
+      fontSize: 16,
     }
-});
+  });

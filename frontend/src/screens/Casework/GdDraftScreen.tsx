@@ -31,7 +31,13 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, borderRadius, fontSize } from '../../theme';
+import { spacing, borderRadius, fontSize } from '../../theme';
+import { useTheme } from '../../theme/ThemeProvider';
+import { useStyles } from '../../theme/useStyles';
+import type { Palette } from '../../theme/palette';
+import { glassSurface } from '../../theme/surfaces';
+import { Aurora } from '../../components/motion';
+import { fontFamily } from '../../theme/type';
 import caseworkService, {
   Channel,
   channelsFor,
@@ -58,6 +64,8 @@ const FIELD_LABEL: Record<string, string> = {
 };
 
 const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const { reportId } = route.params;
 
@@ -260,20 +268,24 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
   if (loading) {
     return (
       <View style={styles.centre}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={t.brand} />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      {/* The ambient field, behind everything. `glassSurface` is a
+          translucent fill and needs something to be translucent over —
+          see the note in theme/surfaces.ts. */}
+      <Aurora intensity="ambient" />
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={t.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>General Diary</Text>
         <TouchableOpacity onPress={() => navigation.navigate('GdProfile')} style={styles.iconButton}>
-          <Ionicons name="person-circle-outline" size={24} color={colors.text} />
+          <Ionicons name="person-circle-outline" size={24} color={t.text} />
         </TouchableOpacity>
       </View>
 
@@ -289,7 +301,7 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
         {profileIncomplete && (
           <View style={[styles.card, styles.cardWarn]}>
             <View style={styles.warnHead}>
-              <Ionicons name="alert-circle-outline" size={20} color={colors.warning} />
+              <Ionicons name="alert-circle-outline" size={20} color={t.warn} />
               <Text style={styles.warnTitle}>Your GD details are missing</Text>
             </View>
             <Text style={styles.cardHint}>
@@ -307,7 +319,7 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
               style={styles.primaryButton}
               onPress={() => navigation.navigate('GdProfile')}
             >
-              <Ionicons name="person-add-outline" size={18} color={colors.white} />
+              <Ionicons name="person-add-outline" size={18} color={t.onBrand} />
               <Text style={styles.primaryButtonText}>Add your details</Text>
             </TouchableOpacity>
           </View>
@@ -318,7 +330,7 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
             <MaterialCommunityIcons
               name="file-document-edit-outline"
               size={44}
-              color={colors.primary}
+              color={t.brand}
             />
             <Text style={styles.emptyTitle}>Write the General Diary</Text>
             <Text style={styles.emptyBody}>
@@ -361,7 +373,7 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
                   value={thanaQuery}
                   onChangeText={setThanaQuery}
                   placeholder="Search police stations"
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor={t.textFaint}
                   autoFocus
                 />
                 {filteredThanas.map(name => (
@@ -459,12 +471,12 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
             ) : (
               <View style={[styles.card, styles.cardOk]}>
                 <View style={styles.thanaRow}>
-                  <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                  <Ionicons name="checkmark-circle" size={20} color={t.ok} />
                   <Text style={styles.approvedText}>Approved — ready to file</Text>
                 </View>
 
                 <TouchableOpacity style={styles.primaryButton} onPress={print}>
-                  <Ionicons name="print-outline" size={18} color={colors.white} />
+                  <Ionicons name="print-outline" size={18} color={t.onBrand} />
                   <Text style={styles.primaryButtonText}>Print the form</Text>
                 </TouchableOpacity>
                 <Text style={styles.cardHint}>
@@ -473,7 +485,7 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
                 </Text>
 
                 <TouchableOpacity style={styles.secondaryButton} onPress={copyNarrative}>
-                  <Ionicons name="copy-outline" size={18} color={colors.primary} />
+                  <Ionicons name="copy-outline" size={18} color={t.brand} />
                   <Text style={styles.secondaryButtonText}>Copy for the Online GD app</Text>
                 </TouchableOpacity>
                 <Text style={styles.cardHint}>
@@ -497,7 +509,7 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
                     value={gdNumber}
                     onChangeText={setGdNumber}
                     placeholder="GD no."
-                    placeholderTextColor={colors.textMuted}
+                    placeholderTextColor={t.textFaint}
                   />
                   <TouchableOpacity style={styles.saveSmall} onPress={saveGdNumber}>
                     <Text style={styles.saveSmallText}>Save</Text>
@@ -518,7 +530,7 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
                   style={styles.channel}
                   onPress={() => Linking.openURL(`tel:${channel.number.replace(/[^0-9+]/g, '')}`)}
                 >
-                  <Ionicons name="call-outline" size={18} color={colors.primary} />
+                  <Ionicons name="call-outline" size={18} color={t.brand} />
                   <View style={styles.channelText}>
                     <Text style={styles.channelLabel}>
                       {channel.label} · {channel.number}
@@ -540,7 +552,7 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
 
       {working && (
         <View style={styles.overlay}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={t.brand} />
           <Text style={styles.overlayText}>{working}</Text>
         </View>
       )}
@@ -548,221 +560,224 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  centre: {
-    flex: 1,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  iconButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: '700' },
-  body: { paddingHorizontal: spacing.md },
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    centre: {
+      flex: 1,
+      backgroundColor: t.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.md,
+      paddingBottom: spacing.sm,
+    },
+    iconButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+    headerTitle: { fontFamily: fontFamily.bodySemi, color: t.text, fontSize: fontSize.lg,},
+    body: { paddingHorizontal: spacing.md },
 
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    alignItems: 'center',
-    marginTop: spacing.lg,
-  },
-  emptyTitle: {
-    color: colors.text,
-    fontSize: fontSize.xl,
-    fontWeight: '700',
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  emptyBody: {
-    color: colors.textSecondary,
-    fontSize: fontSize.sm,
-    lineHeight: 21,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-  },
+    emptyCard: {
+      ...glassSurface(t),
+      padding: spacing.lg,
+      alignItems: 'center',
+      marginTop: spacing.lg,
+    },
+    emptyTitle: {
+      fontFamily: fontFamily.display,
+      color: t.text,
+      fontSize: fontSize.xl,
+      marginTop: spacing.md,
+      marginBottom: spacing.sm,
+    },
+    emptyBody: {
+      fontFamily: fontFamily.body,
+      color: t.textSoft,
+      fontSize: fontSize.sm,
+      lineHeight: 21,
+      textAlign: 'center',
+      marginBottom: spacing.lg,
+    },
 
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  cardWarn: { borderColor: colors.warning },
-  warnHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  warnTitle: { color: colors.warning, fontSize: fontSize.md, fontWeight: '700' },
-  cardOk: { borderColor: colors.success },
-  cardLabel: {
-    color: colors.textMuted,
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
-  },
-  cardHint: {
-    color: colors.textMuted,
-    fontSize: fontSize.xs,
-    lineHeight: 18,
-    marginTop: spacing.sm,
-  },
+    card: {
+      ...glassSurface(t),
+      padding: spacing.md,
+      marginBottom: spacing.md,
+    },
+    cardWarn: { borderColor: t.warn },
+    warnHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    warnTitle: { fontFamily: fontFamily.bodySemi, color: t.warn, fontSize: fontSize.md,},
+    cardOk: { borderColor: t.ok },
+    cardLabel: {
+      fontFamily: fontFamily.bodySemi,
+      color: t.textFaint,
+      fontSize: fontSize.xs,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: spacing.xs,
+    },
+    cardHint: {
+      fontFamily: fontFamily.body,
+      color: t.textFaint,
+      fontSize: fontSize.xs,
+      lineHeight: 18,
+      marginTop: spacing.sm,
+    },
 
-  thanaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  thanaName: { color: colors.text, fontSize: fontSize.md, fontWeight: '600', flex: 1 },
-  link: { color: colors.primary, fontSize: fontSize.sm, fontWeight: '600' },
-  linkStrong: { fontWeight: '700' },
-  thanaOption: {
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-  },
-  thanaOptionText: { color: colors.text, fontSize: fontSize.sm },
+    thanaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    thanaName: { fontFamily: fontFamily.bodySemi, color: t.text, fontSize: fontSize.md,flex: 1 },
+    link: { fontFamily: fontFamily.bodySemi, color: t.brand, fontSize: fontSize.sm,},
+    linkStrong: { fontFamily: fontFamily.bodySemi,},
+    thanaOption: {
+      paddingVertical: spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: t.lineSoft,
+    },
+    thanaOptionText: { fontFamily: fontFamily.body, color: t.text, fontSize: fontSize.sm },
 
-  narrative: {
-    color: colors.text,
-    fontSize: fontSize.md,
-    lineHeight: 30,
-    marginTop: spacing.sm,
-  },
-  narrativeInput: {
-    color: colors.text,
-    fontSize: fontSize.md,
-    lineHeight: 28,
-    marginTop: spacing.sm,
-    minHeight: 200,
-    backgroundColor: colors.glassDark,
-    borderRadius: borderRadius.md,
-    padding: spacing.sm,
-  },
-  editActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.lg,
-    marginTop: spacing.sm,
-  },
-  summary: {
-    color: colors.textMuted,
-    fontSize: fontSize.xs,
-    fontStyle: 'italic',
-    lineHeight: 18,
-    marginTop: spacing.md,
-  },
-  missingItem: {
-    color: colors.textSecondary,
-    fontSize: fontSize.sm,
-    lineHeight: 22,
-  },
+    narrative: {
+      fontFamily: fontFamily.body,
+      color: t.text,
+      fontSize: fontSize.md,
+      lineHeight: 30,
+      marginTop: spacing.sm,
+    },
+    narrativeInput: {
+      fontFamily: fontFamily.body,
+      color: t.text,
+      fontSize: fontSize.md,
+      lineHeight: 28,
+      marginTop: spacing.sm,
+      minHeight: 200,
+      backgroundColor: t.lineSoft,
+      borderRadius: borderRadius.md,
+      padding: spacing.sm,
+    },
+    editActions: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      gap: spacing.lg,
+      marginTop: spacing.sm,
+    },
+    summary: {
+      fontFamily: fontFamily.body,
+      color: t.textFaint,
+      fontSize: fontSize.xs,
+      fontStyle: 'italic',
+      lineHeight: 18,
+      marginTop: spacing.md,
+    },
+    missingItem: {
+      fontFamily: fontFamily.body,
+      color: t.textSoft,
+      fontSize: fontSize.sm,
+      lineHeight: 22,
+    },
 
-  primaryButton: {
-    flexDirection: 'row',
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    // The empty card centres its children, which makes anything inside it
-    // shrink-wrap to its text. Without this the label sits against the button's
-    // own edges.
-    alignSelf: 'stretch',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  primaryButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  buttonDisabled: { backgroundColor: colors.surfaceHover },
-  blockedReason: {
-    color: colors.warning,
-    fontSize: fontSize.xs,
-    marginTop: spacing.sm,
-    textAlign: 'center',
-  },
-  secondaryButton: {
-    flexDirection: 'row',
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'stretch',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  secondaryButtonText: { color: colors.primary, fontSize: fontSize.md, fontWeight: '700' },
-  approvedText: {
-    color: colors.success,
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    marginLeft: spacing.sm,
-    flex: 1,
-  },
+    primaryButton: {
+      flexDirection: 'row',
+      backgroundColor: t.brand,
+      borderRadius: borderRadius.md,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      // The empty card centres its children, which makes anything inside it
+      // shrink-wrap to its text. Without this the label sits against the button's
+      // own edges.
+      alignSelf: 'stretch',
+      gap: spacing.sm,
+      marginTop: spacing.md,
+    },
+    primaryButtonText: {
+      fontFamily: fontFamily.bodySemi,
+      color: t.onBrand,
+      fontSize: fontSize.md,
+      textAlign: 'center',
+    },
+    buttonDisabled: { backgroundColor: t.surfaceRaised },
+    blockedReason: {
+      fontFamily: fontFamily.body,
+      color: t.warn,
+      fontSize: fontSize.xs,
+      marginTop: spacing.sm,
+      textAlign: 'center',
+    },
+    secondaryButton: {
+      flexDirection: 'row',
+      borderWidth: 1,
+      borderColor: t.brand,
+      borderRadius: borderRadius.md,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      alignSelf: 'stretch',
+      gap: spacing.sm,
+      marginTop: spacing.md,
+    },
+    secondaryButtonText: { fontFamily: fontFamily.bodySemi, color: t.brand, fontSize: fontSize.md,},
+    approvedText: {
+      fontFamily: fontFamily.bodySemi,
+      color: t.ok,
+      fontSize: fontSize.md,
+      marginLeft: spacing.sm,
+      flex: 1,
+    },
 
-  input: {
-    backgroundColor: colors.glassDark,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    color: colors.text,
-    fontSize: fontSize.md,
-  },
-  gdNumberRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
-  gdNumberInput: { flex: 1 },
-  saveSmall: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
-    justifyContent: 'center',
-  },
-  saveSmallText: { color: colors.white, fontWeight: '700' },
-  recorded: { color: colors.success, fontSize: fontSize.sm, marginTop: spacing.sm },
+    input: {
+      fontFamily: fontFamily.body,
+      backgroundColor: t.lineSoft,
+      borderWidth: 1,
+      borderColor: t.line,
+      borderRadius: borderRadius.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm + 2,
+      color: t.text,
+      fontSize: fontSize.md,
+    },
+    gdNumberRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+    gdNumberInput: { flex: 1 },
+    saveSmall: {
+      backgroundColor: t.brand,
+      borderRadius: borderRadius.md,
+      paddingHorizontal: spacing.lg,
+      justifyContent: 'center',
+    },
+    saveSmallText: { fontFamily: fontFamily.bodySemi, color: t.onBrand,},
+    recorded: { fontFamily: fontFamily.body, color: t.ok, fontSize: fontSize.sm, marginTop: spacing.sm },
 
-  channel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-  },
-  channelText: { marginLeft: spacing.sm, flex: 1 },
-  channelLabel: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
-  channelReason: { color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 },
+    channel: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: t.lineSoft,
+    },
+    channelText: { marginLeft: spacing.sm, flex: 1 },
+    channelLabel: { fontFamily: fontFamily.bodySemi, color: t.text, fontSize: fontSize.sm,},
+    channelReason: { fontFamily: fontFamily.body, color: t.textFaint, fontSize: fontSize.xs, marginTop: 1 },
 
-  regenerate: { alignItems: 'center', paddingVertical: spacing.md },
+    regenerate: { alignItems: 'center', paddingVertical: spacing.md },
 
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.78)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  overlayText: { color: colors.text, marginTop: spacing.md, fontSize: fontSize.sm },
-});
+    overlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(15, 23, 42, 0.78)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    overlayText: { fontFamily: fontFamily.body, color: t.text, marginTop: spacing.md, fontSize: fontSize.sm },
+  });
 
 export default GdDraftScreen;

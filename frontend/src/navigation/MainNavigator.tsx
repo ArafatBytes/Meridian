@@ -1,9 +1,8 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MainTabParamList } from '../types';
-import { colors } from '../theme';
+import TabBar from './TabBar';
 
 // Import screens and navigators
 import HomeScreen from '../screens/Home/HomeScreen';
@@ -74,36 +73,34 @@ const ProfileIcon = ({
   />
 );
 
+/**
+ * The four tabs.
+ *
+ * `tabBar` replaces the stock bar with `TabBar` — floating, blurred, iOS-style.
+ * That file explains why it is hand-built; the short version is that the stock
+ * bar cannot detach from the bottom edge, and glass needs something behind it.
+ *
+ * Two consequences of the bar now floating *over* content rather than sitting
+ * beneath it:
+ *
+ * * `tabBarStyle` and the tint options are gone. Colour comes from `useTheme()`
+ *   inside `TabBar`, so it follows dark mode; the old options read a
+ *   module-level `colors` and could not.
+ * * A screen at the root of a tab has to reserve room at the bottom or its last
+ *   row sits under the bar. That number is `TAB_BAR_CLEARANCE` in
+ *   `navigation/metrics.ts` — a leaf module, because exporting it from here put
+ *   four require cycles in the bundle. A *pushed* screen needs nothing: the bar
+ *   slides out of the way, see `TabBar`.
+ */
 const MainNavigator: React.FC = () => {
-  const insets = useSafeAreaInsets();
-
   return (
     <Tab.Navigator
+      tabBar={(props) => <TabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSecondary,
-        tabBarStyle: {
-          backgroundColor: colors.white,
-          borderTopWidth: 1,
-          borderTopColor: colors.border,
-          paddingBottom: insets.bottom,
-          paddingTop: 8,
-          height: 54 + insets.bottom,
-          elevation: 8,
-          shadowColor: colors.shadowDark,
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 8,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-          marginTop: 4,
-        },
-        tabBarIconStyle: {
-          marginTop: 4,
-        },
+        // Kept so content can scroll behind the floating bar instead of being
+        // clipped above it — the blur has nothing to work with otherwise.
+        tabBarStyle: { position: 'absolute' },
       }}
     >
       <Tab.Screen

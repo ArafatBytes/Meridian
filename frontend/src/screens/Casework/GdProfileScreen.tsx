@@ -21,7 +21,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, borderRadius, fontSize } from '../../theme';
+import { spacing, borderRadius, fontSize } from '../../theme';
+import { useTheme } from '../../theme/ThemeProvider';
+import { useStyles } from '../../theme/useStyles';
+import type { Palette } from '../../theme/palette';
+import { glassSurface } from '../../theme/surfaces';
+import { Aurora } from '../../components/motion';
+import { fontFamily } from '../../theme/type';
 import caseworkService, { GdProfile } from '../../services/casework.service';
 
 interface Props {
@@ -82,6 +88,8 @@ const FIELDS: Array<{
 ];
 
 const GdProfileScreen: React.FC<Props> = ({ navigation }) => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<Partial<GdProfile>>({});
   const [loading, setLoading] = useState(true);
@@ -110,7 +118,7 @@ const GdProfileScreen: React.FC<Props> = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.centre}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={t.brand} />
       </View>
     );
   }
@@ -120,9 +128,13 @@ const GdProfileScreen: React.FC<Props> = ({ navigation }) => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {/* The ambient field, behind everything. `glassSurface` is a translucent
+          fill and needs something to be translucent over — see the note in
+          theme/surfaces.ts. */}
+      <Aurora intensity="ambient" />
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={t.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>GD details</Text>
         <View style={styles.back} />
@@ -146,7 +158,7 @@ const GdProfileScreen: React.FC<Props> = ({ navigation }) => {
               value={(profile[field.key] as string) ?? ''}
               onChangeText={value => setProfile(p => ({ ...p, [field.key]: value }))}
               placeholder={field.placeholder}
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={t.textFaint}
               multiline={field.multiline}
               keyboardType={
                 field.key === 'gd_nid' || field.key === 'phone'
@@ -168,7 +180,7 @@ const GdProfileScreen: React.FC<Props> = ({ navigation }) => {
           disabled={saving}
         >
           {saving ? (
-            <ActivityIndicator color={colors.white} />
+            <ActivityIndicator color={t.onBrand} />
           ) : (
             <Text style={styles.saveText}>Save</Text>
           )}
@@ -178,64 +190,66 @@ const GdProfileScreen: React.FC<Props> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  centre: {
-    flex: 1,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  back: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: '700' },
-  body: { paddingHorizontal: spacing.md },
-  intro: {
-    color: colors.textSecondary,
-    fontSize: fontSize.sm,
-    lineHeight: 20,
-    marginBottom: spacing.lg,
-  },
-  field: { marginBottom: spacing.md },
-  labelBn: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
-  labelEn: {
-    color: colors.textMuted,
-    fontSize: fontSize.xs,
-    marginTop: 2,
-    marginBottom: spacing.xs,
-  },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    color: colors.text,
-    fontSize: fontSize.md,
-  },
-  inputMultiline: { minHeight: 76, textAlignVertical: 'top' },
-  note: {
-    color: colors.textMuted,
-    fontSize: fontSize.xs,
-    lineHeight: 18,
-    marginTop: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  save: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  saveDisabled: { opacity: 0.6 },
-  saveText: { color: colors.white, fontSize: fontSize.md, fontWeight: '700' },
-});
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    centre: {
+      flex: 1,
+      backgroundColor: t.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.md,
+      paddingBottom: spacing.sm,
+    },
+    back: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+    headerTitle: { fontFamily: fontFamily.bodySemi, color: t.text, fontSize: fontSize.lg,},
+    body: { paddingHorizontal: spacing.md },
+    intro: {
+      fontFamily: fontFamily.body,
+      color: t.textSoft,
+      fontSize: fontSize.sm,
+      lineHeight: 20,
+      marginBottom: spacing.lg,
+    },
+    field: { marginBottom: spacing.md },
+    labelBn: { fontFamily: fontFamily.bodySemi, color: t.text, fontSize: fontSize.md,},
+    labelEn: {
+      fontFamily: fontFamily.body,
+      color: t.textFaint,
+      fontSize: fontSize.xs,
+      marginTop: 2,
+      marginBottom: spacing.xs,
+    },
+    input: {
+      ...glassSurface(t),
+      fontFamily: fontFamily.body,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm + 2,
+      color: t.text,
+      fontSize: fontSize.md,
+    },
+    inputMultiline: { minHeight: 76, textAlignVertical: 'top' },
+    note: {
+      fontFamily: fontFamily.body,
+      color: t.textFaint,
+      fontSize: fontSize.xs,
+      lineHeight: 18,
+      marginTop: spacing.sm,
+      marginBottom: spacing.lg,
+    },
+    save: {
+      backgroundColor: t.brand,
+      borderRadius: borderRadius.md,
+      paddingVertical: spacing.md,
+      alignItems: 'center',
+    },
+    saveDisabled: { opacity: 0.6 },
+    saveText: { fontFamily: fontFamily.bodySemi, color: t.onBrand, fontSize: fontSize.md,},
+  });
 
 export default GdProfileScreen;

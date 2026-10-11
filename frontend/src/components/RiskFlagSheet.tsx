@@ -9,7 +9,11 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, borderRadius, fontSize } from '../theme';
+import { spacing, borderRadius, fontSize } from '../theme';
+import { useTheme } from '../theme/ThemeProvider';
+import { useStyles } from '../theme/useStyles';
+import type { Palette } from '../theme/palette';
+import { fontFamily } from '../theme/type';
 import type { RiskFlag } from '../types/contracts/risk';
 import {
   clockTime,
@@ -145,6 +149,7 @@ function agoText(iso: string | null, from: string | null): string | null {
 const isWebLink = (url: string) => /^https?:\/\//.test(url);
 
 function Row({ label, value }: { label: string; value: string }) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -154,6 +159,8 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 const RiskFlagSheet: React.FC<RiskFlagSheetProps> = ({ flag, asOf, onClose }) => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
   if (!flag) return null;
 
   const band = riskBand(flag.severityNow);
@@ -176,7 +183,7 @@ const RiskFlagSheet: React.FC<RiskFlagSheetProps> = ({ flag, asOf, onClose }) =>
             <View style={[styles.severityDot, { backgroundColor: band.color }]} />
             <Text style={styles.statement}>{flag.mobilityStatement}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton} hitSlop={12}>
-              <Ionicons name="close" size={22} color={colors.textSecondary} />
+              <Ionicons name="close" size={22} color={t.textSoft} />
             </TouchableOpacity>
           </View>
 
@@ -194,20 +201,20 @@ const RiskFlagSheet: React.FC<RiskFlagSheetProps> = ({ flag, asOf, onClose }) =>
                 styles.badge,
                 {
                   backgroundColor: isConfirmed
-                    ? `${colors.success}22`
-                    : colors.surfaceVariant,
+                    ? `${t.ok}22`
+                    : t.lineSoft,
                 },
               ]}
             >
               <Ionicons
                 name={isConfirmed ? 'checkmark-circle' : 'help-circle-outline'}
                 size={13}
-                color={isConfirmed ? colors.success : colors.textSecondary}
+                color={isConfirmed ? t.ok : t.textSoft}
               />
               <Text
                 style={[
                   styles.badgeText,
-                  { color: isConfirmed ? colors.success : colors.textSecondary },
+                  { color: isConfirmed ? t.ok : t.textSoft },
                 ]}
               >
                 {/* The count is read from the flag, not assumed. D05 made
@@ -227,9 +234,9 @@ const RiskFlagSheet: React.FC<RiskFlagSheetProps> = ({ flag, asOf, onClose }) =>
             </View>
 
             {isScheduled && (
-              <View style={[styles.badge, { backgroundColor: `${colors.info}22` }]}>
-                <Ionicons name="calendar-outline" size={13} color={colors.info} />
-                <Text style={[styles.badgeText, { color: colors.info }]}>Scheduled</Text>
+              <View style={[styles.badge, { backgroundColor: `${t.info}22` }]}>
+                <Ionicons name="calendar-outline" size={13} color={t.info} />
+                <Text style={[styles.badgeText, { color: t.info }]}>Scheduled</Text>
               </View>
             )}
           </View>
@@ -355,116 +362,120 @@ const RiskFlagSheet: React.FC<RiskFlagSheetProps> = ({ flag, asOf, onClose }) =>
   );
 };
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: colors.overlay,
-  },
-  sheet: {
-    backgroundColor: colors.backgroundLight,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    paddingTop: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
-    maxHeight: '75%',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  severityDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: spacing.sm,
-  },
-  statement: {
-    flex: 1,
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  closeButton: {
-    marginLeft: spacing.sm,
-    padding: spacing.xs,
-  },
-  badges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginBottom: spacing.md,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: borderRadius.full,
-  },
-  badgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-  },
-  body: {
-    flexGrow: 0,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.divider,
-  },
-  rowLabel: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
-  rowValue: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  sources: {
-    marginTop: spacing.lg,
-  },
-  sourcesHeading: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
-  },
-  source: {
-    paddingVertical: spacing.xs,
-  },
-  sourceId: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  sourceTitle: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-  },
-  sourceTitleLink: {
-    color: colors.primary,
-  },
-  sourceAgo: {
-    fontWeight: '400',
-    color: colors.textSecondary,
-  },
-  footnote: {
-    marginTop: spacing.lg,
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    lineHeight: 16,
-  },
-});
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    overlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: t.scrim,
+    },
+    sheet: {
+      backgroundColor: t.surface,
+      borderTopLeftRadius: borderRadius.xl,
+      borderTopRightRadius: borderRadius.xl,
+      paddingTop: spacing.md,
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.xl,
+      maxHeight: '75%',
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: spacing.sm,
+    },
+    severityDot: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      marginRight: spacing.sm,
+    },
+    statement: {
+      fontFamily: fontFamily.bodySemi,
+      flex: 1,
+      fontSize: fontSize.lg,
+      color: t.text,
+    },
+    closeButton: {
+      marginLeft: spacing.sm,
+      padding: spacing.xs,
+    },
+    badges: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.xs,
+      marginBottom: spacing.md,
+    },
+    badge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 4,
+      borderRadius: borderRadius.full,
+    },
+    badgeText: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.xs,
+    },
+    body: {
+      flexGrow: 0,
+    },
+    row: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: t.line,
+    },
+    rowLabel: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.sm,
+      color: t.textSoft,
+    },
+    rowValue: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.sm,
+      color: t.text,
+    },
+    sources: {
+      marginTop: spacing.lg,
+    },
+    sourcesHeading: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.xs,
+      color: t.textSoft,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: spacing.xs,
+    },
+    source: {
+      paddingVertical: spacing.xs,
+    },
+    sourceId: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.sm,
+      color: t.text,
+    },
+    sourceTitle: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.xs,
+      color: t.textSoft,
+    },
+    sourceTitleLink: {
+      color: t.brand,
+    },
+    sourceAgo: {
+      fontFamily: fontFamily.body,
+      color: t.textSoft,
+    },
+    footnote: {
+      fontFamily: fontFamily.body,
+      marginTop: spacing.lg,
+      fontSize: fontSize.xs,
+      color: t.textFaint,
+      lineHeight: 16,
+    },
+  });
 
 export default RiskFlagSheet;

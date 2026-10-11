@@ -7,11 +7,18 @@
  */
 import React from 'react';
 import { View, Text, StyleSheet, Modal, ActivityIndicator } from 'react-native';
-import { colors, spacing, borderRadius, typography, shadows } from '../../theme';
+import { spacing, borderRadius, typography, shadows } from '../../theme';
+import { useTheme } from '../../theme/ThemeProvider';
+import { useStyles } from '../../theme/useStyles';
+import type { Palette } from '../../theme/palette';
+import { fontFamily } from '../../theme/type';
 import { SOSCameraModal } from '../../components/SOSCameraModal';
 import type { SosController } from './useSOS';
 
-export const SOSFlow: React.FC<{ sos: SosController }> = ({ sos }) => (
+export const SOSFlow: React.FC<{ sos: SosController }> = ({ sos }) => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
+  return (
   <>
     <SOSCameraModal
       visible={sos.cameraVisible}
@@ -23,7 +30,7 @@ export const SOSFlow: React.FC<{ sos: SosController }> = ({ sos }) => (
     <Modal transparent visible={sos.sending}>
       <View style={styles.overlay}>
         <View style={styles.card}>
-          <ActivityIndicator size="large" color={colors.danger} />
+          <ActivityIndicator size="large" color={t.danger} />
           <Text style={styles.title}>
             {sos.stage === 'sending' ? 'Alerting your contacts...' : 'Uploading Evidence...'}
           </Text>
@@ -43,49 +50,51 @@ export const SOSFlow: React.FC<{ sos: SosController }> = ({ sos }) => (
     </Modal>
   </>
 );
+};
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  card: {
-    backgroundColor: colors.white,
-    padding: spacing.xl,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    ...shadows.lg,
-  },
-  title: {
-    ...typography.h4,
-    color: colors.text,
-    marginTop: spacing.md,
-    fontWeight: 'bold',
-  },
-  subtitle: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  barTrack: {
-    width: 200,
-    height: 8,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 4,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 4,
-  },
-  percent: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
-});
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    card: {
+      backgroundColor: t.surface,
+      padding: spacing.xl,
+      borderRadius: borderRadius.md,
+      alignItems: 'center',
+      ...shadows.lg,
+    },
+    title: {
+      ...typography.h4,
+       fontFamily: fontFamily.bodySemi,
+      color: t.text,
+      marginTop: spacing.md,
+    },
+    subtitle: {
+      ...typography.bodySmall,
+      color: t.textSoft,
+      textAlign: 'center',
+    },
+    barTrack: {
+      width: 200,
+      height: 8,
+      backgroundColor: '#E5E7EB',
+      borderRadius: 4,
+      marginTop: spacing.md,
+      marginBottom: spacing.xs,
+      overflow: 'hidden',
+    },
+    barFill: {
+      height: '100%',
+      backgroundColor: t.brand,
+      borderRadius: 4,
+    },
+    percent: {
+      ...typography.caption,
+      color: t.textSoft,
+      marginBottom: spacing.sm,
+    },
+  });

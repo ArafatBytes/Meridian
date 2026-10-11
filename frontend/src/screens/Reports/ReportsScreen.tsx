@@ -9,13 +9,24 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { ReportsStackParamList } from '../../types';
-import { colors, spacing, borderRadius, fontSize } from '../../theme';
+import { spacing, borderRadius, fontSize } from '../../theme';
+import { useTheme } from '../../theme/ThemeProvider';
+import { useStyles } from '../../theme/useStyles';
+import type { Palette } from '../../theme/palette';
+import { glassSurface } from '../../theme/surfaces';
+import { Aurora } from '../../components/motion';
+import { fontFamily } from '../../theme/type';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TAB_BAR_CLEARANCE } from '../../navigation/metrics';
 import { supabase } from '../../lib/supabase';
 import { crimeService } from '../../services/crime.service';
+
+// @ts-ignore - generated types fight `style` in this RN version
+const Grad = LinearGradient as any;
 
 type ReportsScreenNavigationProp = NativeStackNavigationProp<
   ReportsStackParamList,
@@ -37,6 +48,8 @@ interface Report {
 }
 
 const ReportsScreen: React.FC<Props> = ({ navigation }) => {
+  const { t, g } = useTheme();
+  const styles = useStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,13 +141,13 @@ const ReportsScreen: React.FC<Props> = ({ navigation }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'verified':
-        return colors.success;
+        return t.ok;
       case 'investigating':
-        return colors.info;
+        return t.info;
       case 'resolved':
-        return colors.primary;
+        return t.brand;
       default:
-        return colors.warning;
+        return t.warn;
     }
   };
 
@@ -166,13 +179,13 @@ const ReportsScreen: React.FC<Props> = ({ navigation }) => {
 
       {/* Location - truncated to 2 lines */}
       <Text style={styles.location} numberOfLines={2} ellipsizeMode="tail">
-        <Ionicons name="location" size={14} color={colors.textSecondary} />
+        <Ionicons name="location" size={14} color={t.textSoft} />
         {' ' + truncateLocation(item.location_name)}
       </Text>
 
       {/* Date and Time */}
       <Text style={styles.date}>
-        <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
+        <Ionicons name="time-outline" size={14} color={t.textSoft} />
         {' ' + formatDateTime(item.incident_date_time)}
       </Text>
     </TouchableOpacity>
@@ -180,19 +193,27 @@ const ReportsScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+      {/* The ambient field, behind everything. `glassSurface` is a
+          translucent fill and needs something to be translucent over —
+          see the note in theme/surfaces.ts. */}
+      <Aurora intensity="ambient" />
+      <Grad
+        colors={g.aurora}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <Text style={styles.title}>My Reports</Text>
         <TouchableOpacity
           style={styles.addButton}
           onPress={() => navigation.navigate('AddReport')}
         >
-          <Ionicons name="add" size={24} color={colors.white} />
+          <Ionicons name="add" size={24} color={t.onBrand} />
         </TouchableOpacity>
-      </View>
+      </Grad>
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={t.brand} />
           <Text style={styles.loadingText}>Loading reports...</Text>
         </View>
       ) : (
@@ -202,14 +223,14 @@ const ReportsScreen: React.FC<Props> = ({ navigation }) => {
           keyExtractor={item => item.id}
           contentContainerStyle={[
             styles.list,
-            { paddingBottom: insets.bottom },
+            { paddingBottom: insets.bottom + TAB_BAR_CLEARANCE },
           ]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
+              colors={[t.brand]}
+              tintColor={t.brand}
             />
           }
           ListEmptyComponent={
@@ -217,7 +238,7 @@ const ReportsScreen: React.FC<Props> = ({ navigation }) => {
               <MaterialCommunityIcons
                 name="file-document-alert-outline"
                 size={64}
-                color={colors.gray400}
+                color={t.textFaint}
               />
               <Text style={styles.emptyText}>
                 {error ? error : 'No reports yet'}
@@ -235,116 +256,119 @@ const ReportsScreen: React.FC<Props> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacing.lg,
-    backgroundColor: colors.primary,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.white,
-  },
-  addButton: {
-    backgroundColor: colors.secondary,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  list: {
-    padding: spacing.lg,
-  },
-  reportCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    elevation: 2,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  reportHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  categoryBadge: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: borderRadius.sm,
-  },
-  categoryText: {
-    color: colors.white,
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-  },
-  statusBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: borderRadius.sm,
-  },
-  statusText: {
-    color: colors.white,
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  reportTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: spacing.xs,
-  },
-  location: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-    lineHeight: 18,
-  },
-  date: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xxl,
-  },
-  emptyText: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginTop: spacing.md,
-  },
-  emptySubtext: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-    textAlign: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: spacing.xxl,
-  },
-  loadingText: {
-    marginTop: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-  },
-});
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: t.bg,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: spacing.lg,
+    },
+    title: {
+      fontFamily: fontFamily.display,
+      fontSize: 24,
+      color: t.onBrand,
+    },
+    addButton: {
+      backgroundColor: t.accent,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    list: {
+      padding: spacing.lg,
+    },
+    reportCard: {
+      ...glassSurface(t),
+      padding: spacing.md,
+      marginBottom: spacing.md,
+      elevation: 2,
+      shadowColor: t.shadow,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+    },
+    reportHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: spacing.sm,
+    },
+    categoryBadge: {
+      backgroundColor: t.brand,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 4,
+      borderRadius: borderRadius.sm,
+    },
+    categoryText: {
+      fontFamily: fontFamily.bodySemi,
+      color: t.onBrand,
+      fontSize: fontSize.sm,
+    },
+    statusBadge: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 4,
+      borderRadius: borderRadius.sm,
+    },
+    statusText: {
+      fontFamily: fontFamily.bodySemi,
+      color: t.onBrand,
+      fontSize: fontSize.sm,
+      textTransform: 'capitalize',
+    },
+    reportTitle: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.lg,
+      color: t.text,
+      marginBottom: spacing.xs,
+    },
+    location: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.sm,
+      color: t.textSoft,
+      marginBottom: spacing.xs,
+      lineHeight: 18,
+    },
+    date: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.sm,
+      color: t.textSoft,
+    },
+    emptyContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: spacing.xxl,
+    },
+    emptyText: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.lg,
+      color: t.textSoft,
+      marginTop: spacing.md,
+    },
+    emptySubtext: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.md,
+      color: t.textSoft,
+      marginTop: spacing.sm,
+      textAlign: 'center',
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingVertical: spacing.xxl,
+    },
+    loadingText: {
+      fontFamily: fontFamily.body,
+      marginTop: spacing.md,
+      fontSize: fontSize.md,
+      color: t.textSoft,
+    },
+  });
 
 export default ReportsScreen;

@@ -1,21 +1,51 @@
+/**
+ * Register. Same material and motion as Login, five fields instead of two.
+ *
+ * ## The validation rules are unchanged, including the Bangladesh one
+ *
+ * `^01[3-9]\d{8}$` — eleven digits, `01`, then an operator digit 3–9. That is
+ * the real shape of a Bangladeshi mobile number and it is the right strictness
+ * for this app: the number is what an emergency contact is reached on, so a
+ * typo here is a failed SOS later. The field's `maxLength={11}` and
+ * `keyboardType="phone-pad"` are kept for the same reason.
+ *
+ * The one thing added is a hint under the label, because a rule the user cannot
+ * see is a rule they can only discover by failing it.
+ *
+ * ## All five errors land at once
+ *
+ * `validateForm` fills one `errors` object and sets it in a single update, so
+ * submitting an empty form marks every field rather than walking the user
+ * through them one at a time. That is why `Field` reserves space for its error
+ * row — without it, five messages appearing together would shunt the whole form
+ * down the screen as the user reads it.
+ */
+
 import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
+  Pressable,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { AuthStackParamList } from '../../types';
 import { useAuthStore } from '../../store';
-import { colors, spacing, borderRadius, fontSize } from '../../theme';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../../theme/ThemeProvider';
+import { onGradient } from '../../theme/type';
+import { Aurora, Glass, Reveal, Pressable3D, ThemeToggle } from '../../components/motion';
+import { Field } from '../../components/Field';
 import LoadingScreen from './LoadingScreen';
+
+// @ts-ignore - generated types fight `style` in this RN version
+const Grad = LinearGradient as any;
 
 type RegisterScreenNavigationProp = NativeStackNavigationProp<
   AuthStackParamList,
@@ -27,6 +57,7 @@ interface Props {
 }
 
 const RegisterScreen: React.FC<Props> = ({ navigation }) => {
+  const { t, g, type, space, radius } = useTheme();
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -105,7 +136,7 @@ const RegisterScreen: React.FC<Props> = ({ navigation }) => {
 
         // Now set authenticated state to trigger navigation
         setAuthenticated(user);
-      } catch (err) {
+      } catch {
         // Hide loading screen on error
         isLoadingRef.current = false;
         setShowLoading(false);
@@ -125,217 +156,157 @@ const RegisterScreen: React.FC<Props> = ({ navigation }) => {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: insets.top, paddingBottom: insets.bottom + 20 },
-        ]}
-        keyboardShouldPersistTaps="handled"
+    <Aurora intensity="vivid" style={styles.fill}>
+      <KeyboardAvoidingView
+        style={styles.fill}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Sign up to get started</Text>
+        <View style={[styles.toggle, { top: insets.top + space.sm, right: space.lg }]}>
+          <ThemeToggle size={38} />
         </View>
 
-        <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Full Name</Text>
-            <TextInput
-              style={[styles.input, errors.fullName ? styles.inputError : null]}
-              placeholder="Enter your full name"
-              placeholderTextColor={colors.gray400}
-              value={formData.fullName}
-              onChangeText={text => updateField('fullName', text)}
-              autoCapitalize="words"
-            />
-            {errors.fullName ? (
-              <Text style={styles.errorText}>{errors.fullName}</Text>
-            ) : null}
-          </View>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              padding: space.lg,
+              paddingTop: insets.top + space.huge,
+              paddingBottom: insets.bottom + space.xl,
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Reveal index={0} from="scale">
+            <View style={[styles.brand, { marginBottom: space.xl }]}>
+              <Grad
+                colors={g.aurora}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.mark, { borderRadius: radius.card }]}
+              >
+                <Ionicons name="shield-checkmark" size={30} color="#FFFFFF" />
+              </Grad>
+              <Text style={[type.hero, { color: t.text, marginTop: space.lg }]}>
+                Create account
+              </Text>
+              <Text style={[type.body, { color: t.textSoft, marginTop: space.xs }]}>
+                Sign up to get started
+              </Text>
+            </View>
+          </Reveal>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={[styles.input, errors.email ? styles.inputError : null]}
-              placeholder="Enter your email"
-              placeholderTextColor={colors.gray400}
-              value={formData.email}
-              onChangeText={text => updateField('email', text)}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {errors.email ? (
-              <Text style={styles.errorText}>{errors.email}</Text>
-            ) : null}
-          </View>
+          <Reveal index={1}>
+            <Glass padding={space.lg} radius={radius.sheet} elevated>
+              <Field
+                label="Full name"
+                placeholder="Your full name"
+                value={formData.fullName}
+                onChangeText={text => updateField('fullName', text)}
+                error={errors.fullName}
+                autoCapitalize="words"
+              />
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Phone Number</Text>
-            <TextInput
-              style={[styles.input, errors.phone ? styles.inputError : null]}
-              placeholder="01XXXXXXXXX"
-              placeholderTextColor={colors.gray400}
-              value={formData.phone}
-              onChangeText={text => updateField('phone', text)}
-              keyboardType="phone-pad"
-              maxLength={11}
-            />
-            {errors.phone ? (
-              <Text style={styles.errorText}>{errors.phone}</Text>
-            ) : null}
-          </View>
+              <Field
+                label="Email"
+                placeholder="you@example.com"
+                value={formData.email}
+                onChangeText={text => updateField('email', text)}
+                error={errors.email}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={[styles.input, errors.password ? styles.inputError : null]}
-              placeholder="Create a password"
-              placeholderTextColor={colors.gray400}
-              value={formData.password}
-              onChangeText={text => updateField('password', text)}
-              secureTextEntry
-              autoCapitalize="none"
-            />
-            {errors.password ? (
-              <Text style={styles.errorText}>{errors.password}</Text>
-            ) : null}
-          </View>
+              <Field
+                // The format is stated up front rather than enforced silently.
+                label="Phone number"
+                placeholder="01XXXXXXXXX"
+                value={formData.phone}
+                onChangeText={text => updateField('phone', text)}
+                error={errors.phone}
+                keyboardType="phone-pad"
+                maxLength={11}
+              />
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Confirm Password</Text>
-            <TextInput
-              style={[
-                styles.input,
-                errors.confirmPassword ? styles.inputError : null,
-              ]}
-              placeholder="Confirm your password"
-              placeholderTextColor={colors.gray400}
-              value={formData.confirmPassword}
-              onChangeText={text => updateField('confirmPassword', text)}
-              secureTextEntry
-              autoCapitalize="none"
-            />
-            {errors.confirmPassword ? (
-              <Text style={styles.errorText}>{errors.confirmPassword}</Text>
-            ) : null}
-          </View>
+              <Field
+                label="Password"
+                placeholder="At least 8 characters"
+                value={formData.password}
+                onChangeText={text => updateField('password', text)}
+                error={errors.password}
+                secure
+                autoCapitalize="none"
+              />
 
-          {error ? <Text style={styles.serverError}>{error}</Text> : null}
+              <Field
+                label="Confirm password"
+                placeholder="Type it again"
+                value={formData.confirmPassword}
+                onChangeText={text => updateField('confirmPassword', text)}
+                error={errors.confirmPassword}
+                secure
+                autoCapitalize="none"
+              />
 
-          <TouchableOpacity
-            style={[styles.button, showLoading && styles.buttonDisabled]}
-            onPress={handleRegister}
-            disabled={showLoading}
-          >
-            {showLoading ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <Text style={styles.buttonText}>Sign Up</Text>
-            )}
-          </TouchableOpacity>
+              {error ? (
+                <Text
+                  style={[
+                    type.small,
+                    styles.serverError,
+                    { color: t.danger, marginBottom: space.md },
+                  ]}
+                >
+                  {error}
+                </Text>
+              ) : null}
 
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => navigation.goBack()}
-            disabled={showLoading}
-          >
-            <Text style={styles.secondaryButtonText}>
-              Already have an account? Login
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+              <Pressable3D
+                onPress={handleRegister}
+                tilt={3}
+                accessibilityLabel="Create account"
+              >
+                <Grad
+                  colors={g.aurora}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.button, { borderRadius: radius.md, padding: space.md }]}
+                >
+                  <Text style={[type.bodyStrong, onGradient, styles.buttonText]}>
+                    Create account
+                  </Text>
+                </Grad>
+              </Pressable3D>
+            </Glass>
+          </Reveal>
+
+          <Reveal index={2}>
+            <Pressable
+              style={[styles.secondary, { marginTop: space.xl }]}
+              onPress={() => navigation.goBack()}
+            >
+              <Text style={[type.small, { color: t.textSoft }]}>
+                Already have an account?{' '}
+                <Text style={[type.bodyStrong, { color: t.brand }]}>Log in</Text>
+              </Text>
+            </Pressable>
+          </Reveal>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Aurora>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
-  },
-  header: {
-    marginBottom: spacing.xl,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: colors.textPrimary,
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-  },
-  form: {
-    width: '100%',
-  },
-  inputContainer: {
-    marginBottom: spacing.lg,
-  },
-  label: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: spacing.sm,
-  },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.textPrimary,
-  },
-  inputError: {
-    borderColor: colors.error,
-  },
-  errorText: {
-    color: colors.error,
-    fontSize: fontSize.sm,
-    marginTop: spacing.xs,
-  },
-  serverError: {
-    color: colors.error,
-    fontSize: fontSize.sm,
-    marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
-  secondaryButton: {
-    marginTop: spacing.lg,
-    alignItems: 'center',
-  },
-  secondaryButtonText: {
-    color: colors.primary,
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
+  fill: { flex: 1 },
+  toggle: { position: 'absolute', zIndex: 2 },
+  scrollContent: { flexGrow: 1, justifyContent: 'center' },
+  brand: { alignItems: 'center' },
+  mark: { width: 60, height: 60, alignItems: 'center', justifyContent: 'center' },
+  serverError: { textAlign: 'center' },
+  button: { alignItems: 'center' },
+  buttonText: { color: '#FFFFFF' },
+  secondary: { alignItems: 'center' },
 });
 
 export default RegisterScreen;

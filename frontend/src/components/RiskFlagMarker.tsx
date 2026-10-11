@@ -48,7 +48,10 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Marker } from 'react-native-maps';
 
-import { colors } from '../theme';
+import { useTheme } from '../theme/ThemeProvider';
+import { useStyles } from '../theme/useStyles';
+import type { Palette } from '../theme/palette';
+import { fontFamily } from '../theme/type';
 import type { RiskFlag } from '../types/contracts';
 import { riskBand } from './RiskFlagSheet';
 import { isScheduledFlag } from '../features/risk/scheduled';
@@ -62,6 +65,8 @@ export interface RiskFlagMarkerProps {
 export const isConfirmedFlag = (flag: RiskFlag): boolean => flag.status === 'confirmed';
 
 const RiskFlagMarkerComponent: React.FC<RiskFlagMarkerProps> = ({ flag, onPress }) => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
   const band = riskBand(flag.severityNow);
   const confirmed = isConfirmedFlag(flag);
   const scheduled = isScheduledFlag(flag);
@@ -91,7 +96,7 @@ const RiskFlagMarkerComponent: React.FC<RiskFlagMarkerProps> = ({ flag, onPress 
           styles.dot,
           {
             // Hollow for unconfirmed: the claim is lighter, so the mark is lighter.
-            backgroundColor: confirmed ? band.color : colors.surface,
+            backgroundColor: confirmed ? band.color : t.surface,
             borderColor: band.color,
             borderStyle: confirmed ? 'solid' : 'dashed',
             borderWidth: 2,
@@ -134,19 +139,20 @@ export const RiskFlagMarker = React.memo(
     prev.onPress === next.onPress,
 );
 
-const styles = StyleSheet.create({
-  dot: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '700',
-    // Bare `lineHeight` equal to fontSize clips the glyph on Android; a little room
-    // and no vertical padding keeps the digit optically centred in the circle.
-    lineHeight: 15,
-  },
-});
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    dot: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    label: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: 12,
+      // Bare `lineHeight` equal to fontSize clips the glyph on Android; a little room
+      // and no vertical padding keeps the digit optically centred in the circle.
+      lineHeight: 15,
+    },
+  });
