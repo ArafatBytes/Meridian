@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { StatusBar, LogBox } from 'react-native';
+import { StatusBar, LogBox, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -23,6 +23,8 @@ import {
   watchForegroundRegistration,
 } from './src/features/alerts/register';
 import { useAuthStore } from './src/store';
+import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
+import { useAppFonts } from './src/theme/fonts';
 
 // Ignore specific warnings
 LogBox.ignoreLogs([
@@ -39,8 +41,49 @@ const queryClient = new QueryClient({
   },
 });
 
+/**
+ * The status bar, following the theme.
+ *
+ * It was `barStyle="dark-content"` with a hard-coded `#FFFAFA` background, which
+ * in dark mode is black icons on navy — unreadable, and the one piece of chrome
+ * a user cannot work around. It has to live under `ThemeProvider` to read the
+ * mode, hence a component of its own rather than a line in `App`.
+ *
+ * `translucent` stays on: content draws behind the bar, which is what makes the
+ * Aurora field reach the top of the screen.
+ */
+const ThemedStatusBar: React.FC = () => {
+  const { isDark } = useTheme();
+  return (
+    <StatusBar
+      barStyle={isDark ? 'light-content' : 'dark-content'}
+      backgroundColor="transparent"
+      translucent
+    />
+  );
+};
+
+/**
+ * What shows for the few hundred ms before the fonts resolve.
+ *
+ * A flat fill in the theme's background colour, and nothing else. Rendering the
+ * real tree and letting text reflow when the faces land produces a visible
+ * swap — every label jumps as metrics change — and a spinner for 300 ms reads as
+ * a slow app. A ground-coloured hold reads as the app opening.
+ *
+ * It is the theme's `bg`, not white, so a dark-mode user never sees a white
+ * flash on launch.
+ */
+const BootBackdrop: React.FC = () => {
+  const { t } = useTheme();
+  return <View style={[styles.fill, { backgroundColor: t.bg }]} />;
+};
+
 function App(): React.JSX.Element {
   const { initialize } = useAuthStore();
+  // Loads Sora and Inter. `ready` also goes true on failure or after a timeout
+  // — a typeface is never allowed to keep this app off the screen. See fonts.ts.
+  const fonts = useAppFonts();
 
   useEffect(() => {
     // Initialize app services
@@ -97,22 +140,30 @@ function App(): React.JSX.Element {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
-          <StatusBar
-            barStyle="dark-content"
-            backgroundColor="#FFFAFA"
-            translucent
-          />
-          {/* One SOS controller, one shake listener, one voice guard, for the
-              whole app. Inside the providers so it can use them, and outside the
-              navigator so a trigger works on whatever screen is showing. */}
-          <GuardianProvider>
-            <RootNavigator />
-          </GuardianProvider>
-        </QueryClientProvider>
+        {/* Above everything that draws. `useTheme()` throws outside it, which is
+            deliberate — a screen that silently falls back to light would be a
+            dark-mode bug nobody notices. */}
+        <ThemeProvider>
+          <ThemedStatusBar />
+          <QueryClientProvider client={queryClient}>
+            {/* One SOS controller, one shake listener, one voice guard, for the
+                whole app. Inside the providers so it can use them, and outside
+                the navigator so a trigger works on whatever screen is showing.
+                Also deliberately OUTSIDE the font gate below: shake and voice
+                SOS are armed from the first frame, not from the first frame
+                that has typography. */}
+            <GuardianProvider>
+              {fonts.ready ? <RootNavigator /> : <BootBackdrop />}
+            </GuardianProvider>
+          </QueryClientProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+});
 
 export default App;

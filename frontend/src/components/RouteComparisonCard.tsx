@@ -21,13 +21,49 @@
  * say something — a walking time that is an estimate, a route from the public demo server,
  * a straight-line guess, a safety preference that had to be relaxed. All four are states
  * the previous card could reach silently.
+ *
+ * ## It must also not cover the route
+ *
+ * The card used to render everything at once under a `maxHeight: '58%'` cap. With
+ * four stats, an explanation, up to three caveats and a flag list, it reached
+ * that cap routinely — and 58% of the screen, anchored to the bottom, is most of
+ * the map. The user could read about the route but not see it, which defeats the
+ * point of drawing it.
+ *
+ * So it is now a sheet with two states:
+ *
+ * * **Collapsed** (the default) — the ranked tabs, the four stats, and the
+ *   explanation clamped to two lines. Capped at 34% of the screen, so two
+ *   thirds of the map stays visible with the route on it.
+ * * **Expanded** — the same header with everything below it in one scroll view:
+ *   the full explanation, every caveat, every flag. Capped at 76%.
+ *
+ * One `ScrollView` for the body rather than the old arrangement, where only the
+ * flag list scrolled and everything above it could overflow the cap and be
+ * clipped with nothing to indicate it.
+ *
+ * The tabs and stats stay outside the scroll view on purpose: switching between
+ * routes is the card's main job, and a control that scrolls away is a control
+ * you have to go looking for.
  */
 
-import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Glass } from './motion';
 
-import { borderRadius, colors, fontSize, spacing } from '../theme';
+import { borderRadius, fontSize, spacing } from '../theme';
+import { useTheme } from '../theme/ThemeProvider';
+import { useStyles } from '../theme/useStyles';
+import type { Palette } from '../theme/palette';
+import { fontFamily } from '../theme/type';
 import type { RouteResponse } from '../services/route.service';
 
 export interface RouteComparisonCardProps {
@@ -45,10 +81,10 @@ export interface RouteComparisonCardProps {
  * would invert the meaning of every colour, which is the kind of mistake defect 11 was
  * made of.
  */
-export const safetyColour = (score: number): string => {
-  if (score >= 75) return colors.success;
-  if (score >= 50) return colors.warning;
-  return colors.error;
+export const safetyColour = (score: number, t: Palette): string => {
+  if (score >= 75) return t.ok;
+  if (score >= 50) return t.warn;
+  return t.danger;
 };
 
 /** `local` needs no mention; anything else is a degraded answer and must be visible. */
@@ -68,18 +104,46 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
   onSelect,
   bottomInset,
 }) => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
+  // Collapsed by default: the first thing a user wants after asking for a route
+  // is to see the route.
+  const [expanded, setExpanded] = useState(false);
   const route = routes[selectedIndex];
   if (!route) return null;
 
-  const colour = safetyColour(route.safety_score);
+  const colour = safetyColour(route.safety_score, t);
   const caveats = [...route.notes, engineNote(route.engine)].filter(
     (note): note is string => Boolean(note),
   );
 
+  // Is there anything behind the chevron? With one route, no caveats and no
+  // flags, the collapsed view is already the whole card, and offering to expand
+  // onto an empty panel is worse than offering nothing.
+  const hasDetail =
+    caveats.length > 0 ||
+    route.flags.length > 0 ||
+    routes.length === 1 ||
+    route.filter_relaxed ||
+    route.explanation.length > 110;
+
   return (
-    <View style={[styles.card, { bottom: bottomInset + spacing.md }]}>
+    <Glass
+      style={[
+        styles.card,
+        expanded ? styles.cardExpanded : styles.cardCollapsed,
+        { bottom: bottomInset + spacing.md },
+      ]}
+      contentStyle={styles.body}
+      radius={borderRadius.xl}
+      padding={spacing.md}
+      intensity={26}
+      elevated
+    >
       {/* Ranked tabs. The recommended route is index 0 by composite score, and saying so
-          beats leaving the user to infer it from the order. */}
+          beats leaving the user to infer it from the order. Kept outside the scroll
+          view: switching routes is this card's main job, and a control that
+          scrolls away is one you have to go looking for. */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -101,7 +165,7 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
               <Text
                 style={[
                   styles.tabScore,
-                  { color: active ? safetyColour(candidate.safety_score) : colors.textMuted },
+                  { color: active ? safetyColour(candidate.safety_score, t) : t.textFaint },
                 ]}
               >
                 {Math.round(candidate.safety_score)}/100
@@ -113,7 +177,7 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
 
       <View style={styles.stats}>
         <View style={styles.stat}>
-          <Ionicons name="shield-checkmark" size={18} color={colour} />
+          <Ionicons name="shield-checkmark" size={16} color={colour} />
           {/* NN/100 — not a percentage. See the module docstring. */}
           <Text style={[styles.statValue, { color: colour }]}>
             {Math.round(route.safety_score)}/100
@@ -122,7 +186,7 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
         </View>
 
         <View style={styles.stat}>
-          <Ionicons name="time-outline" size={18} color={colors.text} />
+          <Ionicons name="time-outline" size={16} color={t.text} />
           <Text style={styles.statValue}>{route.duration_minutes} min</Text>
           {/* The label carries where the number came from, so a calibration is never
               mistaken for a measurement. Driving times are scaled from the graph's
@@ -139,11 +203,7 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
         </View>
 
         <View style={styles.stat}>
-          <MaterialCommunityIcons
-            name="map-marker-distance"
-            size={18}
-            color={colors.text}
-          />
+          <MaterialCommunityIcons name="map-marker-distance" size={16} color={t.text} />
           <Text style={styles.statValue}>{route.distance_km.toFixed(1)} km</Text>
           <Text style={styles.statLabel}>distance</Text>
         </View>
@@ -151,8 +211,8 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
         <View style={styles.stat}>
           <Ionicons
             name="alert-circle-outline"
-            size={18}
-            color={route.flags.length > 0 ? colors.warning : colors.success}
+            size={16}
+            color={route.flags.length > 0 ? t.warn : t.ok}
           />
           <Text style={styles.statValue}>{route.flags.length}</Text>
           <Text style={styles.statLabel}>
@@ -161,134 +221,198 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
         </View>
       </View>
 
-      {/* Beat 4. Server-framed, rendered verbatim. */}
-      <Text style={styles.explanation}>{route.explanation}</Text>
+      {expanded ? (
+        // Everything below the stats, in ONE scroll view. The old card scrolled
+        // only the flag list, so an explanation plus three caveats could overflow
+        // the height cap and be clipped with nothing to say so.
+        <ScrollView
+          style={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollBody}
+        >
+          {/* Beat 4. Server-framed, rendered verbatim. */}
+          <Text style={styles.explanation}>{route.explanation}</Text>
 
-      {/* One route is a legitimate answer, but a card showing a single tab with no
-          comment reads like the alternatives failed to load. Say which it is.
+          {/* One route is a legitimate answer, but a card showing a single tab with no
+              comment reads like the alternatives failed to load. Say which it is.
 
-          It happens when the road network genuinely offers one sensible way through —
-          OSRM returns alternatives only where a distinct road exists, and across five
-          Dhaka pairs three had one and two had two — and when nothing on the route was
-          worth routing around. A historical blackspot is not: it covers kilometres, so
-          "avoiding" it means avoiding the city. */}
-      {routes.length === 1 && (
-        <View style={styles.caveat}>
-          <Ionicons name="git-branch-outline" size={14} color={colors.textMuted} />
-          <Text style={styles.caveatText}>
-            Only one sensible route exists between these points, so there is nothing to
-            compare. Nothing on it was worth a detour.
-          </Text>
-        </View>
-      )}
-
-      {route.filter_relaxed && (
-        <View style={styles.caveat}>
-          <Ionicons name="information-circle-outline" size={14} color={colors.info} />
-          <Text style={styles.caveatText}>
-            Every available route exceeds your safety preference. These are shown
-            best-first rather than hiding them.
-          </Text>
-        </View>
-      )}
-
-      {caveats.map(note => (
-        <View key={note} style={styles.caveat}>
-          <Ionicons name="warning-outline" size={14} color={colors.warning} />
-          <Text style={styles.caveatText}>{note}</Text>
-        </View>
-      ))}
-
-      {/* The flags themselves, so the score is auditable rather than asserted. Chronic
-          flags are labelled, because "this area has a history" and "there is a fire here
-          now" are different claims and must not look the same. */}
-      {route.flags.length > 0 && (
-        <ScrollView style={styles.flagList} showsVerticalScrollIndicator={false}>
-          {route.flags.map(flag => (
-            <View key={flag.flag_id} style={styles.flagRow}>
-              <View
-                style={[
-                  styles.flagDot,
-                  {
-                    backgroundColor:
-                      flag.status === 'confirmed' ? colors.error : 'transparent',
-                    borderColor: colors.error,
-                  },
-                ]}
-              />
-              <Text style={styles.flagText} numberOfLines={2}>
-                {flag.mobility_statement}
-                <Text style={styles.flagMeta}>
-                  {flag.kind === 'chronic'
-                    ? '  ·  historical pattern'
-                    : `  ·  ${flag.source_count} ${
-                        flag.source_count === 1 ? 'source' : 'sources'
-                      }${flag.status === 'confirmed' ? '' : ', unconfirmed'}`}
-                </Text>
+              It happens when the road network genuinely offers one sensible way through —
+              OSRM returns alternatives only where a distinct road exists, and across five
+              Dhaka pairs three had one and two had two — and when nothing on the route was
+              worth routing around. A historical blackspot is not: it covers kilometres, so
+              "avoiding" it means avoiding the city. */}
+          {routes.length === 1 && (
+            <View style={styles.caveat}>
+              <Ionicons name="git-branch-outline" size={14} color={t.textFaint} />
+              <Text style={styles.caveatText}>
+                Only one sensible route exists between these points, so there is nothing
+                to compare. Nothing on it was worth a detour.
               </Text>
             </View>
+          )}
+
+          {route.filter_relaxed && (
+            <View style={styles.caveat}>
+              <Ionicons name="information-circle-outline" size={14} color={t.info} />
+              <Text style={styles.caveatText}>
+                Every available route exceeds your safety preference. These are shown
+                best-first rather than hiding them.
+              </Text>
+            </View>
+          )}
+
+          {caveats.map(note => (
+            <View key={note} style={styles.caveat}>
+              <Ionicons name="warning-outline" size={14} color={t.warn} />
+              <Text style={styles.caveatText}>{note}</Text>
+            </View>
           ))}
+
+          {/* The flags themselves, so the score is auditable rather than asserted.
+              Chronic flags are labelled, because "this area has a history" and "there is
+              a fire here now" are different claims and must not look the same.
+
+              No `maxHeight` and no nested scroll any more: the list is part of the
+              sheet's one scroll view, so a route with nine flags reads as nine
+              flags instead of a 110pt window with its own hidden scrollbar. */}
+          {route.flags.length > 0 && (
+            <View style={styles.flagList}>
+              {route.flags.map(flag => (
+                <View key={flag.flag_id} style={styles.flagRow}>
+                  <View
+                    style={[
+                      styles.flagDot,
+                      {
+                        backgroundColor:
+                          flag.status === 'confirmed' ? t.danger : 'transparent',
+                        borderColor: t.danger,
+                      },
+                    ]}
+                  />
+                  <Text style={styles.flagText}>
+                    {flag.mobility_statement}
+                    <Text style={styles.flagMeta}>
+                      {flag.kind === 'chronic'
+                        ? '  ·  historical pattern'
+                        : `  ·  ${flag.source_count} ${
+                            flag.source_count === 1 ? 'source' : 'sources'
+                          }${flag.status === 'confirmed' ? '' : ', unconfirmed'}`}
+                    </Text>
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
         </ScrollView>
+      ) : (
+        // Collapsed: two lines of the explanation, clamped rather than shortened,
+        // so expanding shows the same sentence in full.
+        <Text style={styles.explanation} numberOfLines={2}>
+          {route.explanation}
+        </Text>
       )}
-    </View>
+
+      {hasDetail && (
+        <Pressable
+          onPress={() => setExpanded(current => !current)}
+          style={styles.toggle}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={expanded ? 'Hide route details' : 'Show route details'}
+        >
+          <Text style={styles.toggleText}>
+            {expanded
+              ? 'Hide details'
+              : route.flags.length > 0
+                ? `Details · ${route.flags.length} ${
+                    route.flags.length === 1 ? 'flag' : 'flags'
+                  } on this route`
+                : 'Details'}
+          </Text>
+          <Ionicons
+            name={expanded ? 'chevron-down' : 'chevron-up'}
+            size={14}
+            color={t.brand}
+          />
+        </Pressable>
+      )}
+    </Glass>
   );
 };
 
 export default RouteComparisonCard;
 
-const styles = StyleSheet.create({
-  card: {
-    position: 'absolute',
-    left: spacing.md,
-    right: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    // Capped so a route with many flags cannot grow the card over the whole map; the
-    // flag list scrolls inside it.
-    maxHeight: '58%',
-  },
-  tabs: { gap: spacing.sm, paddingBottom: spacing.sm },
-  tab: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surfaceVariant,
-    alignItems: 'center',
-  },
-  tabActive: { backgroundColor: colors.primaryLight },
-  tabText: { fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600' },
-  tabTextActive: { color: colors.primaryDark },
-  tabScore: { fontSize: fontSize.xs, fontWeight: '700' },
-  stats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  stat: { alignItems: 'center', flex: 1 },
-  statValue: { fontSize: fontSize.sm, fontWeight: '700', color: colors.text },
-  statLabel: { fontSize: 10, color: colors.textMuted },
-  explanation: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    lineHeight: 19,
-    paddingTop: spacing.sm,
-  },
-  caveat: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    alignItems: 'flex-start',
-    paddingTop: spacing.xs,
-  },
-  caveatText: { flex: 1, fontSize: fontSize.xs, color: colors.textSecondary, lineHeight: 16 },
-  flagList: { marginTop: spacing.sm, maxHeight: 110 },
-  flagRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start', paddingVertical: 3 },
-  flagDot: { width: 9, height: 9, borderRadius: 5, borderWidth: 1.5, marginTop: 4 },
-  flagText: { flex: 1, fontSize: fontSize.xs, color: colors.text, lineHeight: 16 },
-  flagMeta: { color: colors.textMuted },
-});
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    // `Glass` draws the fill, the border and the radius now, so this carries
+    // placement only. The two height caps are the whole point of the rework:
+    // collapsed leaves two thirds of the map visible, expanded is a sheet.
+    card: { position: 'absolute', left: spacing.md, right: spacing.md },
+    // The cap goes on the SHELL, not on the inner content box. A percentage
+    // resolves against the parent's definite height, and the shell is
+    // absolutely positioned with an auto height — so `maxHeight: '34%'` on a
+    // child of it resolves against nothing and is silently ignored. On the
+    // shell it resolves against the map container, which is what the old
+    // single-piece card did.
+    cardCollapsed: { maxHeight: '34%' },
+    cardExpanded: { maxHeight: '76%' },
+    // `flexShrink` down the chain, so the shell's cap actually reaches the
+    // scroll view. Without it the content keeps its natural height and is
+    // clipped by `overflow: 'hidden'` instead of becoming scrollable.
+    body: { flexShrink: 1 },
+    scroll: { flexShrink: 1 },
+    scrollBody: { paddingBottom: spacing.xs },
+    toggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      paddingTop: spacing.sm,
+      marginTop: spacing.xs,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: t.line,
+    },
+    toggleText: { fontFamily: fontFamily.bodySemi, fontSize: fontSize.xs, color: t.brand },
+    tabs: { gap: spacing.sm, paddingBottom: spacing.sm },
+    tab: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      borderRadius: borderRadius.md,
+      backgroundColor: t.lineSoft,
+      alignItems: 'center',
+    },
+    tabActive: { backgroundColor: t.brandStrong },
+    tabText: { fontFamily: fontFamily.bodySemi, fontSize: fontSize.xs, color: t.textSoft,},
+    tabTextActive: { color: t.brandStrong },
+    tabScore: { fontFamily: fontFamily.bodySemi, fontSize: fontSize.xs,},
+    stats: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingVertical: spacing.sm,
+      borderTopWidth: 1,
+      borderBottomWidth: 1,
+      borderColor: t.lineSoft,
+    },
+    stat: { alignItems: 'center', flex: 1 },
+    statValue: { fontFamily: fontFamily.bodySemi, fontSize: fontSize.sm,color: t.text },
+    statLabel: { fontFamily: fontFamily.body, fontSize: 10, color: t.textFaint },
+    explanation: {
+      fontFamily: fontFamily.body,
+      fontSize: fontSize.sm,
+      color: t.text,
+      lineHeight: 19,
+      paddingTop: spacing.sm,
+    },
+    caveat: {
+      flexDirection: 'row',
+      gap: spacing.xs,
+      alignItems: 'flex-start',
+      paddingTop: spacing.xs,
+    },
+    caveatText: { fontFamily: fontFamily.body, flex: 1, fontSize: fontSize.xs, color: t.textSoft, lineHeight: 16 },
+    flagList: { marginTop: spacing.sm },
+    flagRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start', paddingVertical: 3 },
+    flagDot: { width: 9, height: 9, borderRadius: 5, borderWidth: 1.5, marginTop: 4 },
+    flagText: { fontFamily: fontFamily.body, flex: 1, fontSize: fontSize.xs, color: t.text, lineHeight: 16 },
+    flagMeta: { color: t.textFaint },
+  });

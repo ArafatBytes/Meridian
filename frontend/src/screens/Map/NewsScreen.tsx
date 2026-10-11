@@ -33,7 +33,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, borderRadius, typography } from '../../theme';
+import { spacing, borderRadius, typography } from '../../theme';
+import { useTheme } from '../../theme/ThemeProvider';
+import { useStyles } from '../../theme/useStyles';
+import type { Palette } from '../../theme/palette';
+import { glassSurface } from '../../theme/surfaces';
+import { Aurora } from '../../components/motion';
+import { fontFamily } from '../../theme/type';
 import { riskService, type IngestionStatus, type MapRegion } from '../../services/risk.service';
 import { messageOf } from '../../services/casework.service';
 import { riskBand } from '../../components/RiskFlagSheet';
@@ -73,6 +79,8 @@ function ingestionLine(status: IngestionStatus | null): string {
 }
 
 const NewsScreen: React.FC = () => {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
@@ -129,9 +137,13 @@ const NewsScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* The ambient field, behind everything. `glassSurface` is a
+          translucent fill and needs something to be translucent over —
+          see the note in theme/surfaces.ts. */}
+      <Aurora intensity="ambient" />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={t.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>What we read</Text>
         <View style={{ width: 24 }} />
@@ -140,7 +152,7 @@ const NewsScreen: React.FC = () => {
       {/* The pipeline's own numbers, not a summary of this list. On a day when
           ingestion did nothing, this line is how you find that out in one glance. */}
       <View style={styles.statusBar}>
-        <Ionicons name="pulse-outline" size={14} color={colors.textSecondary} />
+        <Ionicons name="pulse-outline" size={14} color={t.textSoft} />
         <Text style={styles.statusText} numberOfLines={2}>
           {ingestionLine(ingestion)}
         </Text>
@@ -167,7 +179,7 @@ const NewsScreen: React.FC = () => {
 
       {entries === null ? (
         <View style={styles.centre}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={t.brand} />
         </View>
       ) : (
         <ScrollView
@@ -179,7 +191,7 @@ const NewsScreen: React.FC = () => {
         >
           {error && (
             <View style={styles.errorCard}>
-              <Ionicons name="warning-outline" size={18} color={colors.error} />
+              <Ionicons name="warning-outline" size={18} color={t.danger} />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
@@ -194,7 +206,7 @@ const NewsScreen: React.FC = () => {
 
           {shown.length === 0 && !error && (
             <View style={styles.emptyCard}>
-              <Ionicons name="newspaper-outline" size={40} color={colors.textSecondary} />
+              <Ionicons name="newspaper-outline" size={40} color={t.textSoft} />
               <Text style={styles.emptyTitle}>
                 {tab === 'today' ? 'Nothing read yet' : 'Nothing announced'}
               </Text>
@@ -239,7 +251,7 @@ const NewsScreen: React.FC = () => {
                     <Ionicons
                       name={confirmed ? 'checkmark-circle' : 'help-circle-outline'}
                       size={12}
-                      color={confirmed ? colors.success : colors.textSecondary}
+                      color={confirmed ? t.ok : t.textSoft}
                     />
                     <Text style={styles.tagText}>
                       {confirmed
@@ -249,18 +261,18 @@ const NewsScreen: React.FC = () => {
                   </View>
 
                   {entry.flag.validFrom && (
-                    <View style={[styles.tag, { backgroundColor: `${colors.info}22` }]}>
-                      <Ionicons name="calendar-outline" size={12} color={colors.info} />
-                      <Text style={[styles.tagText, { color: colors.info }]}>
+                    <View style={[styles.tag, { backgroundColor: `${t.info}22` }]}>
+                      <Ionicons name="calendar-outline" size={12} color={t.info} />
+                      <Text style={[styles.tagText, { color: t.info }]}>
                         {windowText(entry.flag.validFrom, entry.flag.validTo)}
                       </Text>
                     </View>
                   )}
 
                   {entry.isSample && (
-                    <View style={[styles.tag, { backgroundColor: `${colors.warning}22` }]}>
-                      <Ionicons name="flask-outline" size={12} color={colors.warning} />
-                      <Text style={[styles.tagText, { color: colors.warning }]}>
+                    <View style={[styles.tag, { backgroundColor: `${t.warn}22` }]}>
+                      <Ionicons name="flask-outline" size={12} color={t.warn} />
+                      <Text style={[styles.tagText, { color: t.warn }]}>
                         Sample data
                       </Text>
                     </View>
@@ -283,101 +295,99 @@ const NewsScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  headerTitle: { ...typography.h4, color: colors.text },
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    headerTitle: { ...typography.h4, color: t.text },
 
-  statusBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  statusText: { ...typography.caption, color: colors.textSecondary, flex: 1 },
+    statusBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.sm,
+    },
+    statusText: { ...typography.caption, color: t.textSoft, flex: 1 },
 
-  tabs: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  tab: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.surfaceVariant,
-  },
-  tabActive: { backgroundColor: colors.primary },
-  tabText: { ...typography.bodySmall, color: colors.textSecondary, fontWeight: '600' },
-  tabTextActive: { color: colors.white },
+    tabs: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.md,
+    },
+    tab: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: 6,
+      borderRadius: borderRadius.sm,
+      backgroundColor: t.lineSoft,
+    },
+    tabActive: { backgroundColor: t.brand },
+    tabText: { ...typography.bodySmall, fontFamily: fontFamily.bodySemi, color: t.textSoft },
+    tabTextActive: { color: t.onBrand },
 
-  centre: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  body: { paddingHorizontal: spacing.lg, gap: spacing.md },
-  counter: { ...typography.caption, color: colors.textSecondary },
+    centre: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    body: { paddingHorizontal: spacing.lg, gap: spacing.md },
+    counter: { ...typography.caption, color: t.textSoft },
 
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    padding: spacing.md,
-    gap: spacing.xs,
-  },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
-  outlet: { ...typography.caption, color: colors.primary, fontWeight: '700' },
-  time: { ...typography.caption, color: colors.textSecondary },
-  title: { ...typography.body, color: colors.text, fontWeight: '600', lineHeight: 21 },
-  titleLink: { color: colors.primary },
+    card: {
+      ...glassSurface(t),
+      padding: spacing.md,
+      gap: spacing.xs,
+    },
+    cardTop: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
+    outlet: { ...typography.caption, fontFamily: fontFamily.bodySemi, color: t.brand },
+    time: { ...typography.caption, color: t.textSoft },
+    title: { ...typography.body, fontFamily: fontFamily.bodySemi, color: t.text, lineHeight: 21 },
+    titleLink: { color: t.brand },
 
-  outcome: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: 2 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  outcomeText: { ...typography.bodySmall, color: colors.textSecondary, flex: 1 },
+    outcome: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: 2 },
+    dot: { width: 8, height: 8, borderRadius: 4 },
+    outcomeText: { ...typography.bodySmall, color: t.textSoft, flex: 1 },
 
-  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: 4 },
-  tag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.surfaceVariant,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-  },
-  tagText: { ...typography.caption, color: colors.textSecondary },
+    tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: 4 },
+    tag: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: t.lineSoft,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderRadius: borderRadius.sm,
+    },
+    tagText: { ...typography.caption, color: t.textSoft },
 
-  errorCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: `${colors.error}11`,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-  },
-  errorText: { ...typography.bodySmall, color: colors.error, flex: 1 },
+    errorCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      backgroundColor: `${t.danger}11`,
+      borderRadius: borderRadius.md,
+      padding: spacing.md,
+    },
+    errorText: { ...typography.bodySmall, color: t.danger, flex: 1 },
 
-  emptyCard: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xxl,
-    paddingHorizontal: spacing.md,
-  },
-  emptyTitle: { ...typography.h4, color: colors.text },
-  emptyText: { ...typography.bodySmall, color: colors.textSecondary, textAlign: 'center' },
+    emptyCard: {
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.xxl,
+      paddingHorizontal: spacing.md,
+    },
+    emptyTitle: { ...typography.h4, color: t.text },
+    emptyText: { ...typography.bodySmall, color: t.textSoft, textAlign: 'center' },
 
-  footnote: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-    lineHeight: 16,
-  },
-});
+    footnote: {
+      ...typography.caption,
+      color: t.textSoft,
+      marginTop: spacing.sm,
+      lineHeight: 16,
+    },
+  });
 
 export default NewsScreen;

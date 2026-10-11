@@ -9,7 +9,11 @@ import {
   Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, borderRadius, fontSize } from '../theme';
+import { spacing, borderRadius, fontSize } from '../theme';
+import { useTheme } from '../theme/ThemeProvider';
+import { useStyles } from '../theme/useStyles';
+import type { Palette } from '../theme/palette';
+import { fontFamily } from '../theme/type';
 import { geoService } from '../services/geo.service';
 import type { GeoResolution, GeoMethod } from '../types/contracts/geo';
 
@@ -55,13 +59,17 @@ interface ChipStyle {
  * answer that passed a bounding-box check, which is weaker, and the interface
  * should not flatten that difference.
  */
-const METHOD_CHIP: Record<Exclude<GeoMethod, 'unresolved'>, ChipStyle> = {
-  gazetteer: { label: 'From our Dhaka gazetteer', colour: colors.success, icon: 'book-outline' },
-  llm_gazetteer: { label: 'Inferred by AI', colour: colors.info, icon: 'sparkles-outline' },
-  nominatim: { label: 'From a map service', colour: colors.info, icon: 'globe-outline' },
-};
+const methodChip = (
+  t: Palette,
+): Record<Exclude<GeoMethod, 'unresolved'>, ChipStyle> => ({
+  gazetteer: { label: 'From our Dhaka gazetteer', colour: t.ok, icon: 'book-outline' },
+  llm_gazetteer: { label: 'Inferred by AI', colour: t.info, icon: 'sparkles-outline' },
+  nominatim: { label: 'From a map service', colour: t.info, icon: 'globe-outline' },
+});
 
 export default function PlaceSearch({ onResolved, placeholder }: PlaceSearchProps) {
+  const { t } = useTheme();
+  const styles = useStyles(makeStyles);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<GeoResolution | null>(null);
@@ -101,28 +109,28 @@ export default function PlaceSearch({ onResolved, placeholder }: PlaceSearchProp
     setFailedQuery(null);
   };
 
-  const chip = result && result.method !== 'unresolved' ? METHOD_CHIP[result.method] : null;
+  const chip = result && result.method !== 'unresolved' ? methodChip(t)[result.method] : null;
 
   return (
     <View style={styles.container}>
       <View style={styles.inputRow}>
-        <Ionicons name="search" size={18} color={colors.textMuted} />
+        <Ionicons name="search" size={18} color={t.textFaint} />
         <TextInput
           style={styles.input}
           value={query}
           onChangeText={setQuery}
           onSubmitEditing={submit}
           placeholder={placeholder ?? 'Mirpur 10 golchattar'}
-          placeholderTextColor={colors.textMuted}
+          placeholderTextColor={t.textFaint}
           returnKeyType="search"
           autoCorrect={false}
           autoCapitalize="none"
         />
         {busy ? (
-          <ActivityIndicator size="small" color={colors.textSecondary} />
+          <ActivityIndicator size="small" color={t.textSoft} />
         ) : query.length > 0 ? (
           <TouchableOpacity onPress={clear} hitSlop={8}>
-            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+            <Ionicons name="close-circle" size={18} color={t.textFaint} />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -141,7 +149,7 @@ export default function PlaceSearch({ onResolved, placeholder }: PlaceSearchProp
 
       {failedQuery && (
         <View style={styles.failRow}>
-          <Ionicons name="help-circle-outline" size={15} color={colors.textSecondary} />
+          <Ionicons name="help-circle-outline" size={15} color={t.textSoft} />
           <Text style={styles.failText}>
             Could not find “{failedQuery}”. We will not guess a location.
           </Text>
@@ -151,67 +159,70 @@ export default function PlaceSearch({ onResolved, placeholder }: PlaceSearchProp
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: borderRadius.xl,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  input: {
-    flex: 1,
-    paddingVertical: spacing.xs,
-    fontSize: fontSize.sm,
-    color: colors.text,
-  },
-  resultRow: {
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-    gap: spacing.xs,
-  },
-  resolvedName: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  chip: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderWidth: 1,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-  },
-  chipText: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-  },
-  failRow: {
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  failText: {
-    flex: 1,
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-  },
-});
+const makeStyles = (t: Palette) =>
+StyleSheet.create({
+    container: {
+      backgroundColor: t.surface,
+      borderRadius: borderRadius.xl,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      shadowColor: '#000',
+      shadowOpacity: 0.15,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 4,
+    },
+    inputRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    input: {
+      fontFamily: fontFamily.body,
+      flex: 1,
+      paddingVertical: spacing.xs,
+      fontSize: fontSize.sm,
+      color: t.text,
+    },
+    resultRow: {
+      marginTop: spacing.sm,
+      paddingTop: spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: t.line,
+      gap: spacing.xs,
+    },
+    resolvedName: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.sm,
+      color: t.text,
+    },
+    chip: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      borderWidth: 1,
+      borderRadius: borderRadius.full,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+    },
+    chipText: {
+      fontFamily: fontFamily.bodySemi,
+      fontSize: fontSize.xs,
+    },
+    failRow: {
+      marginTop: spacing.sm,
+      paddingTop: spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: t.line,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    failText: {
+      fontFamily: fontFamily.body,
+      flex: 1,
+      fontSize: fontSize.xs,
+      color: t.textSoft,
+    },
+  });
