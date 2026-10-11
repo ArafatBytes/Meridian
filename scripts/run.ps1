@@ -3,7 +3,8 @@
 # =============================================================================
 #   .\scripts\run.ps1               backend in Docker + Expo on the host
 #   .\scripts\run.ps1 -BackendOnly  just the containers
-#   .\scripts\run.ps1 -Rebuild      force an image rebuild first
+#   .\scripts\run.ps1 -Rebuild      force a Docker image rebuild first
+#   .\scripts\run.ps1 -Build        force a native Android rebuild
 #   .\scripts\run.ps1 -Osrm         also start the local routing engine
 #   .\scripts\run.ps1 -Down         stop everything
 #   .\scripts\run.ps1 -Logs         tail the backend log
@@ -12,12 +13,17 @@
 # on the `expo` service in docker-compose.yml. The three reasons are broken file
 # watching over bind mounts, host-addressing for the phone, and native builds
 # needing the host SDKs anyway.
+#
+# With a phone attached over USB this does the whole job: backend up, the app
+# pointed at this machine, the APK rebuilt only if the native config has moved
+# since the last build, and the app opened. Nothing to remember.
 # =============================================================================
 
 [CmdletBinding()]
 param(
     [switch]$BackendOnly,
     [switch]$Rebuild,
+    [switch]$Build,
     [switch]$Osrm,
     [switch]$Down,
     [switch]$Logs
@@ -253,12 +259,171 @@ if ([int]$nodeMajor -gt 22) {
     Warn "If Metro misbehaves, install Node 22 LTS before blaming the code."
 }
 
+# -----------------------------------------------------------------------------
+# 5a. The phone
+# -----------------------------------------------------------------------------
+# Expo Go cannot run this app any more. Background geofencing, on-device speech
+# recognition and notification channels are all native, so the phone runs a
+# locally built dev build and reaches Metro over USB.
+#
+# Three things have to be true, and each fails with a symptom pointing
+# somewhere else:
+#
+#   a device is attached      -> "no devices/emulators found", from gradle
+#   the APK matches app.json  -> a native module is missing at runtime, which
+#                                surfaces as "undefined is not a function"
+#   adb reverse maps 8081     -> red screen, "could not connect to the
+#                                development server"
+#
+# So all three are checked here instead of being discovered one at a time.
+Step "Android device"
+
+$package = 'com.Meridian.app'
+$device = $null
+
+if (-not (Get-Command adb -ErrorAction SilentlyContinue)) {
+    Warn "adb is not on PATH. Add this, then open a new terminal:"
+    Say  "        %LOCALAPPDATA%\Android\Sdk\platform-tools"
+} else {
+    $device = (adb devices) |
+        Where-Object { $_ -match '^(\S+)\s+device$' } |
+        ForEach-Object { $Matches[1] } |
+        Select-Object -First 1
+
+    if (-not $device) {
+        # 'unauthorized' is its own state with its own fix: the phone is seen,
+        # but it has not accepted this computer's key.
+        $pending = (adb devices) | Where-Object { $_ -match '\s+(unauthorized|offline)$' }
+        if ($pending) {
+            Warn "A phone is attached but not usable yet:"
+            $pending | ForEach-Object { Say "        $_" }
+            Warn "Unlock it and accept the 'Allow USB debugging' prompt."
+        } else {
+            Warn "No phone attached. Plug one in with USB debugging on."
+        }
+    } else {
+        Ok "device $device"
+    }
+}
+
+# Metro already listening is the trap worth failing on. A second bundler moves
+# to 8082, adb reverse maps 8081 only, and the app then cannot find a bundle at
+# all - which looks nothing like "you have two bundlers running".
+try {
+    $metro = Invoke-WebRequest -Uri 'http://localhost:8081/status' -TimeoutSec 2 -UseBasicParsing
+    if ($metro.Content -match 'packager-status:running') {
+        Die "Metro is already running on port 8081.`n         Stop it (Ctrl+C in its terminal), then run this again.`n         A second bundler moves to 8082, which adb reverse does not map."
+    }
+} catch { }
+
+# -----------------------------------------------------------------------------
+# 5b. Build only when the native side has actually moved
+# -----------------------------------------------------------------------------
+# The stamp is a hash of app.json and package.json - between them, every input
+# that changes the APK: plugins, permissions, the bundle id, the native
+# dependency list. JS is deliberately not in it, because JS comes from Metro
+# and never needs a rebuild.
+#
+# It over-triggers slightly (editing a scripts entry in package.json counts),
+# and that is the right way round: a needless three-minute build is an
+# annoyance, a skipped one is half an hour spent debugging a native module that
+# was never in the APK.
+$stampFile = "$Root\frontend\android\.meridian-build-stamp"
+
+function Get-NativeStamp {
+    $text = ''
+    foreach ($f in @('app.json', 'package.json')) {
+        $text += (Get-Content "$Root\frontend\$f" -Raw)
+    }
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $hash = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($text))
+    return ([System.BitConverter]::ToString($hash)).Replace('-', '')
+}
+
+$stamp = Get-NativeStamp
+$needsBuild = $false
+$reason = ''
+
+if ($Build) {
+    $needsBuild = $true; $reason = '-Build was passed'
+} elseif (-not (Test-Path "$Root\frontend\android")) {
+    $needsBuild = $true; $reason = 'there is no native project yet'
+} elseif ($device -and -not ((adb -s $device shell pm list packages $package) -match $package)) {
+    $needsBuild = $true; $reason = "$package is not installed on this phone"
+} elseif (-not (Test-Path $stampFile)) {
+    $needsBuild = $true; $reason = 'no build stamp, so what is installed is unknown'
+} elseif ((Get-Content $stampFile -Raw).Trim() -ne $stamp) {
+    $needsBuild = $true; $reason = 'app.json or package.json changed since the last build'
+}
+
+if ($needsBuild -and -not $device) {
+    Warn "A build is needed ($reason) but no phone is attached."
+    Warn "Metro will still start. Plug the phone in and re-run to build."
+} elseif ($needsBuild) {
+    Step "Building the app"
+    Say  "    reason: $reason"
+    Say  "    2-6 minutes cold, under a minute once gradle has its cache"
+    Say  ""
+    Set-Location "$Root\frontend"
+    # --no-bundler: build and install only. Metro starts once, below, by the
+    # same path a no-build run uses - one way the dev server gets started
+    # rather than two that can drift apart.
+    npx expo run:android --no-bundler
+    if ($LASTEXITCODE -ne 0) {
+        Set-Location $Root
+        Die "the Android build failed. The gradle output above says why."
+    }
+    Set-Location $Root
+    # Written only after a build that actually succeeded.
+    Set-Content -Path $stampFile -Value $stamp -Encoding ascii
+    # `expo run:android` launches the app as soon as it is installed, which is
+    # before Metro exists on this path - so the app comes up on the red "could
+    # not connect" screen and stays there. Closing it here lets the launcher
+    # job below start it once, cleanly, with a bundler to talk to.
+    adb -s $device shell am force-stop $package | Out-Null
+    Ok "built, installed, stamped"
+} else {
+    Ok "the installed app matches app.json - no build needed"
+}
+
+# Idempotent, and re-asserted on every run on purpose: the mapping lives in the
+# adb session, so unplugging the phone silently loses it.
+if ($device) {
+    adb -s $device reverse tcp:8081 tcp:8081 | Out-Null
+    Ok "adb reverse: the phone's 8081 -> this machine"
+}
+
+# -----------------------------------------------------------------------------
+# 6. Metro
+# -----------------------------------------------------------------------------
 Step "Starting Expo"
 Say "    API for the app: $env:EXPO_PUBLIC_API_BASE_URL"
 Say "    --clear is used because EXPO_PUBLIC_* is inlined at bundle time"
 Say ""
-Say "    Scan the QR code with Expo Go. Ctrl+C stops Expo;"
-Say "    the containers keep running (.\scripts\run.ps1 -Down stops them)."
+
+if ($device) {
+    Say "    This is a dev build, not Expo Go - ignore the QR code below."
+    Say "    Meridian opens on $device by itself once Metro is ready."
+
+    # Metro holds the terminal, so the launch cannot come after it. A job that
+    # waits for the bundler and then starts the app is the whole reason this is
+    # one command rather than two things to remember.
+    Start-Job -ArgumentList $package -ScriptBlock {
+        param($pkg)
+        foreach ($i in 1..90) {
+            try {
+                $r = Invoke-WebRequest -Uri 'http://localhost:8081/status' -TimeoutSec 2 -UseBasicParsing
+                if ($r.Content -match 'packager-status:running') { break }
+            } catch { }
+            Start-Sleep -Seconds 1
+        }
+        # monkey, not am start: it finds the launcher activity itself, so this
+        # does not have to know the activity's name or follow it if it changes.
+        adb shell monkey -p $pkg -c android.intent.category.LAUNCHER 1
+    } | Out-Null
+}
+
+Say "    Ctrl+C stops Expo; the containers keep running (.\scripts\run.ps1 -Down stops them)."
 Say ""
 
 Set-Location "$Root\frontend"

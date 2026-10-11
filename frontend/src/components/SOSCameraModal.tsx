@@ -288,9 +288,30 @@ export const SOSCameraModal: React.FC<SOSCameraModalProps> = ({
                     // cross-platform one and means 640x480. videoBitrate is what
                     // does the work on iOS, together with the codec passed to
                     // recordAsync.
-                    // ANDROID: neither. Let CameraX choose.
+                    // ANDROID: bitrate yes, quality no. They are separate
+                    // knobs and only one of them was at fault.
                     //
-                    // Evidence, from logcat on a Unisoc ums9230 (Vivo V2344):
+                    // Dropping the bitrate too is what made every Android clip
+                    // four seconds long. With `videoBitrate` unset, expo-camera
+                    // never calls `setTargetVideoEncodingBitRate`, so CameraX
+                    // uses its own default for the quality it chose -- and with
+                    // `videoQuality` unset that is 1080p, around 17 Mbps. That
+                    // fills the 8 MB `maxFileSize` in **3.8 seconds**, CameraX
+                    // finalises with `ERROR_FILE_SIZE_LIMIT_REACHED`, and
+                    // `ExpoCameraView.kt` resolves that case as a SUCCESS with a
+                    // uri. So the app got a valid four-second video, closed the
+                    // modal, and left the countdown frozen at 6 -- nothing
+                    // reported an error, because by the camera's lights nothing
+                    // went wrong.
+                    //
+                    // The bitrate is what keeps the clip inside the size budget;
+                    // `maxFileSize` is only the backstop. At 1.2 Mbps ten
+                    // seconds is about 1.5 MB, so the cap stops binding and the
+                    // upload is seconds rather than minutes.
+                    //
+                    // Quality stays unset, which is the part of the Vivo fix that
+                    // was right. Evidence, from logcat on a Unisoc ums9230
+                    // (Vivo V2344):
                     // the recording ran its full 10 seconds, audio was captured
                     // the whole time, and `Recorder` logged "Cached audio data
                     // while we wait for video keyframe before starting muxer"
@@ -313,11 +334,12 @@ export const SOSCameraModal: React.FC<SOSCameraModalProps> = ({
                     // treats ERROR_FILE_SIZE_LIMIT_REACHED as a successful
                     // finish — a truncated clip rather than a lost one.
                     //
-                    // iOS keeps the measured values: 4:3 at 1.2 Mbps, which is
-                    // what stopped a 10-second clip being 16.45 MB and taking
-                    // 2m34s to email.
+                    // 1.2 Mbps is the measured value that stopped a 10-second
+                    // clip being 16.45 MB and taking 2m34s to email. iOS also
+                    // pins the quality to 4:3, and needs the codec passed to
+                    // `recordAsync` for the bitrate to apply at all.
                     videoQuality={Platform.OS === 'android' ? undefined : '4:3'}
-                    videoBitrate={Platform.OS === 'android' ? undefined : SOS_VIDEO_BITRATE}
+                    videoBitrate={SOS_VIDEO_BITRATE}
                 />
 
                 <View style={styles.overlay}>
