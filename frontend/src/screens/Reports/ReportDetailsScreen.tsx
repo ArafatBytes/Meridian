@@ -43,7 +43,7 @@ interface Props {
 }
 
 const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
-  const { t, g } = useTheme();
+  const { t, g, mode } = useTheme();
   const styles = useStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const { reportId } = route.params;
@@ -354,6 +354,9 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
         {/* Map */}
         <View style={styles.mapContainer}>
           <MapView
+            // Follow the app's theme, not the phone's. See `MapComponent.tsx`.
+            key={mode}
+            userInterfaceStyle={mode}
             provider={MAP_PROVIDER}
             style={styles.map}
             initialRegion={{

@@ -203,7 +203,7 @@ interface Props {
 }
 
 const MapScreen: React.FC<Props> = ({ navigation }) => {
-  const { t } = useTheme();
+  const { t, mode } = useTheme();
   const styles = useStyles(makeStyles);
   const { currentLocation, getCurrentLocation } = useLocationStore();
   const [region, setRegion] = useState(DEFAULT_MAP_REGION);
@@ -680,6 +680,12 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <MapView
+        // The map's own light/dark, pinned to the app's theme instead of the
+        // phone's, and remounted when it changes because Android reads the
+        // scheme only at creation. Both lines are load-bearing -- the long
+        // version of why is in `MapComponent.tsx`.
+        key={mode}
+        userInterfaceStyle={mode}
         ref={mapRef}
         provider={MAP_PROVIDER}
         style={styles.map}
