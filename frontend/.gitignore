@@ -65,7 +65,7 @@ yarn-error.log
 
 # testing
 /coverage
-
+/android
 # Yarn
 .yarn/*
 !.yarn/patches
