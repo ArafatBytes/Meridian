@@ -36,13 +36,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import NotificationService from '../../services/notification.service';
-import { borderRadius, fontSize, spacing } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
 import { glassBar, glassSurface } from '../../theme/surfaces';
 import { Aurora } from '../../components/motion';
-import { fontFamily } from '../../theme/type';
+import { fontFamily, radius, space, type } from '../../theme/type';
 import {
   blockingPushProblem,
   type AlertHistoryEntry,
@@ -190,7 +189,7 @@ const AlertPreferencesScreen: React.FC<Props> = ({ navigation }) => {
           translucent fill and needs something to be translucent over —
           see the note in theme/surfaces.ts. */}
       <Aurora intensity="ambient" />
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+      <View style={[styles.header, { paddingTop: insets.top + space.lg }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={t.text} />
         </TouchableOpacity>
@@ -201,7 +200,7 @@ const AlertPreferencesScreen: React.FC<Props> = ({ navigation }) => {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xxl }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + space.huge }}
         refreshControl={<RefreshControl refreshing={false} onRefresh={load} />}
       >
         {/* The blocking problem, if any, before anything else — toggling
@@ -392,104 +391,101 @@ StyleSheet.create({
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: spacing.lg,
-      paddingBottom: spacing.md,
+      paddingHorizontal: space.xl,
+      paddingBottom: space.lg,
     },
-    backButton: { padding: spacing.sm },
-    headerTitle: { fontFamily: fontFamily.display, fontSize: fontSize.xl,color: t.text },
+    backButton: { padding: space.sm },
+    headerTitle: {      ...type.heading, color: t.text },
     headerSpacer: { width: 40, alignItems: 'center' },
     sectionTitle: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.sm,
+      ...type.label,
       color: t.textFaint,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
-      marginTop: spacing.xl,
-      marginBottom: spacing.sm,
-      marginHorizontal: spacing.lg,
+      marginTop: space.xxl,
+      marginBottom: space.sm,
+      marginHorizontal: space.xl,
     },
     row: {
       ...glassSurface(t),
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.md,
-      paddingVertical: spacing.md,
-      paddingHorizontal: spacing.lg,
-      marginHorizontal: spacing.lg,
-      marginBottom: spacing.sm,
+      gap: space.lg,
+      paddingVertical: space.lg,
+      paddingHorizontal: space.xl,
+      marginHorizontal: space.xl,
+      marginBottom: space.sm,
     },
     rowBody: { flex: 1 },
-    rowTitle: { fontFamily: fontFamily.bodySemi, fontSize: fontSize.md,color: t.text },
-    rowSubtitle: { fontFamily: fontFamily.body, fontSize: fontSize.xs, color: t.textSoft, marginTop: 2 },
-    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: spacing.lg },
+    rowTitle: {      ...type.bodyStrong, color: t.text },
+    rowSubtitle: {      ...type.caption, color: t.textSoft, marginTop: 2 },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, paddingHorizontal: space.xl },
     chip: {
-      paddingVertical: spacing.sm,
-      paddingHorizontal: spacing.md,
-      borderRadius: borderRadius.md,
+      paddingVertical: space.sm,
+      paddingHorizontal: space.lg,
+      borderRadius: radius.md,
       backgroundColor: t.fillSoft,
       borderWidth: 1,
       borderColor: t.lineSoft,
     },
     chipActive: { backgroundColor: t.brandStrong, borderColor: t.brand },
-    chipText: { fontFamily: fontFamily.bodySemi, fontSize: fontSize.sm,color: t.textSoft },
+    chipText: {      ...type.label, color: t.textSoft },
     chipTextActive: { color: t.onBrand },
     chipHint: { fontFamily: fontFamily.body, fontSize: 10, color: t.textFaint },
     chipHintActive: { color: t.onBrand, opacity: 0.85 },
     notice: {
       flexDirection: 'row',
-      gap: spacing.sm,
+      gap: space.sm,
       alignItems: 'flex-start',
       backgroundColor: t.fillSoft,
-      padding: spacing.md,
-      marginHorizontal: spacing.lg,
-      marginTop: spacing.md,
-      borderRadius: borderRadius.md,
+      padding: space.lg,
+      marginHorizontal: space.xl,
+      marginTop: space.lg,
+      borderRadius: radius.md,
     },
-    noticeText: { fontFamily: fontFamily.body, flex: 1, fontSize: fontSize.xs, color: t.textSoft, lineHeight: 17 },
+    noticeText: {      ...type.caption, flex: 1, color: t.textSoft, lineHeight: 17 },
     problem: {
       flexDirection: 'row',
-      gap: spacing.sm,
+      gap: space.sm,
       alignItems: 'flex-start',
       backgroundColor: 'rgba(245, 158, 11, 0.12)',
-      padding: spacing.md,
-      marginHorizontal: spacing.lg,
-      marginTop: spacing.md,
-      borderRadius: borderRadius.md,
+      padding: space.lg,
+      marginHorizontal: space.xl,
+      marginTop: space.lg,
+      borderRadius: radius.md,
       borderWidth: 1,
       borderColor: t.warn,
     },
-    problemText: { fontFamily: fontFamily.body, flex: 1, fontSize: fontSize.sm, color: t.text, lineHeight: 18 },
+    problemText: {      ...type.small, flex: 1, color: t.text, lineHeight: 18 },
     testButton: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: spacing.sm,
+      gap: space.sm,
       backgroundColor: t.brand,
-      paddingVertical: spacing.md,
-      marginHorizontal: spacing.lg,
-      marginTop: spacing.xl,
-      borderRadius: borderRadius.md,
+      paddingVertical: space.lg,
+      marginHorizontal: space.xl,
+      marginTop: space.xxl,
+      borderRadius: radius.md,
     },
     testButtonDisabled: { opacity: 0.6 },
-    testButtonText: { fontFamily: fontFamily.bodySemi, color: t.onBrand, fontSize: fontSize.md,},
+    testButtonText: {      ...type.bodyStrong, color: t.onBrand,},
     empty: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.xs,
+      ...type.caption,
       color: t.textFaint,
-      marginHorizontal: spacing.lg,
-      lineHeight: 17,
+      marginHorizontal: space.xl,
     },
     historyRow: {
       ...glassSurface(t),
       flexDirection: 'row',
-      gap: spacing.sm,
+      gap: space.sm,
       alignItems: 'flex-start',
-      padding: spacing.md,
-      marginHorizontal: spacing.lg,
-      marginBottom: spacing.sm,
+      padding: space.lg,
+      marginHorizontal: space.xl,
+      marginBottom: space.sm,
     },
     historyDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
     historyBody: { flex: 1 },
-    historyText: { fontFamily: fontFamily.body, fontSize: fontSize.sm, color: t.text, lineHeight: 18 },
+    historyText: {      ...type.small, color: t.text, lineHeight: 18 },
     historyMeta: { fontFamily: fontFamily.body, fontSize: 10, color: t.textFaint, marginTop: 3 },
   });

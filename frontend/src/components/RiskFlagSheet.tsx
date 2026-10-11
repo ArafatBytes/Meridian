@@ -8,11 +8,10 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { spacing, borderRadius, fontSize } from '../theme';
 import { useTheme } from '../theme/ThemeProvider';
 import { useStyles } from '../theme/useStyles';
 import type { Palette } from '../theme/palette';
-import { fontFamily, space } from '../theme/type';
+import { fontFamily, radius, space, type } from '../theme/type';
 import { Sheet } from './motion';
 import type { RiskFlag } from '../types/contracts/risk';
 import {
@@ -375,41 +374,39 @@ StyleSheet.create({
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: spacing.sm,
+      marginBottom: space.sm,
     },
     severityDot: {
       width: 12,
       height: 12,
       borderRadius: 6,
-      marginRight: spacing.sm,
+      marginRight: space.sm,
     },
     statement: {
-      fontFamily: fontFamily.bodySemi,
+      ...type.bodyStrong,
       flex: 1,
-      fontSize: fontSize.lg,
       color: t.text,
     },
     closeButton: {
-      marginLeft: spacing.sm,
-      padding: spacing.xs,
+      marginLeft: space.sm,
+      padding: space.xs,
     },
     badges: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: spacing.xs,
-      marginBottom: spacing.md,
+      gap: space.xs,
+      marginBottom: space.lg,
     },
     badge: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: space.sm,
       paddingVertical: 4,
-      borderRadius: borderRadius.full,
+      borderRadius: radius.pill,
     },
     badgeText: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.xs,
+      ...type.caption,
     },
     body: {
       flexGrow: 0,
@@ -418,42 +415,37 @@ StyleSheet.create({
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: spacing.sm,
+      paddingVertical: space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: t.line,
     },
     rowLabel: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.sm,
+      ...type.small,
       color: t.textSoft,
     },
     rowValue: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.sm,
+      ...type.label,
       color: t.text,
     },
     sources: {
-      marginTop: spacing.lg,
+      marginTop: space.xl,
     },
     sourcesHeading: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.xs,
+      ...type.overline,
       color: t.textSoft,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
-      marginBottom: spacing.xs,
+      marginBottom: space.xs,
     },
     source: {
-      paddingVertical: spacing.xs,
+      paddingVertical: space.xs,
     },
     sourceId: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.sm,
+      ...type.label,
       color: t.text,
     },
     sourceTitle: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.xs,
+      ...type.caption,
       color: t.textSoft,
     },
     sourceTitleLink: {
@@ -464,11 +456,9 @@ StyleSheet.create({
       color: t.textSoft,
     },
     footnote: {
-      fontFamily: fontFamily.body,
-      marginTop: spacing.lg,
-      fontSize: fontSize.xs,
+      ...type.caption,
+      marginTop: space.xl,
       color: t.textFaint,
-      lineHeight: 16,
     },
   });
 

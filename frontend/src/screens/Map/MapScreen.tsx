@@ -23,13 +23,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { CompositeNavigationProp } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NavigationProp } from '@react-navigation/native';
-import { spacing, borderRadius, fontSize } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
 import { glassSurface, lift } from '../../theme/surfaces';
 import { Glass, Sheet } from '../../components/motion';
-import { fontFamily, space } from '../../theme/type';
+import { fontFamily, radius, space, type } from '../../theme/type';
 import { useLocationStore } from '../../store';
 import { DEFAULT_MAP_REGION } from '../../constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -125,11 +124,11 @@ const MAX_DRAWN_RADIUS_M = 5000;
  * Everything on top of the map is absolutely positioned, and three of those things
  * used to be placed by independent guesses that happened to collide:
  *
- *   - the time control sat at `insets.bottom + spacing.xxl * 2` (96) while the SOS
- *     button occupies `insets.bottom + spacing.xl` upwards (32 to 112), so a
+ *   - the time control sat at `insets.bottom + space.huge * 2` (96) while the SOS
+ *     button occupies `insets.bottom + space.xxl` upwards (32 to 112), so a
  *     full-width bar lay across the top of an 80pt emergency button;
- *   - the report and route buttons started at `insets.top + spacing.xl` (32) while
- *     the search card starts at `insets.top + spacing.xs` (4) and is ~42 tall, so
+ *   - the report and route buttons started at `insets.top + space.xxl` (32) while
+ *     the search card starts at `insets.top + space.xs` (4) and is ~42 tall, so
  *     the card — which has the higher zIndex — covered the top of both;
  *   - the risk badge is content-sized with no right bound, so a long label
  *     ("31 risk flags · news 4 min ago") ran underneath the SOS button.
@@ -585,8 +584,8 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
 
   // Laid out as a stack rather than as independent guesses — see the geometry note
   // at the top of this file.
-  const searchTop = insets.top + spacing.xs;
-  const fabColumnTop = searchTop + searchHeight + spacing.sm;
+  const searchTop = insets.top + space.xs;
+  const fabColumnTop = searchTop + searchHeight + space.sm;
   // Every bottom overlay measures from here rather than from `insets.bottom`.
   // The tab bar now floats *over* this screen instead of sitting below it, so
   // the safe floor moved up by its height — and because the geometry note above
@@ -596,7 +595,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   // What the time control has to clear. It was the top of the SOS button; with
   // that gone it is just the floor plus the badge's own row, so the control sits
   // lower and gives the map back the strip it was using.
-  const overlayFloor = bottomFloor + spacing.xl + 28;
+  const overlayFloor = bottomFloor + space.xxl + 28;
   // `maxWidth` rather than a `right` bound: setting both `left` and `right` on an
   // absolute element stretches it, so a badge reading "0 risk flags" would sit in a
   // pill the width of the screen. This hugs the label.
@@ -604,7 +603,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   // It used to subtract `SOS_SIZE` to stop short of the SOS button. That button
   // is gone, so the badge gets two thirds of the width — enough for the longest
   // real label ("31 risk flags · news 4 min ago") without ellipsis.
-  const riskBadgeMaxWidth = (windowWidth - spacing.lg * 2) * 0.66;
+  const riskBadgeMaxWidth = (windowWidth - space.xl * 2) * 0.66;
 
   return (
     <View style={styles.container}>
@@ -794,7 +793,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       {/* Route Search Interface (Google Maps Style) */}
       {routeMode && (
         <View style={[styles.searchContainer, { top: searchTop }]}>
-          <Glass style={styles.searchBox} padding={spacing.md} radius={borderRadius.lg} intensity={30} elevated>
+          <Glass style={styles.searchBox} padding={space.lg} radius={radius.card} intensity={30} elevated>
             {/* The way out of route mode. It lives inside the card because the
                 floating button that used to do this job sat underneath the card and
                 could not be tapped, and route mode has no other exit — a reload was
@@ -889,7 +888,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
 
           {/* Suggestions List */}
           {suggestions.length > 0 && (
-            <Glass style={styles.suggestionsContainer} padding={0} radius={borderRadius.md} elevated>
+            <Glass style={styles.suggestionsContainer} padding={0} radius={radius.md} elevated>
               <ScrollView keyboardShouldPersistTaps="always">
                 {suggestions.map((item, index) => (
                   <TouchableOpacity
@@ -946,7 +945,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
             styles.actionButton,
             {
               top: fabColumnTop + FAB_SIZE + FAB_GAP,
-              right: spacing.lg,
+              right: space.xl,
               backgroundColor: t.brand
             }
           ]}
@@ -983,7 +982,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           style={[
             styles.riskBadge,
             {
-              bottom: bottomFloor + spacing.xl,
+              bottom: bottomFloor + space.xxl,
               // A content-sized badge with no bound slid under the SOS button once
               // the label grew. Bounded here; the label ellipsizes instead.
               maxWidth: riskBadgeMaxWidth,
@@ -1058,7 +1057,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           the project does not have, a dragged value fires a request per frame, and
           six taps are repeatable on stage in a way a drag is not. */}
       {!routeMode && (
-        <View style={[styles.asOfBar, { bottom: overlayFloor + spacing.sm }]}>
+        <View style={[styles.asOfBar, { bottom: overlayFloor + space.sm }]}>
           <Text style={styles.asOfLabel}>{asOfSummary(asOfOffsetHours, riskFlags, Date.now())}</Text>
           <View style={styles.asOfButtons}>
             {AS_OF_PRESETS.map(({ hours, label }) => (
@@ -1200,13 +1199,13 @@ StyleSheet.create({
     // own the top-right corner.
     riskBadge: {
       position: 'absolute',
-      left: spacing.lg,
+      left: space.xl,
       flexDirection: 'row',
       alignItems: 'center',
       ...glassSurface(t),
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: space.sm,
       paddingVertical: 6,
-      borderRadius: borderRadius.full,
+      borderRadius: radius.pill,
       ...lift(t, 2),
     },
     riskDot: {
@@ -1221,12 +1220,11 @@ StyleSheet.create({
       flexShrink: 1,
     },
     riskBadgeText: {
-      fontFamily: fontFamily.bodySemi,
+      ...type.caption,
       color: t.text,
-      fontSize: fontSize.xs,
     },
     riskBadgeButton: {
-      marginLeft: spacing.sm,
+      marginLeft: space.sm,
       minWidth: 20,
       alignItems: 'center',
     },
@@ -1234,7 +1232,7 @@ StyleSheet.create({
       position: 'absolute',
       // `top` is set inline, below the search card. See the geometry note on
       // `fabColumnTop`; a static top here is what put it behind the card.
-      right: spacing.lg,
+      right: space.xl,
       backgroundColor: t.brand,
       width: FAB_SIZE,
       height: FAB_SIZE,
@@ -1267,11 +1265,10 @@ StyleSheet.create({
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: spacing.sm,
+      marginBottom: space.sm,
     },
     routeHeaderTitle: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.sm,
+      ...type.label,
       color: t.text,
     },
     loadingOverlay: {
@@ -1282,9 +1279,8 @@ StyleSheet.create({
       zIndex: 20,
     },
     loadingText: {
-      fontFamily: fontFamily.bodySemi,
-      marginTop: spacing.md,
-      fontSize: fontSize.md,
+      ...type.bodyStrong,
+      marginTop: space.lg,
       color: t.brand,
     },
     // The dev-only "as of" control. Sits above the SOS button rather than beside it:
@@ -1292,31 +1288,30 @@ StyleSheet.create({
     // would be memorable for the wrong reason.
     asOfBar: {
       position: 'absolute',
-      left: spacing.md,
-      right: spacing.md,
+      left: space.lg,
+      right: space.lg,
       ...glassSurface(t),
-      borderRadius: borderRadius.lg,
-      paddingVertical: spacing.sm,
-      paddingHorizontal: spacing.md,
+      borderRadius: radius.card,
+      paddingVertical: space.sm,
+      paddingHorizontal: space.lg,
       borderWidth: 1,
       borderColor: t.line,
       ...lift(t, 3),
     },
     asOfLabel: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.xs,
+      ...type.caption,
       color: t.textSoft,
-      marginBottom: spacing.xs,
+      marginBottom: space.xs,
     },
     asOfButtons: {
       flexDirection: 'row',
-      gap: spacing.xs,
+      gap: space.xs,
     },
     asOfButton: {
       flex: 1,
-      paddingVertical: spacing.xs,
+      paddingVertical: space.xs,
       paddingHorizontal: 2,
-      borderRadius: borderRadius.sm,
+      borderRadius: radius.sm,
       backgroundColor: t.fillSoft,
       alignItems: 'center',
     },
@@ -1324,8 +1319,7 @@ StyleSheet.create({
       backgroundColor: t.brand,
     },
     asOfButtonText: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.xs,
+      ...type.caption,
       color: t.textSoft,
     },
     asOfButtonTextActive: {
@@ -1341,80 +1335,73 @@ StyleSheet.create({
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: spacing.lg,
+      marginBottom: space.xl,
     },
     categoryBadge: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
+      paddingHorizontal: space.lg,
+      paddingVertical: space.sm,
       backgroundColor: t.bg,
-      borderRadius: borderRadius.md,
+      borderRadius: radius.md,
     },
     categoryText: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.md,
+      ...type.bodyStrong,
     },
     crimeTitle: {
-      fontFamily: fontFamily.display,
-      fontSize: fontSize.xl,
+      ...type.heading,
       color: t.text,
-      marginBottom: spacing.md,
+      marginBottom: space.lg,
     },
     infoRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: spacing.sm,
-      gap: spacing.sm,
+      marginBottom: space.sm,
+      gap: space.sm,
     },
     infoText: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.md,
+      ...type.body,
       color: t.textSoft,
     },
     verifiedBadge: {
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: t.ok,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: borderRadius.md,
+      paddingHorizontal: space.lg,
+      paddingVertical: space.sm,
+      borderRadius: radius.md,
       alignSelf: 'flex-start',
-      marginTop: spacing.sm,
-      gap: spacing.xs,
+      marginTop: space.sm,
+      gap: space.xs,
     },
     verifiedText: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.sm,
+      ...type.label,
       color: t.ok,
     },
     divider: {
       height: 1,
       backgroundColor: t.fillStrong,
-      marginVertical: spacing.lg,
+      marginVertical: space.xl,
     },
     sectionLabel: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.md,
+      ...type.bodyStrong,
       color: t.text,
-      marginBottom: spacing.sm,
+      marginBottom: space.sm,
     },
     description: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.md,
+      ...type.body,
       color: t.textSoft,
-      lineHeight: 22,
     },
     searchContainer: {
       position: 'absolute',
-      left: spacing.lg,
-      right: spacing.lg,
+      left: space.xl,
+      right: space.xl,
       zIndex: 10,
     },
     searchBox: {
       // No fill, border or radius here: `Glass` draws all three. What stays is
       // the padding. The lift is `Glass`'s own `elevated`, which it applies on
       // request -- so this does not add one of its own.
-      borderRadius: borderRadius.lg,
-      padding: spacing.md,
+      borderRadius: radius.card,
+      padding: space.lg,
     },
     inputRow: {
       flexDirection: 'row',
@@ -1423,13 +1410,13 @@ StyleSheet.create({
     },
     activeInputRow: {
       backgroundColor: '#f8f9fa',
-      borderRadius: borderRadius.sm,
+      borderRadius: radius.sm,
     },
     inputDot: {
       width: 8,
       height: 8,
       borderRadius: 4,
-      marginRight: spacing.md,
+      marginRight: space.lg,
     },
     sourceDot: {
       backgroundColor: t.brand,
@@ -1440,9 +1427,9 @@ StyleSheet.create({
     },
     profileRow: {
       flexDirection: 'row',
-      gap: spacing.sm,
-      paddingTop: spacing.sm,
-      marginTop: spacing.xs,
+      gap: space.sm,
+      paddingTop: space.sm,
+      marginTop: space.xs,
       borderTopWidth: 1,
       borderTopColor: t.lineSoft,
     },
@@ -1450,13 +1437,13 @@ StyleSheet.create({
       flexDirection: 'row',
       alignItems: 'center',
       gap: 5,
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: space.lg,
       paddingVertical: 6,
-      borderRadius: borderRadius.md,
+      borderRadius: radius.md,
       backgroundColor: t.fillSoft,
     },
     profileChipActive: { backgroundColor: t.brandStrong },
-    profileChipText: { fontFamily: fontFamily.bodySemi, fontSize: fontSize.xs, color: t.textSoft,},
+    profileChipText: {      ...type.caption, color: t.textSoft,},
     profileChipTextActive: { color: t.brandStrong },
     connectorLine: {
       width: 2,
@@ -1466,27 +1453,25 @@ StyleSheet.create({
       marginVertical: 2,
     },
     input: {
-      fontFamily: fontFamily.body,
+      ...type.body,
       flex: 1,
-      fontSize: fontSize.md,
       color: t.text,
     },
     suggestionsContainer: {
-      marginTop: spacing.sm,
-      borderRadius: borderRadius.md,
+      marginTop: space.sm,
+      borderRadius: radius.md,
       maxHeight: 200,
     },
     suggestionItem: {
       flexDirection: 'row',
       alignItems: 'center',
-      padding: spacing.md,
+      padding: space.lg,
       borderBottomWidth: 1,
       borderBottomColor: t.line,
     },
     suggestionText: {
-      fontFamily: fontFamily.body,
-      marginLeft: spacing.md,
-      fontSize: fontSize.md,
+      ...type.body,
+      marginLeft: space.lg,
       color: t.text,
       flex: 1,
     },

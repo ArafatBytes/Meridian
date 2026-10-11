@@ -1,7 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Modal, TouchableOpacity, Alert, Animated, Easing, Platform } from 'react-native';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
-import { spacing, typography } from '../theme';
 import { useTheme } from '../theme/ThemeProvider';
 import { useStyles } from '../theme/useStyles';
 import type { Palette } from '../theme/palette';

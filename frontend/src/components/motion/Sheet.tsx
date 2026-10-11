@@ -149,13 +149,32 @@ export const Sheet: React.FC<SheetProps> = ({
           />
         ) : null}
 
+        {/*
+          An opaque pane, not `glassFill`.
+
+          `Glass` fills with `glassFill` -- 62% white, 58% navy -- which is
+          right when there is a blur underneath doing the legibility work. In a
+          `Modal` there is none (see above), and 62% white composited over a
+          45% dark scrim is grey. On the phone the Add Contact sheet came out
+          the colour of wet newspaper, with the screen it was covering faintly
+          visible through the form fields.
+
+          So the fill becomes `surfaceRaised` and the other three conditions
+          from `Glass.tsx` -- the light edge, the top sheen, the shadow -- carry
+          the material on their own. Which they do: it still reads as a pane,
+          it just reads as an opaque one.
+        */}
         <Glass
           blur={false}
           elevated
           radius={radiusProp ?? (bottom ? radius.sheet : radius.card)}
           padding={padding}
           contentStyle={contentStyle}
-          style={[bottom ? styles.bottomPane : styles.centerPane, style]}
+          style={[
+            { backgroundColor: t.surfaceRaised },
+            bottom ? styles.bottomPane : styles.centerPane,
+            style,
+          ]}
         >
           {children}
         </Glass>

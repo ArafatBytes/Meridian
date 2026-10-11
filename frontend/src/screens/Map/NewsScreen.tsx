@@ -33,13 +33,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { spacing, borderRadius, typography } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
 import { glassSurface } from '../../theme/surfaces';
 import { Aurora } from '../../components/motion';
-import { fontFamily } from '../../theme/type';
+import { fontFamily, radius, space, type } from '../../theme/type';
 import { riskService, type IngestionStatus, type MapRegion } from '../../services/risk.service';
 import { messageOf } from '../../services/casework.service';
 import { riskBand } from '../../components/RiskFlagSheet';
@@ -185,7 +184,7 @@ const NewsScreen: React.FC = () => {
         <ScrollView
           contentContainerStyle={[
             styles.body,
-            { paddingBottom: insets.bottom + spacing.xl },
+            { paddingBottom: insets.bottom + space.xxl },
           ]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
@@ -302,90 +301,90 @@ StyleSheet.create({
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.md,
+      paddingHorizontal: space.xl,
+      paddingVertical: space.lg,
     },
-    headerTitle: { ...typography.h4, color: t.text },
+    headerTitle: { ...type.heading, color: t.text },
 
     statusBar: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.xs,
-      paddingHorizontal: spacing.lg,
-      paddingBottom: spacing.sm,
+      gap: space.xs,
+      paddingHorizontal: space.xl,
+      paddingBottom: space.sm,
     },
-    statusText: { ...typography.caption, color: t.textSoft, flex: 1 },
+    statusText: { ...type.caption, color: t.textSoft, flex: 1 },
 
     tabs: {
       flexDirection: 'row',
-      gap: spacing.sm,
-      paddingHorizontal: spacing.lg,
-      paddingBottom: spacing.md,
+      gap: space.sm,
+      paddingHorizontal: space.xl,
+      paddingBottom: space.lg,
     },
     tab: {
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: space.lg,
       paddingVertical: 6,
-      borderRadius: borderRadius.sm,
+      borderRadius: radius.sm,
       backgroundColor: t.fillSoft,
     },
     tabActive: { backgroundColor: t.brand },
-    tabText: { ...typography.bodySmall, fontFamily: fontFamily.bodySemi, color: t.textSoft },
+    tabText: { ...type.small, fontFamily: fontFamily.bodySemi, color: t.textSoft },
     tabTextActive: { color: t.onBrand },
 
     centre: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    body: { paddingHorizontal: spacing.lg, gap: spacing.md },
-    counter: { ...typography.caption, color: t.textSoft },
+    body: { paddingHorizontal: space.xl, gap: space.lg },
+    counter: { ...type.caption, color: t.textSoft },
 
     card: {
       ...glassSurface(t),
-      padding: spacing.md,
-      gap: spacing.xs,
+      padding: space.lg,
+      gap: space.xs,
     },
-    cardTop: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
-    outlet: { ...typography.caption, fontFamily: fontFamily.bodySemi, color: t.brand },
-    time: { ...typography.caption, color: t.textSoft },
-    title: { ...typography.body, fontFamily: fontFamily.bodySemi, color: t.text, lineHeight: 21 },
+    cardTop: { flexDirection: 'row', justifyContent: 'space-between', gap: space.sm },
+    outlet: { ...type.caption, fontFamily: fontFamily.bodySemi, color: t.brand },
+    time: { ...type.caption, color: t.textSoft },
+    title: { ...type.body, fontFamily: fontFamily.bodySemi, color: t.text, lineHeight: 21 },
     titleLink: { color: t.brand },
 
-    outcome: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: 2 },
+    outcome: { flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: 2 },
     dot: { width: 8, height: 8, borderRadius: 4 },
-    outcomeText: { ...typography.bodySmall, color: t.textSoft, flex: 1 },
+    outcomeText: { ...type.small, color: t.textSoft, flex: 1 },
 
-    tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: 4 },
+    tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginTop: 4 },
     tag: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
       backgroundColor: t.fillSoft,
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: space.sm,
       paddingVertical: 2,
-      borderRadius: borderRadius.sm,
+      borderRadius: radius.sm,
     },
-    tagText: { ...typography.caption, color: t.textSoft },
+    tagText: { ...type.caption, color: t.textSoft },
 
     errorCard: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.sm,
+      gap: space.sm,
       backgroundColor: `${t.danger}11`,
-      borderRadius: borderRadius.md,
-      padding: spacing.md,
+      borderRadius: radius.md,
+      padding: space.lg,
     },
-    errorText: { ...typography.bodySmall, color: t.danger, flex: 1 },
+    errorText: { ...type.small, color: t.danger, flex: 1 },
 
     emptyCard: {
       alignItems: 'center',
-      gap: spacing.sm,
-      paddingVertical: spacing.xxl,
-      paddingHorizontal: spacing.md,
+      gap: space.sm,
+      paddingVertical: space.huge,
+      paddingHorizontal: space.lg,
     },
-    emptyTitle: { ...typography.h4, color: t.text },
-    emptyText: { ...typography.bodySmall, color: t.textSoft, textAlign: 'center' },
+    emptyTitle: { ...type.heading, color: t.text },
+    emptyText: { ...type.small, color: t.textSoft, textAlign: 'center' },
 
     footnote: {
-      ...typography.caption,
+      ...type.caption,
       color: t.textSoft,
-      marginTop: spacing.sm,
+      marginTop: space.sm,
       lineHeight: 16,
     },
   });

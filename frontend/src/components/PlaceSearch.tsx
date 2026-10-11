@@ -9,11 +9,10 @@ import {
   Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { spacing, borderRadius, fontSize } from '../theme';
 import { useTheme } from '../theme/ThemeProvider';
 import { useStyles } from '../theme/useStyles';
 import type { Palette } from '../theme/palette';
-import { fontFamily } from '../theme/type';
+import { fontFamily, radius, space, type } from '../theme/type';
 import { lift } from '../theme/surfaces';
 import { geoService } from '../services/geo.service';
 import type { GeoResolution, GeoMethod } from '../types/contracts/geo';
@@ -164,33 +163,31 @@ const makeStyles = (t: Palette) =>
 StyleSheet.create({
     container: {
       backgroundColor: t.surface,
-      borderRadius: borderRadius.xl,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
+      borderRadius: radius.card,
+      paddingHorizontal: space.lg,
+      paddingVertical: space.sm,
       ...lift(t, 3),
     },
     inputRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.sm,
+      gap: space.sm,
     },
     input: {
-      fontFamily: fontFamily.body,
+      ...type.small,
       flex: 1,
-      paddingVertical: spacing.xs,
-      fontSize: fontSize.sm,
+      paddingVertical: space.xs,
       color: t.text,
     },
     resultRow: {
-      marginTop: spacing.sm,
-      paddingTop: spacing.sm,
+      marginTop: space.sm,
+      paddingTop: space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: t.line,
-      gap: spacing.xs,
+      gap: space.xs,
     },
     resolvedName: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.sm,
+      ...type.label,
       color: t.text,
     },
     chip: {
@@ -199,27 +196,25 @@ StyleSheet.create({
       alignItems: 'center',
       gap: 4,
       borderWidth: 1,
-      borderRadius: borderRadius.full,
-      paddingHorizontal: spacing.sm,
+      borderRadius: radius.pill,
+      paddingHorizontal: space.sm,
       paddingVertical: 2,
     },
     chipText: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.xs,
+      ...type.caption,
     },
     failRow: {
-      marginTop: spacing.sm,
-      paddingTop: spacing.sm,
+      marginTop: space.sm,
+      paddingTop: space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: t.line,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.xs,
+      gap: space.xs,
     },
     failText: {
-      fontFamily: fontFamily.body,
+      ...type.caption,
       flex: 1,
-      fontSize: fontSize.xs,
       color: t.textSoft,
     },
   });

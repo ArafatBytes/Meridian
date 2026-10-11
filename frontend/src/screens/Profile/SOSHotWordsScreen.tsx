@@ -35,13 +35,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { spacing, borderRadius, fontSize } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
 import { glassBar, glassSurface, lift } from '../../theme/surfaces';
 import { Aurora } from '../../components/motion';
-import { fontFamily } from '../../theme/type';
+import { fontFamily, radius, space, type } from '../../theme/type';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store';
@@ -229,7 +228,7 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
           sits behind the rest without touching the layout. */}
       <Aurora intensity="ambient" />
       {/* Header with Back Button */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+      <View style={[styles.header, { paddingTop: insets.top + space.lg }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -352,34 +351,31 @@ StyleSheet.create({
       ...glassSurface(t),
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.md,
-      marginHorizontal: spacing.lg,
-      marginTop: spacing.md,
-      padding: spacing.lg,
+      gap: space.lg,
+      marginHorizontal: space.xl,
+      marginTop: space.lg,
+      padding: space.xl,
     },
     guardianLinkBody: { flex: 1 },
-    guardianLinkTitle: { fontFamily: fontFamily.bodySemi, fontSize: fontSize.md,color: t.text },
+    guardianLinkTitle: {      ...type.bodyStrong, color: t.text },
     guardianLinkSubtitle: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.xs,
+      ...type.caption,
       color: t.textSoft,
       marginTop: 2,
-      lineHeight: 16,
     },
     header: {
       ...glassBar(t),
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: spacing.lg,
-      paddingBottom: spacing.md,
+      paddingHorizontal: space.xl,
+      paddingBottom: space.lg,
     },
     backButton: {
-      padding: spacing.sm,
+      padding: space.sm,
     },
     headerTitle: {
-      fontFamily: fontFamily.display,
-      fontSize: fontSize.xl,
+      ...type.heading,
       color: t.text,
     },
     placeholder: {
@@ -387,46 +383,44 @@ StyleSheet.create({
     },
     inputSection: {
       ...glassSurface(t),
-      padding: spacing.lg,
-      marginTop: spacing.md,
-      marginHorizontal: spacing.lg,
+      padding: space.xl,
+      marginTop: space.lg,
+      marginHorizontal: space.xl,
       ...lift(t, 2),
     },
     inputContainer: {
       backgroundColor: t.bg,
-      borderRadius: borderRadius.md,
+      borderRadius: radius.md,
       borderWidth: 1,
       borderColor: t.line,
-      padding: spacing.md,
+      padding: space.lg,
       minHeight: 80,
-      marginBottom: spacing.md,
+      marginBottom: space.lg,
     },
     input: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.md,
+      ...type.body,
       color: t.text,
       textAlignVertical: 'top',
     },
     buttonRow: {
       flexDirection: 'row',
-      gap: spacing.md,
+      gap: space.lg,
     },
     voiceButton: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: spacing.md,
-      paddingHorizontal: spacing.sm,
+      paddingVertical: space.lg,
+      paddingHorizontal: space.sm,
       backgroundColor: t.bg,
-      borderRadius: borderRadius.md,
+      borderRadius: radius.md,
       borderWidth: 1,
       borderColor: t.brand,
-      gap: spacing.xs,
+      gap: space.xs,
     },
     voiceButtonText: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.md,
+      ...type.bodyStrong,
       color: t.brand,
     },
     listeningButton: {
@@ -441,15 +435,14 @@ StyleSheet.create({
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: spacing.md,
-      paddingHorizontal: spacing.sm,
+      paddingVertical: space.lg,
+      paddingHorizontal: space.sm,
       backgroundColor: t.brand,
-      borderRadius: borderRadius.md,
-      gap: spacing.xs,
+      borderRadius: radius.md,
+      gap: space.xs,
     },
     addButtonText: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.md,
+      ...type.bodyStrong,
       color: t.onBrand,
     },
     disabledButton: {
@@ -457,62 +450,58 @@ StyleSheet.create({
     },
     listSection: {
       flex: 1,
-      marginTop: spacing.lg,
-      paddingHorizontal: spacing.lg,
+      marginTop: space.xl,
+      paddingHorizontal: space.xl,
     },
     sectionTitle: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.lg,
+      ...type.bodyStrong,
       color: t.text,
-      marginBottom: spacing.md,
+      marginBottom: space.lg,
     },
     listContent: {
-      paddingBottom: spacing.xl,
+      paddingBottom: space.xxl,
     },
     hotWordItem: {
       ...glassSurface(t),
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      padding: spacing.lg,
-      marginBottom: spacing.md,
+      padding: space.xl,
+      marginBottom: space.lg,
       ...lift(t, 1),
     },
     hotWordContent: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.md,
+      gap: space.lg,
     },
     hotWordText: {
-      fontFamily: fontFamily.bodyMedium,
+      ...type.body,
       flex: 1,
-      fontSize: fontSize.md,
       color: t.text,
     },
     deleteButton: {
-      padding: spacing.sm,
+      padding: space.sm,
     },
     emptyState: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: spacing.xxl * 2,
+      paddingVertical: space.huge * 2,
     },
     emptyStateText: {
-      fontFamily: fontFamily.display,
-      fontSize: fontSize.xl,
+      ...type.heading,
       color: t.text,
-      marginTop: spacing.lg,
+      marginTop: space.xl,
       textAlign: 'center',
     },
     emptyStateSubtext: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.md,
+      ...type.body,
       color: t.textSoft,
-      marginTop: spacing.sm,
+      marginTop: space.sm,
       textAlign: 'center',
-      paddingHorizontal: spacing.xl,
+      paddingHorizontal: space.xxl,
     },
   });
 

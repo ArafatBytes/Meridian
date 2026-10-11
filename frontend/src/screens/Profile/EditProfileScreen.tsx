@@ -14,13 +14,12 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { spacing, borderRadius, fontSize } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
 import { glassSurface, lift } from '../../theme/surfaces';
 import { Aurora } from '../../components/motion';
-import { fontFamily } from '../../theme/type';
+import { fontFamily, radius, space, type } from '../../theme/type';
 import { useAuthStore } from '../../store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
@@ -315,7 +314,7 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
         colors={g.aurora}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+        style={[styles.header, { paddingTop: insets.top + space.lg }]}>
         <TouchableOpacity
           style={styles.headerButton}
           onPress={() => navigation.goBack()}
@@ -330,7 +329,7 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
         style={styles.content}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + spacing.xl },
+          { paddingBottom: insets.bottom + space.xxl },
         ]}
       >
         {/* Avatar Section */}
@@ -535,7 +534,7 @@ StyleSheet.create({
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      padding: spacing.lg,
+      padding: space.xl,
     },
     headerButton: {
       width: 40,
@@ -544,25 +543,24 @@ StyleSheet.create({
       alignItems: 'center',
     },
     headerTitle: {
-      fontFamily: fontFamily.display,
-      fontSize: fontSize.xl,
+      ...type.heading,
       color: t.onBrand,
     },
     content: {
       flex: 1,
     },
     scrollContent: {
-      padding: spacing.lg,
+      padding: space.xl,
     },
     avatarSection: {
       alignItems: 'center',
-      marginBottom: spacing.xl,
+      marginBottom: space.xxl,
     },
     avatarContainer: {
       width: 120,
       height: 120,
       borderRadius: 60,
-      marginBottom: spacing.sm,
+      marginBottom: space.sm,
       position: 'relative',
     },
     avatar: {
@@ -603,44 +601,41 @@ StyleSheet.create({
       borderColor: t.bg,
     },
     avatarHint: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.sm,
+      ...type.small,
       color: t.textSoft,
     },
     section: {
       ...glassSurface(t),
-      padding: spacing.lg,
-      marginBottom: spacing.md,
+      padding: space.xl,
+      marginBottom: space.lg,
       ...lift(t, 1),
     },
     sectionHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: spacing.md,
+      marginBottom: space.lg,
     },
     sectionTitle: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.lg,
+      ...type.bodyStrong,
       color: t.text,
-      marginBottom: spacing.md,
+      marginBottom: space.lg,
     },
     inputContainer: {
-      marginBottom: spacing.md,
+      marginBottom: space.lg,
     },
     label: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.sm,
+      ...type.label,
       color: t.text,
-      marginBottom: spacing.xs,
+      marginBottom: space.xs,
     },
     input: {
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: t.bg,
-      borderRadius: borderRadius.sm,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
+      borderRadius: radius.sm,
+      paddingHorizontal: space.lg,
+      paddingVertical: space.sm,
       borderWidth: 1,
       borderColor: t.line,
     },
@@ -648,58 +643,53 @@ StyleSheet.create({
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: t.fillSoft,
-      borderRadius: borderRadius.sm,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
+      borderRadius: radius.sm,
+      paddingHorizontal: space.lg,
+      paddingVertical: space.sm,
       borderWidth: 1,
       borderColor: t.line,
     },
     textInput: {
-      fontFamily: fontFamily.body,
+      ...type.body,
       flex: 1,
-      marginLeft: spacing.sm,
-      fontSize: fontSize.md,
+      marginLeft: space.sm,
       color: t.text,
     },
     disabledText: {
-      fontFamily: fontFamily.body,
+      ...type.body,
       flex: 1,
-      marginLeft: spacing.sm,
-      fontSize: fontSize.md,
+      marginLeft: space.sm,
       color: t.textSoft,
     },
     hint: {
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.xs,
+      ...type.caption,
       color: t.textSoft,
-      marginTop: spacing.xs,
+      marginTop: space.xs,
     },
     changePasswordButton: {
       backgroundColor: t.accent,
-      borderRadius: borderRadius.sm,
-      paddingVertical: spacing.md,
+      borderRadius: radius.sm,
+      paddingVertical: space.lg,
       alignItems: 'center',
-      marginTop: spacing.md,
+      marginTop: space.lg,
     },
     changePasswordButtonText: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.md,
+      ...type.bodyStrong,
       color: t.onBrand,
     },
     saveButton: {
       backgroundColor: t.brand,
-      borderRadius: borderRadius.md,
-      paddingVertical: spacing.md,
+      borderRadius: radius.md,
+      paddingVertical: space.lg,
       flexDirection: 'row',
       justifyContent: 'center',
       alignItems: 'center',
       ...lift(t, 2, t.brand),
     },
     saveButtonText: {
-      fontFamily: fontFamily.bodySemi,
-      fontSize: fontSize.lg,
+      ...type.bodyStrong,
       color: t.onBrand,
-      marginLeft: spacing.sm,
+      marginLeft: space.sm,
     },
   });
 

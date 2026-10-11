@@ -189,7 +189,17 @@ const ProfileScreen: React.FC<Props> = ({ navigation }) => {
 
           <Reveal index={1}>
             <Text
-              style={[type.title, onGradient, styles.centred, { marginTop: space.md }]}
+              // `onBrand`, which is the token for text that sits ON the Aurora
+              // gradient. Without a colour it fell back to the platform
+              // default -- black -- so the user's own name was the one
+              // unreadable thing on the header. The two lines under it carry
+              // their colour in `styles.sub`, which is why they looked right.
+              style={[
+                type.title,
+                onGradient,
+                styles.centred,
+                { color: t.onBrand, marginTop: space.md },
+              ]}
             >
               {user?.name ?? 'Your profile'}
             </Text>

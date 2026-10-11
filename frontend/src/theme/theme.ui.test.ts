@@ -162,6 +162,44 @@ describe('no style pairs fontFamily with fontWeight', () => {
   });
 });
 
+describe('there is one scale, not two', () => {
+  /**
+   * `theme.ts` says it at the top: **do not add keys here**. It is the floor
+   * under the recolour — the legacy names, repointed at the Aurora palette so
+   * that 26 un-migrated screens stopped being purple in a single edit.
+   *
+   * Twelve screens then went on using `spacing`, `borderRadius`, `fontSize` and
+   * `typography` from it, which is why they sat oddly beside Home and Profile.
+   * The numbers are genuinely different: `spacing.md` is 16 and `space.md` is
+   * 12, `borderRadius.lg` is 16 and `radius.card` is 20, the old type scale ran
+   * 12/14/16/18/20/24/32 and the real one runs 11/13/15/18/24/34. A screen
+   * built from the first set cannot line up with one built from the second, and
+   * no amount of recolouring hides it.
+   *
+   * `colors` is exempt and stays exported: `theme.test.ts` pins its keys,
+   * because a missing one is a runtime `undefined` passed to a style prop,
+   * which React Native ignores in silence.
+   */
+  const LEGACY = ['spacing', 'borderRadius', 'fontSize', 'fontWeight', 'typography', 'shadows'];
+  const offenders: string[] = [];
+
+  for (const file of sourceFiles()) {
+    const rel = path.relative(SRC, file).split(path.sep).join('/');
+    if (rel.startsWith('theme/')) continue;
+    const source = fs.readFileSync(file, 'utf8');
+    const imports = source.match(/import \{[^}]*\} from '(?:\.\.\/)+theme';/g) ?? [];
+    for (const line of imports) {
+      for (const name of LEGACY) {
+        if (new RegExp(`\\b${name}\\b`).test(line)) offenders.push(`${rel}: ${name}`);
+      }
+    }
+  }
+
+  it('so nothing outside theme/ imports the legacy scale', () => {
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe('the spacing and radius scales', () => {
   it('increase monotonically, with no duplicates', () => {
     const steps = [space.xs, space.sm, space.md, space.lg, space.xl, space.xxl, space.huge];
