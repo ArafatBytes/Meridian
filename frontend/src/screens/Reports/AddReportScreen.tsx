@@ -1198,9 +1198,9 @@ StyleSheet.create({
       padding: space.xl,
     },
     sectionTitle: {
-      ...type.bodyStrong,
-      color: t.text,
-      marginBottom: space.lg,
+      ...type.overline,
+      color: t.textFaint,
+      marginBottom: space.md,
     },
     categoryGrid: {
       flexDirection: 'row',

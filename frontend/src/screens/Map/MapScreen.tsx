@@ -1382,8 +1382,8 @@ StyleSheet.create({
       marginVertical: space.xl,
     },
     sectionLabel: {
-      ...type.bodyStrong,
-      color: t.text,
+      ...type.overline,
+      color: t.textFaint,
       marginBottom: space.sm,
     },
     description: {

@@ -398,10 +398,8 @@ StyleSheet.create({
     headerTitle: {      ...type.heading, color: t.text },
     headerSpacer: { width: 40, alignItems: 'center' },
     sectionTitle: {
-      ...type.label,
+      ...type.overline,
       color: t.textFaint,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
       marginTop: space.xxl,
       marginBottom: space.sm,
       marginHorizontal: space.xl,

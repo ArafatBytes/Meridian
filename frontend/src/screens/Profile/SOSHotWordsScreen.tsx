@@ -454,9 +454,9 @@ StyleSheet.create({
       paddingHorizontal: space.xl,
     },
     sectionTitle: {
-      ...type.bodyStrong,
-      color: t.text,
-      marginBottom: space.lg,
+      ...type.overline,
+      color: t.textFaint,
+      marginBottom: space.md,
     },
     listContent: {
       paddingBottom: space.xxl,
