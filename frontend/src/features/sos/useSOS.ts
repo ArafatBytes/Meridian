@@ -38,11 +38,51 @@ export type SosStage = 'uploading' | 'sending';
  */
 export type SosTrigger = 'button' | 'shake' | 'hot-word';
 
+/**
+ * How the send ended, for the screen to render.
+ *
+ * State rather than `Alert.alert`, for two reasons beyond appearance. The
+ * native dialog cannot say *what was sent* in any structured way — it takes one
+ * string, so the counts had to be jammed into a sentence with a `\n` in it —
+ * and it cannot be styled, so the most important moment in the product looked
+ * like a system error.
+ *
+ * `videoAttached` is carried because "SOS sent" while the video was silently
+ * dropped is the kind of quiet lie this codebase keeps refusing to tell: on a
+ * phone whose camera cannot record, the alert still goes out, and the person
+ * should be able to see which half arrived.
+ */
+export interface SosResult {
+  ok: boolean;
+  contactsNotified: number;
+  policeStationsFound: number;
+  videoAttached: boolean;
+  /** Why it failed. Only set when `ok` is false. */
+  message?: string;
+}
+
 export interface SosController {
   cameraVisible: boolean;
   sending: boolean;
   progress: number;
   stage: SosStage;
+  /**
+   * Whether the send has been put in the corner.
+   *
+   * The upload is unaffected either way: it is an in-flight `XMLHttpRequest`
+   * held by this hook, which lives in `GuardianProvider` at the app root, so it
+   * neither knows nor cares what is on screen. Minimising hides a modal; it
+   * does not pause, cancel or restart anything.
+   */
+  minimized: boolean;
+  /** Put the send in the corner and give the app back. */
+  minimize: () => void;
+  /** Bring the full progress card back. */
+  expand: () => void;
+  /** The outcome sheet's contents, or null when there is nothing to show. */
+  result: SosResult | null;
+  /** Close the outcome sheet. */
+  dismissResult: () => void;
   /**
    * Open the camera. Safe to call from a button, the shake listener, or the
    * hot-word listener.
@@ -68,6 +108,8 @@ export function useSOS(): SosController {
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState(0);
   const [stage, setStage] = useState<SosStage>('uploading');
+  const [result, setResult] = useState<SosResult | null>(null);
+  const [minimized, setMinimized] = useState(false);
 
   // A ref, not state: it is read inside `onVideoRecorded`, which was created on
   // an earlier render, and the whole reason this file exists is that reading
@@ -103,6 +145,11 @@ export function useSOS(): SosController {
   const onVideoRecorded = useCallback(async (uri: string | null) => {
     setCameraVisible(false);
     setSending(true);
+    // Each send starts in the foreground. Inheriting `minimized` from the
+    // last one would mean an SOS that reported itself only in a corner —
+    // and the one before it was minimised by somebody who is no longer
+    // necessarily holding the phone.
+    setMinimized(false);
 
     try {
       // Fetched at trigger time, not read from the store.
@@ -173,8 +220,21 @@ export function useSOS(): SosController {
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 
         xhr.upload.onprogress = event => {
-          if (event.lengthComputable) {
-            const realPercent = Math.round((event.loaded / event.total) * 100);
+          // `event.total > 0`, not `event.lengthComputable`: React Native
+          // hardcodes `lengthComputable: true` on upload progress
+          // (`Libraries/Network/XMLHttpRequest.js:329`), so the flag says
+          // nothing about whether `total` is usable.
+          if (event.total > 0) {
+            // Clamped. `loaded` and `total` are counted by different pieces of
+            // the platform -- a counting sink on the request body against the
+            // multipart body's own computed length -- and on a real Android
+            // handset `loaded` ran past `total`, so the overlay read "192%
+            // Completed" during a working SOS. A progress bar that can read
+            // 192% is one nobody believes at 40% either.
+            const realPercent = Math.min(
+              100,
+              Math.round((event.loaded / event.total) * 100),
+            );
             setProgress(prev => {
               const next = Math.max(prev, realPercent);
               simulated = next;
@@ -219,21 +279,32 @@ export function useSOS(): SosController {
         xhr.send(formData);
       });
 
-      Alert.alert(
-        'SOS Sent!',
-        `Emergency services and ${data.contacts_notified} contacts have been notified.\n` +
-          `Police Stations found: ${data.police_stations_found ?? 0}`,
-        [{ text: 'OK' }],
-      );
+      setResult({
+        ok: true,
+        contactsNotified: data.contacts_notified ?? 0,
+        policeStationsFound: data.police_stations_found ?? 0,
+        videoAttached: Boolean(uri),
+      });
     } catch (error: any) {
       console.error('SOS Error:', error);
-      Alert.alert('SOS Failed', error.message || 'Could not send SOS alert. Please try again.');
+      setResult({
+        ok: false,
+        contactsNotified: 0,
+        policeStationsFound: 0,
+        videoAttached: false,
+        message: error.message || 'Could not send the alert. Please try again.',
+      });
     } finally {
       setSending(false);
     }
   }, [getCurrentLocation]);
 
   const cancel = useCallback(() => setCameraVisible(false), []);
+
+  const dismissResult = useCallback(() => setResult(null), []);
+
+  const minimize = useCallback(() => setMinimized(true), []);
+  const expand = useCallback(() => setMinimized(false), []);
 
   /**
    * The camera failed. Send the SOS anyway, with location only.
@@ -279,6 +350,11 @@ ${message}`,
     sending,
     progress,
     stage,
+    minimized,
+    minimize,
+    expand,
+    result,
+    dismissResult,
     start,
     cancel,
     onVideoRecorded,
