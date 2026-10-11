@@ -40,6 +40,61 @@ import type { Palette } from './palette';
 import { radius } from './type';
 
 /**
+ * How far off the page something sits. Four levels, and nothing in between.
+ *
+ * ## Why not `elevation`
+ *
+ * Android's `elevation` renders a view's shadow into the same region as the
+ * view and then draws the view on top. With an opaque background you never see
+ * it. With `glassFill` — 62% white in light mode, 58% navy in dark — you see
+ * the remaining 38% or 42% of a shadow smeared across the *inside* of the
+ * panel. That is the grey film that was on every glass card in the app, and
+ * tuning the number does not fix it: it is 38% of whatever you pick.
+ *
+ * `boxShadow` is a Fabric style prop (RN 0.86, new architecture is on here)
+ * that draws outside the border box on both platforms, like CSS. One
+ * declaration, no `Platform.select`, and nothing behind the fill.
+ *
+ * ## Why levels rather than numbers
+ *
+ * There were 26 shadow declarations across ten files, each with its own
+ * `shadowOpacity` between 0.1 and 0.3 — and on Android every one of them was
+ * ignored, because `elevation` takes no opacity. So the two platforms did not
+ * agree on a single card, and no two cards agreed with each other. Four named
+ * levels is few enough to hold in your head and one place to tune.
+ *
+ * The colour is `t.shadow`, which carries its own alpha and flips with the mode
+ * — `rgba(15,23,42,0.14)` on light, `rgba(0,0,0,0.55)` on navy, because a
+ * shadow has to be much darker to read against a dark ground at all.
+ */
+const LIFTS = {
+  /** A card at rest in a list. Just enough to separate it from the field. */
+  1: { offsetY: 1, blur: 4 },
+  /** A raised card, a button. The default. */
+  2: { offsetY: 2, blur: 8 },
+  /** A control floating over content — a search bar, a hint over a map. */
+  3: { offsetY: 4, blur: 14 },
+  /** A FAB, or a pane over a live map. The only level you should notice. */
+  4: { offsetY: 8, blur: 24 },
+} as const;
+
+export type LiftLevel = keyof typeof LIFTS;
+
+/**
+ * A drop shadow at one of the four levels.
+ *
+ * `color` overrides `t.shadow`, for the one case that wants a coloured glow
+ * rather than a shadow: a brand-filled primary button, where a neutral shadow
+ * under a saturated fill reads as dirt.
+ */
+export function lift(t: Palette, level: LiftLevel = 2, color?: string): ViewStyle {
+  const { offsetY, blur } = LIFTS[level];
+  return {
+    boxShadow: [{ offsetX: 0, offsetY, blurRadius: blur, color: color ?? t.shadow }],
+  };
+}
+
+/**
  * A translucent panel: fill, hairline edge, card radius.
  *
  * The border is two hairlines rather than one. A single hairline on a 3x density

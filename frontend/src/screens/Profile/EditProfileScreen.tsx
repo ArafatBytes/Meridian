@@ -18,7 +18,7 @@ import { spacing, borderRadius, fontSize } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
-import { glassSurface } from '../../theme/surfaces';
+import { glassSurface, lift } from '../../theme/surfaces';
 import { Aurora } from '../../components/motion';
 import { fontFamily } from '../../theme/type';
 import { useAuthStore } from '../../store';
@@ -611,11 +611,7 @@ StyleSheet.create({
       ...glassSurface(t),
       padding: spacing.lg,
       marginBottom: spacing.md,
-      elevation: 1,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1,
-      shadowRadius: 2,
+      ...lift(t, 1),
     },
     sectionHeader: {
       flexDirection: 'row',
@@ -697,11 +693,7 @@ StyleSheet.create({
       flexDirection: 'row',
       justifyContent: 'center',
       alignItems: 'center',
-      elevation: 2,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2,
-      shadowRadius: 3,
+      ...lift(t, 2, t.brand),
     },
     saveButtonText: {
       fontFamily: fontFamily.bodySemi,

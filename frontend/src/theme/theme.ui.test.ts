@@ -308,6 +308,50 @@ describe('every dialog is a Sheet', () => {
   });
 });
 
+describe('a blur target is never transparent', () => {
+  /**
+   * The defect that made every blurred panel a grey smear.
+   *
+   * Dimezis blurs the nominated view by drawing **that view's own canvas** into
+   * a bitmap. `Aurora` put the page colour on the wrapper and the blobs inside
+   * the target, so the target drew three translucent blobs over nothing — and
+   * the blur of nothing is not transparent, it is black.
+   *
+   * On screen: a charcoal gradient across the Guardian card, the Theme card and
+   * the Log out card, heavy enough to swallow the text under it, while the four
+   * quick actions on Home looked perfect. The only difference between them is
+   * that the quick actions pass `blur={false}`, which skips the `BlurView`
+   * entirely — so the one panel kind that never blurred was the one that looked
+   * right, which is the opposite of what you would guess.
+   *
+   * The rule: whatever is handed out as a blur target paints an opaque
+   * background. It is one line and it is invisible in review, because a
+   * transparent view is a perfectly ordinary thing for everything else.
+   */
+  it('Aurora paints the page colour on the backdrop, not only above it', () => {
+    const source = fs.readFileSync(
+      path.join(SRC, 'components/motion/Aurora.tsx'),
+      'utf8',
+    );
+    const open = source.indexOf('<BlurBackdrop');
+    expect(open).toBeGreaterThan(-1);
+    const tag = source.slice(open, source.indexOf('>', open));
+    expect(tag).toContain('backgroundColor: t.bg');
+  });
+
+  it('and the screen wrapper the tab bar samples is opaque through its screen', () => {
+    // `ClaimBlurTarget` wraps a whole screen, and a screen's first child is its
+    // `Aurora` — which is opaque. So the target has something to draw without
+    // a background of its own, and giving it one would paint over the screen.
+    const navigator = fs.readFileSync(
+      path.join(SRC, 'navigation/MainNavigator.tsx'),
+      'utf8',
+    );
+    expect(navigator).toContain('<ClaimBlurTarget');
+    expect(navigator).not.toContain('backgroundColor');
+  });
+});
+
 describe('glassSurface is only used over something', () => {
   /**
    * `glassSurface` is a translucent fill. Over the Aurora field it reads as

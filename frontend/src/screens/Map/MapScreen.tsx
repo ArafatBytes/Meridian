@@ -27,7 +27,7 @@ import { spacing, borderRadius, fontSize } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
-import { glassSurface } from '../../theme/surfaces';
+import { glassSurface, lift } from '../../theme/surfaces';
 import { Glass, Sheet } from '../../components/motion';
 import { fontFamily, space } from '../../theme/type';
 import { useLocationStore } from '../../store';
@@ -1207,11 +1207,7 @@ StyleSheet.create({
       paddingHorizontal: spacing.sm,
       paddingVertical: 6,
       borderRadius: borderRadius.full,
-      elevation: 3,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2,
-      shadowRadius: 3,
+      ...lift(t, 2),
     },
     riskDot: {
       width: 8,
@@ -1245,11 +1241,7 @@ StyleSheet.create({
       borderRadius: FAB_SIZE / 2,
       justifyContent: 'center',
       alignItems: 'center',
-      elevation: 4,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2,
-      shadowRadius: 4,
+      ...lift(t, 4),
     },
     // Enters route mode. Keep it above the search card: it sits just below that card
     // and the card grows when a place resolves, so without this it can end up buried.
@@ -1269,11 +1261,7 @@ StyleSheet.create({
       justifyContent: 'center',
       alignItems: 'center',
       zIndex: 11,
-      elevation: 9,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2,
-      shadowRadius: 4,
+      ...lift(t, 4),
     },
     routeHeader: {
       flexDirection: 'row',
@@ -1312,11 +1300,7 @@ StyleSheet.create({
       paddingHorizontal: spacing.md,
       borderWidth: 1,
       borderColor: t.line,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.15,
-      shadowRadius: 6,
-      elevation: 4,
+      ...lift(t, 3),
     },
     asOfLabel: {
       fontFamily: fontFamily.bodySemi,
@@ -1427,14 +1411,10 @@ StyleSheet.create({
     },
     searchBox: {
       // No fill, border or radius here: `Glass` draws all three. What stays is
-      // the padding and the elevation, which `Glass` applies only on request.
+      // the padding. The lift is `Glass`'s own `elevated`, which it applies on
+      // request -- so this does not add one of its own.
       borderRadius: borderRadius.lg,
       padding: spacing.md,
-      elevation: 8,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.2,
-      shadowRadius: 8,
     },
     inputRow: {
       flexDirection: 'row',
@@ -1494,11 +1474,6 @@ StyleSheet.create({
     suggestionsContainer: {
       marginTop: spacing.sm,
       borderRadius: borderRadius.md,
-      elevation: 4,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
       maxHeight: 200,
     },
     suggestionItem: {

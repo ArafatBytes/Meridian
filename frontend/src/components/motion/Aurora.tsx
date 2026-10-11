@@ -138,8 +138,28 @@ export const Aurora: React.FC<AuroraProps> = ({
     <BlurTargetProvider>
       <View style={[styles.fill, { backgroundColor: t.bg }, style]} pointerEvents="box-none">
         {/* ONLY the blobs go in the target. This is what every `Glass` in
-            `children` samples, and it must not contain a blur view itself. */}
-        <BlurBackdrop pointerEvents="none">
+            `children` samples, and it must not contain a blur view itself.
+
+            `backgroundColor` is on the TARGET, not only on the view above.
+            That is the whole difference between glass and a dark smear.
+
+            Dimezis blurs the nominated view by drawing *that view's own
+            canvas* into a bitmap. The page colour used to live on the parent,
+            so the target drew three translucent blobs over nothing — and the
+            blur of "nothing" is not transparent, it is black. Every panel with
+            `blur` on came out with a grey-to-charcoal wash across it, heavy
+            enough to swallow the text underneath, while the panels passing
+            `blur={false}` looked right. That was the tell: the four quick
+            actions on Home were clean and the Guardian card above them was
+            not, and the only difference between them is this prop.
+
+            Paying for the fill twice (here and on the parent) is one overdraw
+            of a flat colour. The parent keeps it because `children` are drawn
+            outside the target and still need a page to sit on. */}
+        <BlurBackdrop
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: t.bg }]}
+        >
           {blobs.map((blob, index) => (
             <Blob key={index} spec={blob} animated={animated} />
           ))}

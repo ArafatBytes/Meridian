@@ -38,7 +38,7 @@ import { spacing, borderRadius, fontSize } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
-import { glassBar, glassSurface } from '../../theme/surfaces';
+import { glassBar, glassSurface, lift } from '../../theme/surfaces';
 import { Aurora, Sheet } from '../../components/motion';
 import { fontFamily } from '../../theme/type';
 import { useAuthStore } from '../../store';
@@ -496,11 +496,7 @@ StyleSheet.create({
       alignItems: 'center',
       padding: spacing.lg,
       marginBottom: spacing.md,
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 2,
+      ...lift(t, 1),
     },
     contactAvatar: {
       width: 50,

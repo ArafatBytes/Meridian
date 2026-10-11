@@ -27,7 +27,7 @@ import { spacing, borderRadius, fontSize } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
-import { glassSurface } from '../../theme/surfaces';
+import { glassSurface, lift } from '../../theme/surfaces';
 import { Aurora } from '../../components/motion';
 import { fontFamily } from '../../theme/type';
 import { useLocationStore } from '../../store';
@@ -1180,11 +1180,7 @@ StyleSheet.create({
       justifyContent: 'space-between',
       paddingHorizontal: spacing.lg,
       paddingBottom: spacing.md,
-      elevation: 4,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
+      ...lift(t, 2),
     },
     backButton: {
       padding: spacing.sm,
@@ -1223,17 +1219,14 @@ StyleSheet.create({
       alignItems: 'center',
       justifyContent: 'center',
       minHeight: 100,
-      elevation: 2,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
+      ...lift(t, 1),
     },
     categoryCardActive: {
       backgroundColor: t.brand,
       borderColor: t.brand,
-      elevation: 4,
-      shadowOpacity: 0.2,
+      // The selected card lifts, and the shadow takes the brand colour: a grey
+      // shadow under a saturated fill reads as dirt rather than as depth.
+      ...lift(t, 3, t.brand),
     },
     categoryLabel: {
       fontFamily: fontFamily.bodyMedium,
@@ -1269,11 +1262,7 @@ StyleSheet.create({
       justifyContent: 'center',
       paddingVertical: spacing.md,
       paddingHorizontal: spacing.lg,
-      elevation: 2,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1,
-      shadowRadius: 2,
+      ...lift(t, 1),
     },
     dateTimeText: {
       fontFamily: fontFamily.bodyMedium,
@@ -1285,11 +1274,7 @@ StyleSheet.create({
       ...glassSurface(t),
       padding: spacing.md,
       marginTop: spacing.md,
-      elevation: 4,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.15,
-      shadowRadius: 4,
+      ...lift(t, 2),
     },
     pickerCloseButton: {
       backgroundColor: t.brand,
@@ -1347,15 +1332,13 @@ StyleSheet.create({
     mapHint: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      // `t.surface`, not a hardcoded 95% white: this floats over the map, and
+      // in dark mode a white chip was the brightest thing on the screen.
+      backgroundColor: t.surface,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
       borderRadius: borderRadius.md,
-      elevation: 2,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
+      ...lift(t, 3),
     },
     mapHintText: {
       fontFamily: fontFamily.body,
@@ -1402,11 +1385,7 @@ StyleSheet.create({
     suggestionsContainer: {
       ...glassSurface(t),
       marginTop: spacing.xs,
-      elevation: 4,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.15,
-      shadowRadius: 4,
+      ...lift(t, 3),
       maxHeight: 200,
     },
     suggestionItem: {
@@ -1450,11 +1429,7 @@ StyleSheet.create({
       marginTop: spacing.md,
       padding: spacing.lg,
       borderRadius: borderRadius.md,
-      elevation: 4,
-      shadowColor: t.brand,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 6,
+      ...lift(t, 3, t.brand),
     },
     submitButtonDisabled: {
       backgroundColor: t.fillStrong,

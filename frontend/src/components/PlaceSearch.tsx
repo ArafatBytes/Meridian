@@ -14,6 +14,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { useStyles } from '../theme/useStyles';
 import type { Palette } from '../theme/palette';
 import { fontFamily } from '../theme/type';
+import { lift } from '../theme/surfaces';
 import { geoService } from '../services/geo.service';
 import type { GeoResolution, GeoMethod } from '../types/contracts/geo';
 
@@ -166,11 +167,7 @@ StyleSheet.create({
       borderRadius: borderRadius.xl,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
-      shadowColor: '#000',
-      shadowOpacity: 0.15,
-      shadowRadius: 6,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 4,
+      ...lift(t, 3),
     },
     inputRow: {
       flexDirection: 'row',

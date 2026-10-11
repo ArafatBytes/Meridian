@@ -312,7 +312,16 @@ const SosButton: React.FC<{ onPress: () => void }> = ({ onPress }) => {
           end={{ x: 1, y: 1 }}
           style={[
             styles.sos,
-            { borderRadius: radius.card, padding: space.lg, shadowColor: '#E11D48' },
+            {
+              borderRadius: radius.card,
+              padding: space.lg,
+              // A rose glow rather than a grey shadow: this is the one warm
+              // gradient in the app and a neutral shadow under it reads as
+              // dirt. `boxShadow`, not elevation -- see `lift` in surfaces.ts.
+              boxShadow: [
+                { offsetX: 0, offsetY: 8, blurRadius: 24, color: 'rgba(225, 29, 72, 0.45)' },
+              ],
+            },
           ]}
         >
           <Ionicons name="alert-circle" size={30} color="#FFFFFF" />
@@ -474,7 +483,7 @@ const styles = StyleSheet.create({
   gridItem: { width: '48%', marginBottom: 12 },
   actionIcon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 
-  sos: { flexDirection: 'row', alignItems: 'center', shadowOpacity: 0.4, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
+  sos: { flexDirection: 'row', alignItems: 'center' },
   sosTitle: { color: '#FFFFFF' },
   sosHint: { color: 'rgba(255,255,255,0.85)', marginTop: 2 },
   ping: { ...StyleSheet.absoluteFill, borderWidth: 2 },

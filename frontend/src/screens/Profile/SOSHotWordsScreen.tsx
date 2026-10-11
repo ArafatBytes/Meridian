@@ -39,7 +39,7 @@ import { spacing, borderRadius, fontSize } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
-import { glassBar, glassSurface } from '../../theme/surfaces';
+import { glassBar, glassSurface, lift } from '../../theme/surfaces';
 import { Aurora } from '../../components/motion';
 import { fontFamily } from '../../theme/type';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -390,11 +390,7 @@ StyleSheet.create({
       padding: spacing.lg,
       marginTop: spacing.md,
       marginHorizontal: spacing.lg,
-      elevation: 2,
-      shadowColor: t.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
+      ...lift(t, 2),
     },
     inputContainer: {
       backgroundColor: t.bg,
@@ -480,11 +476,7 @@ StyleSheet.create({
       justifyContent: 'space-between',
       padding: spacing.lg,
       marginBottom: spacing.md,
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 2,
+      ...lift(t, 1),
     },
     hotWordContent: {
       flex: 1,
