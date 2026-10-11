@@ -142,6 +142,25 @@ const MainNavigator: React.FC = () => {
     <BlurTargetProvider>
       <Tab.Navigator
         tabBar={(props) => <TabBar {...props} />}
+        // The map loses every overlay without this.
+        //
+        // `react-native-screens` detaches a tab's screen from the native view
+        // hierarchy when you leave it, and reattaches it when you come back.
+        // For a list that is free. For `MapView` it is not: detaching tears
+        // down the GoogleMap instance along with its overlay registry, and on
+        // reattach react-native-maps builds a *new* map. The `<Marker>` and
+        // `<Circle>` children never re-render -- nothing about their props
+        // changed -- so React never re-sends them, and the new map stays empty.
+        //
+        // What you see is a map with no risk markers, no radius circles and no
+        // crime pins, while the badge underneath still reads "67 flags",
+        // because the JavaScript state was never touched. It only happens on
+        // the *second* visit, which is what makes it look like a loading bug.
+        //
+        // The cost is that four screens stay attached instead of one. They are
+        // mounted either way -- this only decides whether they are in the view
+        // tree -- and the three that are not the map are lists.
+        detachInactiveScreens={false}
         screenOptions={{
           headerShown: false,
           // Kept so content can scroll behind the floating bar instead of being
