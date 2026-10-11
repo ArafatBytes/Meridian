@@ -241,6 +241,14 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
    */
   const riskRequestId = useRef(0);
 
+  /** The map itself, for the one thing `region` cannot express: bearing. */
+  const mapRef = useRef<MapView>(null);
+
+  // Measured rather than guessed, like the search card above it. The time
+  // control's height depends on the font and on how the six presets wrap, and
+  // the map controls have to sit just clear of it.
+  const [asOfHeight, setAsOfHeight] = useState(0);
+
   // Defect 14. One SOS implementation, shared with Home.
   // The one shared SOS controller, mounted at the app root by
   // `GuardianProvider`. Creating one per screen is what gave this app two shake
@@ -508,6 +516,49 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     fetchRiskFlags(offsetHours);
   };
 
+  /**
+   * Put the map back on the user.
+   *
+   * Both halves are needed, and `setRegion` alone is not enough — which is what
+   * the first version did, and it did nothing at all.
+   *
+   * Dragging the map does **not** update `region`: there is no
+   * `onRegionChangeComplete` here, deliberately, because feeding the user's own
+   * pan back into a controlled prop is how a map starts fighting the finger. So
+   * after a pan the state still holds wherever the map was last *told* to be —
+   * usually the user's location — and `setRegion` to that same value changes
+   * nothing, react-native-maps sees an unchanged prop, and the map stays where
+   * the finger left it.
+   *
+   * `animateToRegion` moves it regardless, because it talks to the native map
+   * rather than to the prop. The `setRegion` is still worth doing for the other
+   * case: when the state really is somewhere else (a place search flew the map
+   * across town), it both moves the map and re-runs the risk fetch for the area
+   * the user is actually returning to.
+   */
+  const recentreOnMe = async () => {
+    const here = currentLocation ?? (await getCurrentLocation());
+    if (!here) return;
+    const next = {
+      ...region,
+      latitude: here.latitude,
+      longitude: here.longitude,
+    };
+    setRegion(next);
+    mapRef.current?.animateToRegion(next, 400);
+  };
+
+  /**
+   * Point the map north again.
+   *
+   * This one *does* go through the ref, because bearing and pitch are not in
+   * `region` at all -- it carries a centre and a span and nothing about which
+   * way is up. So there is no controlled value to fight with here.
+   */
+  const faceNorth = () => {
+    mapRef.current?.animateCamera({ heading: 0, pitch: 0 }, { duration: 300 });
+  };
+
   const handleMarkerPress = (crime: CrimeReportData) => {
     if (routeMode) return; // Don't select markers in route mode
     setSelectedCrime(crime);
@@ -629,12 +680,21 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <MapView
+        ref={mapRef}
         provider={MAP_PROVIDER}
         style={styles.map}
         region={region}
         showsUserLocation
-        showsMyLocationButton
-        showsCompass
+        // Google's own controls are off, and replaced below.
+        //
+        // They are positioned by the Maps SDK against the top edge of the map,
+        // which here is the top edge of the *screen* -- the map is full-bleed so
+        // that content can float over it. So the locate button sat under the
+        // status bar, among the clock and the charging icon, and the compass sat
+        // under the search card. `mapPadding` is the usual answer and cannot
+        // help: it moves them down from the top, and the room is at the bottom.
+        showsMyLocationButton={false}
+        showsCompass={false}
         onPress={handleMapPress}
       >
         {/* Source Marker */}
@@ -1065,6 +1125,37 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       )}
 
+      {/* Locate, and face north. Google's two, in a place a thumb can reach.
+          Above the time control rather than below it: the bottom strip belongs
+          to the thing that changes what the map is showing, and these only
+          change where you are looking. Right-hand side, stacked, so they line up
+          under the report and route buttons rather than starting a third column. */}
+      {!routeMode && asOfHeight > 0 && (
+        <View
+          style={[
+            styles.mapControls,
+            { bottom: overlayFloor + space.sm + asOfHeight + space.md },
+          ]}
+        >
+          <TouchableOpacity
+            style={styles.mapControl}
+            onPress={faceNorth}
+            accessibilityRole="button"
+            accessibilityLabel="Face the map north"
+          >
+            <Ionicons name="compass-outline" size={22} color={t.textSoft} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.mapControl, styles.mapControlLast]}
+            onPress={recentreOnMe}
+            accessibilityRole="button"
+            accessibilityLabel="Centre the map on my location"
+          >
+            <Ionicons name="locate" size={22} color={t.brand} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* The time control. Demo beat 8 — and the reason it ships.
           It arrived in D02 behind `__DEV__`, as the only way to make decay
           showable: without it, beat 5 means standing on stage saying "trust me,
@@ -1078,7 +1169,10 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           the project does not have, a dragged value fires a request per frame, and
           six taps are repeatable on stage in a way a drag is not. */}
       {!routeMode && (
-        <View style={[styles.asOfBar, { bottom: overlayFloor + space.sm }]}>
+        <View
+          style={[styles.asOfBar, { bottom: overlayFloor + space.sm }]}
+          onLayout={event => setAsOfHeight(event.nativeEvent.layout.height)}
+        >
           <Text style={styles.asOfLabel}>{asOfSummary(asOfOffsetHours, riskFlags, Date.now())}</Text>
           <View style={styles.asOfButtons}>
             {AS_OF_PRESETS.map(({ hours, label }) => (
@@ -1307,6 +1401,28 @@ StyleSheet.create({
     // The dev-only "as of" control. Sits above the SOS button rather than beside it:
     // during a demo the presenter's thumb is on this, and a mis-tap that fired an SOS
     // would be memorable for the wrong reason.
+    // A column, right-aligned, so the two controls read as one control cluster
+    // rather than as two more floating actions.
+    mapControls: {
+      position: 'absolute',
+      right: space.xl,
+      alignItems: 'center',
+    },
+    mapControl: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: t.surface,
+      borderWidth: StyleSheet.hairlineWidth * 2,
+      borderColor: t.line,
+      marginBottom: space.sm,
+      ...lift(t, 3),
+    },
+    mapControlLast: {
+      marginBottom: 0,
+    },
     asOfBar: {
       position: 'absolute',
       left: space.lg,
