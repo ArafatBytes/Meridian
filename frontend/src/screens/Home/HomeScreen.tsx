@@ -26,8 +26,7 @@ import {
 } from '../../theme';
 import { useAuthStore } from '../../store';
 import { GlassCard } from '../../components/GlassCard';
-import { useSOS } from '../../features/sos/useSOS';
-import { SOSFlow } from '../../features/sos/SOSFlow';
+import { useSosController } from '../../features/guardian/GuardianProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MainTabParamList } from '../../types';
 
@@ -42,10 +41,15 @@ const HomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const rootNavigation = useNav<any>();
 
-  // Defect 14. The whole SOS flow — token refresh, location, upload progress, the
-  // shake listener — now lives in `useSOS`, so `MapScreen` runs the same one
-  // instead of a red button with a `// TODO` behind it.
-  const sos = useSOS();
+  // Defect 14 extracted the SOS flow — token refresh, location, upload
+  // progress — out of this screen and into `useSOS`. B6a/B8 then moved the
+  // *instance* up to the app root, because calling `useSOS()` per screen gave
+  // this app two shake listeners and two camera modals per shake: the tab
+  // navigator keeps visited screens mounted, so Home and Map each had one.
+  //
+  // There is now exactly one controller, one shake listener and one voice guard,
+  // all in `features/guardian/GuardianProvider`. This is a consumer.
+  const sos = useSosController();
 
   // The voice-activated SOS block that used to live here has been removed.
   //
@@ -59,8 +63,12 @@ const HomeScreen: React.FC = () => {
   // Removed now rather than ported, because SDK 57 drops expo-av and porting
   // dead code to a new API is pure waste. Real hot-word detection is S18, and
   // it uses an on-device wake-word engine -- not a polling loop that uploads
-  // audio. Until then SOS is the manual button and the shake gesture, both of
-  // which now live in `useSOS`.
+  // audio.
+  //
+  // B8 built it. Shout detection, the hot-word match and the automatic trigger
+  // all live in `features/voice/useVoiceGuard`, mounted once in
+  // `GuardianProvider` so a shouted phrase works on whatever screen is showing.
+  // Nothing is uploaded and nothing is recorded until a match fires.
 
   const handleReportCrimePress = () => {
     navigation.navigate('Reports');
@@ -80,7 +88,7 @@ const HomeScreen: React.FC = () => {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
-      <SOSFlow sos={sos} />
+      {/* SOSFlow is rendered once by GuardianProvider at the app root. */}
 
       <ScrollView
         style={styles.scrollView}
@@ -100,7 +108,7 @@ const HomeScreen: React.FC = () => {
         {/* SOS Emergency Button */}
         <TouchableOpacity
           style={[styles.sosButtonContainer, styles.sosButton]}
-          onPress={sos.start}
+          onPress={() => sos.start('button')}
         >
           <Ionicons name="alert-circle" size={32} color={colors.white} />
           <Text style={styles.sosButtonText}>SOS Emergency</Text>

@@ -71,12 +71,15 @@ on the `create extension postgis` line, enable it under
 | `profiles` | app | app |
 | `crime_reports` | app | app (all users' reports) + backend `route_service` |
 | `emergency_contacts` | app | **backend `sos_service`** — this is what makes SOS work |
-| `sos_hot_words` | app | nothing yet (S18) |
+| `sos_hot_words` | app | **the app itself** — on-device hot-word matching (B8) |
 | `users` | backend `sos.py` | backend — **transitional, deleted in S02** |
-| `sos_incidents` | nothing yet (S05) | — |
-| `user_locations` | nothing yet (S17) | — |
+| `sos_incidents` | backend `sos_service` (S05) | app — SOS history (D09) |
+| `user_locations` | **nothing, still** (S17) | — |
+| `push_devices` | backend `alerts/service` (B6a) | backend — the alert dispatcher |
+| `notification_preferences` | backend `alerts/service` (B6a) | backend — the alert policy |
+| `sent_alerts` | backend `alerts/service` (B6a) | backend + app — the alert history |
 
-Plus: the `crime_category` enum, `updated_at` triggers, RLS on all seven
+Plus: the `crime_category` enum, `updated_at` triggers, RLS on all ten
 tables, and a public-read `avatars` storage bucket scoped so a user can only
 write inside their own `<uid>/` folder.
 
@@ -170,7 +173,8 @@ change in the same commit, or it breaks something.
 | `incident_date_time` is `timestamp` without a zone | The app encodes Dhaka local time *as if it were UTC*. The column matches the client's bug on purpose; changing one without the other shifts every timestamp by six hours. | S07 |
 | `public.users` duplicates `profiles` | `sos.py` auto-provisions into it. Removing it now breaks SOS. | S02 (ADR 0003) |
 | `password_hash` is always `"supabase_managed"` | Vestigial — Supabase owns authentication. Column dies with the table. | S02 |
-| `sos_hot_words` is written and never read | The screen works; nothing consumes the words. | S18 |
+| ~~`sos_hot_words` is written and never read~~ | **Closed in B8.** The phrases are read by `frontend/src/features/voice/` and matched **on the device** — nothing is uploaded, and the backend never sees them. `/voice/analyze`, which ignored them in favour of a hardcoded list and always returned `trigger: false`, is deleted. | ~~S18~~ |
+| `user_locations` is written by nothing | Background location is S17 and is not built. **B6a deliberately did not start writing it:** `push_devices.last_location` holds one overwritten point instead, so there is no location history to govern. | S17 / B14 |
 
 ---
 

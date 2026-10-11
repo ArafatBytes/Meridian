@@ -312,6 +312,14 @@ export type ProfileStackParamList = {
   // three below have been declared and unregistered since D01 -- so this also has
   // a row on the profile menu and a screen in ProfileNavigator.
   SOSHistory: undefined;
+  // B6a. Per-category alert preferences, the hourly cap stated out loud, a
+  // delivery self-test and the alert history. Registered in ProfileNavigator and
+  // reachable from the profile menu -- unlike the three below, which have been
+  // declared and unregistered since D01.
+  AlertPreferences: undefined;
+  // B6a/B8. Guardian: the one screen where zone alerts, voice SOS and shake SOS
+  // are armed, calibrated against live meters, and proved.
+  Guardian: undefined;
   Settings: undefined;
   TrackingHistory: undefined;
   About: undefined;

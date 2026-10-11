@@ -64,6 +64,23 @@ services:
       # Data the services read at import time.
       - ./backend/police_stations.csv:/app/police_stations.csv:ro
       - ./backend/bangladesh_crime_data_full.csv:/app/bangladesh_crime_data_full.csv:ro
+      # B6a. One client file, read-only, so a CROSS-CODEBASE contract test can run
+      # in the environment this project actually runs tests in.
+      #
+      # `tests/invariants/test_alert_channels_match_the_client.py` asserts the
+      # backend never sends an Android `channelId` the app did not create — a
+      # mismatch is silent on both sides, and the notification arrives with
+      # default importance and no sound. Checking it needs to read
+      # frontend/src/features/alerts/channels.ts.
+      #
+      # Without this mount the test skips, and it would skip *always*: there is no
+      # backend venv on this project's machines, so `scripts/check.sh` skips the
+      # host path too. A contract test that never runs is worse than none, because
+      # the suite still counts it.
+      #
+      # Mounted at the path it would have on the host, so the test's path lookup
+      # is the same code in both environments.
+      - ./frontend/src/features/alerts/channels.ts:/frontend/src/features/alerts/channels.ts:ro
       # Was ~700 MB of model weights (YOLOv9c 82 MB, CLIP ~600 MB), downloaded
       # on the first AI request. D07 deleted both: nothing in the image loads
       # local weights any more. Kept only because HF_HOME/TORCH_HOME still point

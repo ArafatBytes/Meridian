@@ -16,12 +16,11 @@
  * A screen wires SOS in three lines:
  *
  *     const sos = useSOS();
- *     <TouchableOpacity onPress={sos.start} />
+ *     <TouchableOpacity onPress={() => sos.start('button')} />
  *     <SOSFlow sos={sos} />
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
-import { Accelerometer } from 'expo-sensors';
 import { useLocationStore } from '../../store';
 import AuthService from '../../services/auth.service';
 import { API_BASE_URL } from '../../constants/app.constants';
@@ -29,28 +28,38 @@ import { API_BASE_URL } from '../../constants/app.constants';
 /** Which half of the send we are in. The upload finishes long before the alert does. */
 export type SosStage = 'uploading' | 'sending';
 
+/**
+ * What set this SOS off.
+ *
+ * Carried to the server as `voice_activated` and stored on the incident, so the
+ * history screen can say which it was. B8 / S18 — `sos_service` had
+ * `voice_activated=False  # the voice path sets this once S18 lands` sitting in
+ * it, and this is that path.
+ */
+export type SosTrigger = 'button' | 'shake' | 'hot-word';
+
 export interface SosController {
   cameraVisible: boolean;
   sending: boolean;
   progress: number;
   stage: SosStage;
-  /** Open the camera. Safe to call from a button or from the shake listener. */
-  start: () => void;
+  /**
+   * Open the camera. Safe to call from a button, the shake listener, or the
+   * hot-word listener.
+   *
+   * The trigger source is remembered until the send completes rather than passed
+   * to `onVideoRecorded`, because the camera screen sits between the two and has
+   * no business knowing or forwarding it.
+   */
+  start: (trigger?: SosTrigger) => void;
   cancel: () => void;
-  onVideoRecorded: (uri: string) => Promise<void>;
+  /** `null` sends the SOS with location only — see the implementation. */
+  onVideoRecorded: (uri: string | null) => Promise<void>;
   onCameraError: (message: string) => void;
 }
 
-/**
- * Shake-to-SOS threshold, in g.
- *
- * Carried over as it was found: the comment in `HomeScreen` said 3.5 and the code
- * said 6.0. The code wins here because 6.0 is what has actually been used on a
- * device, and changing a trigger threshold while extracting a hook would mean two
- * changes in one commit with only one of them tested. Reconciling it properly with
- * a measurement is B5.
- */
-const SHAKE_THRESHOLD = 6.0;
+// The shake threshold now lives in `features/guardian/guardianStore` as a
+// user-calibrated setting. See the note where the listener used to be.
 
 export function useSOS(): SosController {
   const { currentLocation, getCurrentLocation } = useLocationStore();
@@ -60,7 +69,13 @@ export function useSOS(): SosController {
   const [progress, setProgress] = useState(0);
   const [stage, setStage] = useState<SosStage>('uploading');
 
-  const start = useCallback(() => {
+  // A ref, not state: it is read inside `onVideoRecorded`, which was created on
+  // an earlier render, and the whole reason this file exists is that reading
+  // changing values out of a stale closure is how SOS broke before (defect 14).
+  const triggerRef = useRef<SosTrigger>('button');
+
+  const start = useCallback((trigger: SosTrigger = 'button') => {
+    triggerRef.current = trigger;
     setCameraVisible(true);
     // Ask for a fix now rather than discovering we have none after the recording.
     if (!currentLocation) {
@@ -68,7 +83,24 @@ export function useSOS(): SosController {
     }
   }, [currentLocation, getCurrentLocation]);
 
-  const onVideoRecorded = useCallback(async (uri: string) => {
+  /**
+   * Send the SOS. `uri` is null when there is no video to send.
+   *
+   * **A failed recording must not kill the alert.** `/sos/trigger` has always
+   * taken the video as optional (`video: Optional[UploadFile] = File(None)`),
+   * and the SOS's actual job is to tell somebody where you are. The clip is
+   * evidence — valuable, and not a prerequisite.
+   *
+   * This matters beyond defensiveness: on the Vivo V2344 (Unisoc ums9230) this
+   * app was tested on, CameraX never delivers a single video frame to its
+   * VideoCapture surface. Measured from logcat: the recording runs its full ten
+   * seconds, audio is captured throughout, and `Recorder` logs "waiting for
+   * video keyframe" 43 times a second for the entire duration at every quality
+   * offered — LOWEST, SD and the 1080p default. Audio works; video never
+   * arrives. Before this change, that meant the SOS did nothing at all on that
+   * handset.
+   */
+  const onVideoRecorded = useCallback(async (uri: string | null) => {
     setCameraVisible(false);
     setSending(true);
 
@@ -105,14 +137,20 @@ export function useSOS(): SosController {
       const formData = new FormData();
       formData.append('latitude', String(finalLocation.latitude));
       formData.append('longitude', String(finalLocation.longitude));
+      // B8 / S18. Provenance, not a credential -- nothing is authorised on it.
+      formData.append('voice_activated', String(triggerRef.current === 'hot-word'));
 
-      const fileType = uri.split('.').pop() || 'mp4';
-      // @ts-ignore - React Native's FormData takes this shape for a file
-      formData.append('video', {
-        uri,
-        name: `sos_video.${fileType}`,
-        type: `video/${fileType}`,
-      });
+      if (uri) {
+        const fileType = uri.split('.').pop() || 'mp4';
+        // @ts-ignore - React Native's FormData takes this shape for a file
+        formData.append('video', {
+          uri,
+          name: `sos_video.${fileType}`,
+          type: `video/${fileType}`,
+        });
+      } else {
+        console.warn('SOS: sending location only — no video was captured.');
+      }
 
       setProgress(0);
       setStage('uploading');
@@ -197,24 +235,44 @@ export function useSOS(): SosController {
 
   const cancel = useCallback(() => setCameraVisible(false), []);
 
-  const onCameraError = useCallback((message: string) => {
-    setCameraVisible(false);
-    Alert.alert('Recording Error', message);
-  }, []);
+  /**
+   * The camera failed. Send the SOS anyway, with location only.
+   *
+   * This used to close the camera, show "Recording Error" and stop — so a
+   * device that cannot record video could not raise an SOS at all. The alert is
+   * the point; the video is a bonus. The user is told what was and was not sent,
+   * because "SOS sent" when the video was dropped would be a quiet lie.
+   */
+  const onCameraError = useCallback(
+    (message: string) => {
+      setCameraVisible(false);
+      Alert.alert(
+        'Sending without video',
+        `The camera could not record on this phone, so your location is being sent ` +
+          `to your emergency contacts without a video.
 
-  // Shake to trigger. Lives in the hook so it follows SOS onto whichever screen
-  // consumes it, rather than only working while Home happens to be mounted.
-  useEffect(() => {
-    Accelerometer.setUpdateInterval(200);
-    const subscription = Accelerometer.addListener(({ x, y, z }) => {
-      if (Math.sqrt(x * x + y * y + z * z) > SHAKE_THRESHOLD) {
-        if (!cameraVisible && !sending) {
-          start();
-        }
-      }
-    });
-    return () => subscription && subscription.remove();
-  }, [cameraVisible, sending, start]);
+${message}`,
+      );
+      void onVideoRecorded(null);
+    },
+    [onVideoRecorded],
+  );
+
+  // Shake-to-SOS used to live here, and that was the bug.
+  //
+  // `useSOS()` was called in HomeScreen, MapScreen and SOSHotWordsScreen, and the
+  // app's root is a bottom-tab navigator that keeps visited screens mounted. So
+  // after a user had looked at two tabs there were **two accelerometer
+  // subscriptions and two shake handlers**, and one shake opened two camera
+  // modals and sent two alerts.
+  //
+  // It is now a single subscription in `features/guardian/GuardianProvider`,
+  // which is mounted exactly once at the app root and is also where the voice
+  // guard lives — a shouted hot word has to work on whatever screen the person is
+  // on, which is impossible from inside a screen component. The threshold moved
+  // with it, into `guardianStore`, where the user can calibrate it against a live
+  // reading instead of inheriting a constant that disagreed with its own comment
+  // (3.5 in the comment, 6.0 in the code).
 
   return {
     cameraVisible,

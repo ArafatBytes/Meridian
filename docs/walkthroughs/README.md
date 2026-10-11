@@ -2,6 +2,14 @@
 
 One file per demo sprint: `D01.md` … `D09.md`, then `FINALE.md`.
 
+**Plus Track B, as it lands:** **[`GUARDIAN.md`](GUARDIAN.md)** is the live one — background geofencing, shout-to-SOS and shake-to-SOS, tested **entirely from the phone with no terminal**. `B6a.md` and `B8.md` describe the first reading of those two backlog items and are superseded in part; each says so at the top. These follow
+the same rules with one difference stated at the top of each — **they are not yet signed off on a
+device**, because both need a development build that this project has never made. Expo Go cannot
+receive Android push (removed in SDK 53) and cannot load a native module like
+`expo-speech-recognition`. `B6a.md` is therefore split so **Part 1 runs on Expo Go today** and only
+delivery waits for the build. Track B walkthroughs are **not part of the finale** — nothing in the
+demo script depends on them.
+
 **A walkthrough is a play-script you run on a phone, as the user, with no knowledge of the code.**
 It is written by the sprint owner, at the end of the sprint, in the same commit as the work, and the
 owner must have actually run it on a real device before pushing. `DEMO_PLAN.md` §0 makes this a

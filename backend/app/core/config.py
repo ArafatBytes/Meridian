@@ -306,6 +306,62 @@ class Settings(BaseSettings):
     # are fixed now. Turn it on when the CSV has real contacts (defect 17, S05).
     POLICE_ROUTING_ENABLED: bool = False
 
+    # --- Alerting (B6a / S16) ---------------------------------------------
+    #
+    # The push pipeline. See app/alerts/ for the reasoning behind each; these are
+    # the knobs, and the first one is a switch rather than a tuning value.
+
+    # Whether a notification actually leaves the building.
+    #
+    # DEFAULT OFF, and not out of caution — remote push *cannot* work until
+    # somebody has created an Expo project, created a Firebase project, and
+    # uploaded an FCM v1 service-account key to EAS. That is account setup, not
+    # code, and it is written out step by step in docs/walkthroughs/B6a.md.
+    #
+    # With this off the dispatcher still runs, still applies policy, still writes
+    # the ledger and still logs what it would have sent -- everything except
+    # delivery is observable. The alternative, defaulting it on, means an
+    # endpoint that reports success while Expo rejects every message for want of
+    # credentials, and that is a failure discovered on stage.
+    PUSH_ENABLED: bool = False
+
+    # The EAS project the app's push tokens belong to. Read by the *app*, from
+    # app.json's `extra.eas.projectId` -- this copy exists so the backend can
+    # report it on /notifications/config and the walkthrough can check that the
+    # two halves were configured from the same project. A token issued against a
+    # different project is accepted by Expo and then never delivered.
+    EXPO_PROJECT_ID: str = ""
+
+    # Only needed when the Expo project has "enhanced security for push
+    # notifications" switched on, which is off by default. Harmless when empty.
+    EXPO_ACCESS_TOKEN: str = ""
+
+    # The cap S16 asks for by name: "a documented rate cap per user per hour,
+    # from day one, with a test". The test is
+    # tests/invariants/test_alert_fatigue.py.
+    #
+    # Three, because alert fatigue is a burst problem (concept document §12) and
+    # three is roughly the point past which a safety app starts being read as a
+    # nuisance. It is deliberately low: the cost of a missed fourth alert is one
+    # road the user finds blocked by themselves, and the cost of being noisy is
+    # that they turn notifications off and miss *everything* -- an asymmetry that
+    # argues for erring quiet.
+    #
+    # A user may set themselves a stricter cap; `AlertPreferences.effective_cap`
+    # takes the min, so a value here only ever acts as the ceiling.
+    MAX_ALERTS_PER_USER_PER_HOUR: int = 3
+
+    # How close a flag must be to a device's last known position to be worth an
+    # alert, in metres.
+    #
+    # 500 m, which is wider than ROUTE_CORRIDOR_RADIUS_M (150 m) on purpose. That
+    # one asks "is this flag on this road"; this one asks "is this near enough to
+    # matter to someone standing here", and a person on foot in Dhaka reaches
+    # 500 m in six or seven minutes. It also absorbs some of the slop in a
+    # foreground-only position, which may be a few hundred metres old by the time
+    # the sweep reads it.
+    ALERT_RADIUS_M: int = 500
+
     # Anthropic (first used in S04; declared now so the values are not silently
     # dropped by extra="ignore" the way SUPABASE_URL was)
     #

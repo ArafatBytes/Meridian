@@ -892,13 +892,36 @@ to 54.
 
 - [ ] **Defect 3:** `CRIME_COLORS` → lowercase keys matching the DB enum. Derive the map from the contract type so it cannot drift again.
 - [x] **Defect 4:** ~~Delete the `HomeScreen` voice-monitoring block entirely.~~ **Done in S01** — it imported `expo-av`, which SDK 57 removed (defect 37), so deleting it was the cheapest way through the upgrade. Real hot-word detection is still S18, on an on-device wake-word engine.
-- [ ] Remove the ~30 lines of stale-closure deliberation left in `HomeScreen`, and fix the shake threshold comment (says 3.5 g, code is 6.0 — pick one, justify it with a measurement)
+- [ ] Remove the ~30 lines of stale-closure deliberation left in `HomeScreen`. ~~Fix the shake threshold comment (says 3.5 g, code is 6.0 — pick one, justify it with a measurement)~~ **settled in Guardian (11 Oct): it is a user setting.** Neither number was right to hard-code — shake magnitude in g varies by handset — so the Guardian screen pairs it with a **live accelerometer reading** and a stepper, and the measurement is taken by the person whose phone it is. 6.0 g is the default because that is the value that had actually run on a device; 3.5 g is reachable by putting a phone down firmly.
 - [ ] **Defect 11:** One score scale. **0–100 everywhere, higher = safer, named `safety_score`.** Delete the 0–10 `crime_score` and the percent variants. Add a test.
 - [x] **Defect 12:** ~~De-duplicate `EmergencyContact`~~ — done in S01b; re-point at the contract type when S03 lands.
 - [ ] **Defect 14:** Make `MapScreen`'s SOS button call the same path as `HomeScreen`'s. Extract one `useSOS()` hook; both screens consume it.
 - [ ] **Defect 16:** Export `routeService` from the services barrel.
 - [ ] **Defect 10 (frontend half):** route all Nominatim traffic through the S05 backend proxy.
 - [ ] Surface the evidence photos S06 started persisting
+
+#### Found by the first Android build, 11 Oct — all fixed
+
+These are logged because the *reason* they existed is reusable: **this app had only ever been
+built for iOS, through Expo Go.** Expo Go reads `app.json` at runtime and ignores the `plugins`
+block, so nothing that only runs during `prebuild` had ever executed. Nine days of green device
+walkthroughs told us nothing about any of it.
+
+- [x] **Defect 45:** ~~`app.json` declares five asset files that do not exist~~ — `notification-icon.png`, three `.wav` sounds and `favicon.png`. `assets/` holds two markdown guides and nothing else. Present since D01 (`8da3480`); the first `prebuild` failed on it. **Fixed:** the references are gone, and the code no longer names `sos_alert.wav` either — an unbundled sound name falls back to the default *silently*, which looks like it worked.
+- [x] **Defect 46:** ~~`android.usesCleartextTraffic` is not in the SDK 57 schema and was silently ignored~~ — **the one that would have cost the finale.** The debug manifest adds cleartext for you, so a *release* build would have blocked every call to `http://<lan-ip>:8000`: no flags, no SOS, no routing, in front of judges, from a build that worked an hour earlier. **Fixed** via the `expo-build-properties` plugin; verified present in the main manifest.
+- [x] **Defect 47:** ~~No Google Maps API key, so the Map tab crashed on Android~~ — `react-native-maps` uses **Apple Maps on iOS** (no key) and **Google Maps on Android** (key required, in the manifest). **Fixed:** `app.json` → `android.config.googleMaps.apiKey`.
+- [x] **Defect 48:** ~~`@react-native-voice/voice` declares `jcenter()`, which Gradle 9 removed~~ — the package was in `package.json`, imported nowhere, and autolinked anyway. It also exposes no way to refuse network speech recognition, which is why B8 built on `expo-speech-recognition` instead. **Fixed:** uninstalled.
+- [x] **Defect 49:** ~~`SOSCameraModal`'s countdown was never reset, so every SOS after the first in an app session failed~~ — `if (!visible) return null` is an early return *inside* the component, so hiding the modal does not unmount it and `useState(10)` never re-initialises. After one SOS `countdown` sat at 0 forever, and the next call to `startRecording` tripped `stopRecording()` milliseconds later. Survived D01–D09 because one SOS per session is how anyone tests it. **Fixed:** reset on open, seeded from the constant.
+- [x] **Defect 50:** ~~`useSOS()` was mounted in three screens, giving two or three shake listeners~~ — the root is a bottom-tab navigator, which keeps visited screens alive, so one shake opened two camera modals and sent two alerts. **Fixed:** one controller in `features/guardian/GuardianProvider`, consumed through `useSosController()`.
+- [x] **Defect 51:** ~~`startRecording` ran twice, throwing `IllegalStateException: A recording is already in progress`~~ — `onCameraReady` fires more than once (changing a capture prop reconfigures the session), and both calls read `isRecording` from **state**, i.e. their own render's closure, so both saw `false`. **Fixed** with a ref written synchronously before any `await`.
+- [x] **Defect 52:** ~~A camera failure killed the entire SOS~~ — `/sos/trigger` has always taken the video as optional (`video: Optional[UploadFile] = File(None)`); the client never used that path. **Fixed:** a failed recording now sends location only and says so on screen. This is what makes SOS work at all on hardware that cannot record.
+
+#### Still open
+
+- [ ] **Defect 53:** **CameraX never delivers a video frame to `VideoCapture` on the Vivo V2344 (Unisoc `ums9230`).** At `Quality.LOWEST`, `Quality.SD` and the 1080p default the recording runs its full ten seconds, audio is captured throughout, the encoder is configured correctly, and `Recorder` logs *"waiting for video keyframe"* 43 times a second for the entire duration. Audio works; video never arrives. The remaining lever is CameraX's `PreviewView` implementation mode — `TEXTURE_VIEW` is Google's documented workaround for this class of device bug and the log confirms expo-camera uses `SurfaceViewImpl` — but **expo-camera does not expose it as a prop**, so it needs a native patch. Mitigated by defect 52, not fixed. **Next step is data, not code: try a second Android handset.**
+- [ ] **Defect 54:** **`crime_reports` and `risk_flags` have no pipeline between them**, so a user's own report never becomes a risk flag, never bends a route and never raises a zone alert — while the Map draws both as pins, which makes them look interchangeable. Deliberate (a single unverified report must not steer other people's routes) but a real gap. The bridge is Rumour Guard's existing logic applied to user reports: N independent reports, same area, same window. **B13.**
+- [ ] **Defect 55:** `migrate.py status` reports two of D08's migrations as `pending` when they are applied — run by hand through the Supabase editor without the ledger row. **Do not run `migrate.py up` to tidy it**; that would re-run them. Whoever owns D08 should insert the two rows.
+
 
 ---
 
@@ -1046,10 +1069,11 @@ The subtlest correctness requirement in the system.
 
 **Suggested owner:** Nakib. **Prototype:** a real phone gets a push with a real mobility statement.
 
-- [ ] Finish `notification.service.ts`; EAS project id; server-side send
-- [ ] Per-category user preferences
-- [ ] **Alert fatigue is a listed risk (concept doc §12):** conservative thresholds and a documented rate cap per user per hour, from day one, with a test
-- [ ] Every alert carries its explanation and source count
+- [x] ~~Finish `notification.service.ts`; EAS project id; server-side send~~ **Done in B6a.** The service was rewritten: its four Android channels were created and then never used (`getChannelId()` had no call sites, so every notification landed on the fallback channel), it wrote the push token to `SecureStore` where nothing read it, and `getDangerColor()` graded severity on the legacy **0–10** scale. Server-side send is `app/alerts/` + the `alert_dispatch` agent. ⚠️ The EAS project id is a **slot in `app.json`, not a value** — `eas init` and the FCM upload are account work, written out in `docs/walkthroughs/B6a.md` Part 2
+- [x] ~~Per-category user preferences~~ **Done in B6a.** `notification_preferences`, three categories cut by what somebody would plausibly silence separately, plus a severity floor, quiet hours and a self-imposed cap. Chronic alerts default **off**
+- [x] ~~**Alert fatigue is a listed risk (concept doc §12):** conservative thresholds and a documented rate cap per user per hour, from day one, with a test~~ **Done in B6a.** `MAX_ALERTS_PER_USER_PER_HOUR=3`, enforced in one pure function, 33 tests in `tests/invariants/test_alert_fatigue.py`. Phase 3's exit line is `test_the_fourth_alert_in_an_hour_is_refused`
+- [x] ~~Every alert carries its explanation and source count~~ **Done in B6a.** Both in the body text, and `tests/invariants/test_alert_text_is_framed.py` asserts the body is the forwarded `mobility_statement` plus byte-identical boilerplate — nothing composed about a place
+- [ ] ⚠️ **NOT DONE: verified on a device.** Expo Go cannot receive Android push (removed SDK 53), so this needs a development build. B6a.md Part 1 verifies everything except delivery on Expo Go today
 
 ---
 
@@ -1057,10 +1081,11 @@ The subtlest correctness requirement in the system.
 
 **Suggested owner:** Arafat. **Prototype:** walk toward a seeded flag, get a notification before reaching it.
 
-- [ ] `expo-task-manager` + `expo-background-fetch`, battery-conscious. The `app.json` permissions have been declaring this capability with nothing behind it since the beginning.
-- [ ] Retention window from the S03 registry applied to stored locations
-- [ ] Geofence alerting — crossing into an active flag radius notifies with the mobility statement and source count. Debounced; no repeat for the same flag.
-- [ ] Measured battery impact recorded
+- [x] ~~`expo-task-manager` + `expo-background-fetch`, battery-conscious. The `app.json` permissions have been declaring this capability with nothing behind it since the beginning.~~ **Done in Guardian (11 Oct).** `expo-task-manager` only — **no** `expo-background-fetch`, and that is the design: `Location.startGeofencingAsync` hands circles to Android's `GeofencingClient` and **the OS does the detection**, waking a headless task on a crossing. A JS polling loop would be suspended by Android and is the fastest way to drain a phone; the OS fuses GPS with wifi and cell and batches wake-ups across every app that asked
+- [x] ~~Retention window from the S03 registry applied to stored locations~~ **Not applicable, by design.** No location history is stored at all — the geofence handler needs no position, only the region identifier the OS hands back, and `push_devices.last_location` holds a single overwritten point. `public.user_locations` is still written by nothing. There is no retention surface here to govern, which is the better answer than a window on one
+- [x] ~~Geofence alerting — crossing into an active flag radius notifies with the mobility statement and source count. Debounced; no repeat for the same flag.~~ **Done.** Watched at radius **+ 250 m** so the warning arrives while there is still a junction to turn at; the notification forwards the server-framed `mobility_statement` verbatim plus the source count; six-hour per-zone debounce with suppressed crossings written to a user-visible log, so "it stayed quiet correctly" is distinguishable from "it never fired". **Local** notification, not a push — detection is on the phone
+- [ ] ⚠️ **NOT DONE: measured battery impact recorded.** Needs a day of real use on a charged phone, which no amount of code gets you. The design argument is that the OS's own geofencing is far cheaper than a JS location loop, but that is an argument, not a measurement
+- [ ] ⚠️ **NOT DONE: verified on a device.** `docs/walkthroughs/GUARDIAN.md`, which runs entirely on the phone
 
 ---
 
@@ -1068,18 +1093,19 @@ The subtlest correctness requirement in the system.
 
 **Suggested owner:** Nakib. **Prototype:** start a trip, see live progress, complete it.
 
-- [ ] `app/trips/` + migration: start, destination, planned route, checkpoints, status. **Journey Guardian's substrate, built a phase early on purpose** — S22 inherits a working trip model instead of building one under time pressure.
-- [ ] `features/journey/` — start/end a trip, live progress, ETA
-- [ ] **Hot words, done properly.** Delete the Supabase-only dead loop. On-device wake-word detection, user-configurable phrases, no continuous upload. **If no library meets the privacy bar, ship a prominent manual SOS and say so in `PROGRESS.md` — do not ship a fake.**
-- [ ] `/voice/analyze` either works against real hot words or is removed
+- [ ] `app/trips/` + migration: start, destination, planned route, checkpoints, status. **Journey Guardian's substrate, built a phase early on purpose** — S22 inherits a working trip model instead of building one under time pressure. ⚠️ **Still not built.** B8 did the hot-words half only; this is the half B10 depends on
+- [ ] `features/journey/` — start/end a trip, live progress, ETA. ⚠️ **Still not built**
+- [x] ~~**Hot words, done properly.** Delete the Supabase-only dead loop. On-device wake-word detection, user-configurable phrases, no continuous upload. **If no library meets the privacy bar, ship a prominent manual SOS and say so in `PROGRESS.md` — do not ship a fake.**~~ **Done in B8.** On-device via `expo-speech-recognition` with `requiresOnDeviceRecognition`, and — the part that matters — the app **refuses to listen** when `supportsOnDeviceRecognition()` is false rather than accepting the library's silent fallback to network recognition, pointing at the manual SOS button instead. Picovoice Porcupine was the intended engine and its free tier ended 30 Jun 2026. **Armed sessions, not an always-on wake word**, and the UI says which. `src/features/voice/privacy.test.ts` asserts the privacy properties by reading the source, because the failure is a missing option that no running app can show you
+- [x] ~~`/voice/analyze` either works against real hot words or is removed~~ **Removed in B8.** It ignored the caller's stored phrases for a hardcoded list and returned `trigger: false` unconditionally. Matching is on-device, so an endpoint for it would mean uploading audio. `speech.service.ts` and `useVoiceRecorder.ts` went with it — **zero audio upload paths remain in the app**
+- [ ] ⚠️ **NOT DONE: verified on a device.** `expo-speech-recognition` is a native module, so this needs a development build (the same one B6a needs) and Android 13+
 
 ### Phase 3 exit criteria
 
-- [ ] `RISK_SURFACE_IMPL=db` carries real agent output into routing and alerts
-- [ ] Flag precision measured on real data and recorded
-- [ ] Alert rate cap verified by test
-- [ ] No continuous audio upload anywhere in the app
-- [ ] A real device receives a push within 60 s of a flag appearing on its corridor
+- [ ] `RISK_SURFACE_IMPL=db` carries real agent output into routing and alerts. ⚠️ The **seam** is done — `alert_dispatch` reads through `RiskSurface`, so alerts work on `db` and `seeded` alike — but live ingestion yields almost nothing, so in practice this still carries fixture output. Deferred by the owner, 10 Oct
+- [ ] Flag precision measured on real data and recorded. Blocked on the same thing
+- [x] ~~Alert rate cap verified by test~~ **Done in B6a.** `tests/invariants/test_alert_fatigue.py::test_the_fourth_alert_in_an_hour_is_refused`, plus `test_six_qualifying_flags_produce_three_alerts_not_six` for the within-sweep case a per-flag loop gets wrong
+- [x] ~~No continuous audio upload anywhere in the app~~ **Done in B8**, and now **zero** audio upload paths of any kind: `/voice/analyze`, `speech.service.ts` and `useVoiceRecorder.ts` are deleted, and hot-word matching is on-device. `src/features/voice/privacy.test.ts` asserts it mechanically
+- [ ] A real device receives a push within 60 s of a flag appearing on its corridor. ⚠️ **The code is there and the cadence is right** — `alert_dispatch` runs `* * * * *`, which is why that is the cadence — but it is **unverified on a device**: Expo Go cannot receive Android push, so this needs the development build in `docs/walkthroughs/B6a.md` Part 2 §E step 7
 
 ---
 
@@ -1480,9 +1506,21 @@ NOMINATIM_CACHE_TTL_SECONDS=86400
 OSRM_PROFILE=driving
 ROUTE_SAFETY_WEIGHT=0.7
 
-# --- Alerting (S16) ---
-MAX_ALERTS_PER_USER_PER_HOUR=3
-EXPO_PROJECT_ID=
+# --- Alerting (S16; shipped in B6a) ---
+PUSH_ENABLED=false              # delivery off until the Expo + Firebase setup in
+                                # docs/walkthroughs/B6a.md Part 2 is done. With it
+                                # off the dispatcher still runs, still applies the
+                                # cap and still writes the ledger -- it just logs
+                                # what it would have sent. On without credentials
+                                # means an endpoint that reports success while Expo
+                                # rejects every message.
+MAX_ALERTS_PER_USER_PER_HOUR=3  # verified by tests/invariants/test_alert_fatigue.py
+ALERT_RADIUS_M=500              # wider than ROUTE_CORRIDOR_RADIUS_M (150) on
+                                # purpose: that asks "is this on this road", this
+                                # asks "is this near enough to matter to someone
+                                # standing here"
+EXPO_PROJECT_ID=                # must MATCH frontend/app.json extra.eas.projectId
+EXPO_ACCESS_TOKEN=              # only for Expo's "enhanced security" mode
 
 # --- Journey Guardian (S23) ---
 GUARDIAN_CHECKIN_TIMEOUT_SECONDS=300

@@ -105,12 +105,24 @@ export const ROUTE_PREFERENCES = ['Safest', 'Fastest', 'Balanced'] as const;
 export const MAX_ROUTE_ALTERNATIVES = 3;
 
 // Notification Configuration
-export const NOTIFICATION_CHANNELS = {
-  DANGER_ZONE: 'danger_zone',
-  SOS_ALERT: 'sos_alert',
-  CRIME_REPORT: 'crime_report',
-  SYSTEM: 'system',
-};
+// Android notification channel ids used to live here as NOTIFICATION_CHANNELS.
+// B6a moved them to `src/features/alerts/channels.ts`, which is now the single
+// source of truth -- `backend/tests/invariants/test_alert_channels_match_the_client.py`
+// reads that file and asserts the backend never sends a channelId the app did not
+// create, because a mismatch is silent on both sides and costs the notification
+// its importance and its sound.
+//
+// Not re-exported from here: this module is plain constants with no native
+// imports, and `channels.ts` pulls in `expo-notifications` and `react-native`.
+// Re-exporting would make every importer of app.constants.ts depend on the
+// native notification module, which is exactly the coupling `app.constants.test.ts`
+// runs without.
+//
+// Two of the four original ids are gone rather than moved. `danger_zone` is the
+// framing the product abandoned -- a channel name is a user-visible string in
+// Android's settings list, so "Danger Zone Alerts" would have put the one word
+// concept document §9 forbids into the OS settings screen, where nothing in
+// framing.py can reach it. `crime_report` never had a sender.
 
 // Storage Keys
 export const STORAGE_KEYS = {
