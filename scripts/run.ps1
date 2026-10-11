@@ -165,7 +165,7 @@ if (-not $lanIp) {
 if ($previousIp -and $previousIp -ne $lanIp) {
     Warn "LAN IP changed: $previousIp -> $lanIp"
     Warn "Metro has the old address baked into its cache. Start it with -c:"
-    Say  "    cd frontend; npx expo start -c"
+    Say  "    cd frontend; npx expo start -c --dev-client --scheme meridian"
 }
 
 $env:HOST_LAN_IP = $lanIp
@@ -228,7 +228,7 @@ Ok "from a phone   http://${lanIp}:8000/api/v1"
 if ($BackendOnly) {
     Say ""
     Say "Backend only. Start the app yourself with:"
-    Say "    cd frontend; npx expo start --clear"
+    Say "    cd frontend; npx expo start --clear --dev-client --scheme meridian"
     Say ""
     exit 0
 }
@@ -309,12 +309,26 @@ if (-not (Get-Command adb -ErrorAction SilentlyContinue)) {
 # Metro already listening is the trap worth failing on. A second bundler moves
 # to 8082, adb reverse maps 8081 only, and the app then cannot find a bundle at
 # all - which looks nothing like "you have two bundlers running".
-try {
-    $metro = Invoke-WebRequest -Uri 'http://localhost:8081/status' -TimeoutSec 2 -UseBasicParsing
-    if ($metro.Content -match 'packager-status:running') {
-        Die "Metro is already running on port 8081.`n         Stop it (Ctrl+C in its terminal), then run this again.`n         A second bundler moves to 8082, which adb reverse does not map."
+# The test is "is anything listening", not "does Metro answer". A bundler whose
+# file watcher died - which is what happens when node_modules or android/ is
+# replaced underneath it - keeps the socket and answers nothing at all. That
+# passed a /status check, and then `expo start` found the port taken and offered
+# to move to 8082, which adb reverse does not map. The symptom is a red screen
+# on a phone that is wired up correctly.
+$holder = Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+if ($holder) {
+    $owner = (Get-Process -Id $holder.OwningProcess -ErrorAction SilentlyContinue).ProcessName
+    $alive = $false
+    try {
+        $metro = Invoke-WebRequest -Uri 'http://localhost:8081/status' -TimeoutSec 3 -UseBasicParsing
+        $alive = $metro.Content -match 'packager-status:running'
+    } catch { }
+    if ($alive) {
+        Die "Metro is already running on port 8081 (pid $($holder.OwningProcess), $owner).`n         Stop it with Ctrl+C in its terminal, then run this again."
     }
-} catch { }
+    Die "Port 8081 is held by pid $($holder.OwningProcess) ($owner), which is not`n         answering as a bundler - a wedged Metro, most likely.`n         Stop it:  Stop-Process -Id $($holder.OwningProcess) -Force`n         Then run this again. Letting Expo move to 8082 would break adb reverse."
+}
 
 # -----------------------------------------------------------------------------
 # 5b. Build only when the native side has actually moved
@@ -365,6 +379,23 @@ if ($needsBuild -and -not $device) {
     Say  "    2-6 minutes cold, under a minute once gradle has its cache"
     Say  ""
     Set-Location "$Root\frontend"
+    # app.json is half the build stamp - but `expo run:android` only runs
+    # prebuild when the android/ folder is MISSING (ensureNativeProject.js in
+    # @expo/cli checks nothing else). With the folder present it compiles
+    # whatever AndroidManifest.xml is already on disk, so a change to app.json
+    # would trigger a rebuild here and then not be in the APK that came out of
+    # it. That is worse than not rebuilding at all: the stamp would say the
+    # phone matches app.json while it did not.
+    #
+    # Safe to re-run. android/ is gitignored and generated in full from app.json
+    # plus the config plugins - `git log` shows no hand edit has ever landed in
+    # it. --no-install because installing packages is not this script's job and
+    # doubles the time.
+    npx expo prebuild --platform android --no-install
+    if ($LASTEXITCODE -ne 0) {
+        Set-Location $Root
+        Die "expo prebuild failed. A bad value in app.json is the usual cause."
+    }
     # --no-bundler: build and install only. Metro starts once, below, by the
     # same path a no-build run uses - one way the dev server gets started
     # rather than two that can drift apart.
@@ -399,10 +430,11 @@ if ($device) {
 Step "Starting Expo"
 Say "    API for the app: $env:EXPO_PUBLIC_API_BASE_URL"
 Say "    --clear is used because EXPO_PUBLIC_* is inlined at bundle time"
+Say "    --dev-client is why 'a' and the QR open Meridian and not Expo Go"
+Say "    --scheme meridian is named because ios/ has no scheme to agree with"
 Say ""
 
 if ($device) {
-    Say "    This is a dev build, not Expo Go - ignore the QR code below."
     Say "    Meridian opens on $device by itself once Metro is ready."
 
     # Metro holds the terminal, so the launch cannot come after it. A job that
@@ -417,6 +449,11 @@ if ($device) {
             } catch { }
             Start-Sleep -Seconds 1
         }
+        # Expo Go, closed first. It is still installed, it still claims the
+        # `exp://` scheme, and `launchMode="singleTask"` means a foregrounded
+        # Expo Go is simply what the phone shows - so the launch below would
+        # put Meridian behind it. A no-op when it is not running.
+        adb shell am force-stop host.exp.exponent
         # monkey, not am start: it finds the launcher activity itself, so this
         # does not have to know the activity's name or follow it if it changes.
         adb shell monkey -p $pkg -c android.intent.category.LAUNCHER 1
@@ -427,4 +464,31 @@ Say "    Ctrl+C stops Expo; the containers keep running (.\scripts\run.ps1 -Down
 Say ""
 
 Set-Location "$Root\frontend"
-npx expo start --clear
+# --dev-client, and it is not optional.
+#
+# Expo Go cannot run this app - the native modules are not in it - but the CLI
+# does not know that. Left to itself it targets Expo Go, so pressing `a` ran
+#
+#     am start -a android.intent.action.VIEW -d exp://192.168.0.187:8081
+#
+# which opened Expo Go over the top of the dev build that was already running
+# correctly, and filled the log with "Android Push notifications ... removed
+# from Expo Go with the release of SDK 53". It looked exactly like the app was
+# broken.
+#
+# --dev-client switches the target (resolveOptions.js: a literal flag wins over
+# the expo-dev-client dependency check, so the package does not have to be
+# installed). The URL becomes `meridian://expo-development-client/?url=...`,
+# which is why app.json now sets `"scheme": "meridian"` - without a scheme
+# `constructDevClientUrl` returns null and the CLI falls back to opening the
+# http URL in a browser. The scheme reaches the manifest through the prebuild
+# above; the `?url=` is ignored by a build with no dev-client package in it,
+# which is harmless, because such a build reads Metro off localhost:8081 anyway.
+#
+# --scheme is named rather than inferred. `resolveSchemeAsync` otherwise asks
+# for a scheme that the ios/ AND android/ projects BOTH declare, and
+# frontend/ios/ is left over from an old prebuild with no CFBundleURLSchemes in
+# it - so the intersection is empty, the CLI warns "Could not find a shared URI
+# scheme", and deep links are off again. A literal --scheme returns before that
+# lookup runs, so what is or is not in ios/ stops mattering.
+npx expo start --clear --dev-client --scheme meridian
