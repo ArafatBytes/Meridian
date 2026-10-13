@@ -308,8 +308,22 @@ create policy "profiles_update_own" on public.profiles
     for update to authenticated using (auth.uid() = id) with check (auth.uid() = id);
 
 -- ---- crime_reports: read everyone's, write only your own -------------------
--- The map is a community crime map: MapScreen.fetchCrimeReports() deliberately
--- queries with no user filter. This SELECT policy is what makes that work.
+-- ⚠️ SUPERSEDED by migrations/versions/20261013120000__report_trust.sql, which
+-- drops the permissive SELECT policy below and replaces it with
+-- `auth.uid() = user_id`, revokes the table-level UPDATE grant, and drops the
+-- `verified` column. Run the migrations after this file -- a database built from
+-- SCHEMA.sql alone is at the pre-B13 state, where every authenticated user can
+-- read every report and any account can self-award `verified = true` on its own
+-- row.
+--
+-- The text below is left as written because this file is the historical base that
+-- the versioned migrations layer onto, not a description of the current schema.
+-- It was true when written: the map was a community crime map and
+-- MapScreen.fetchCrimeReports() deliberately queried with no user filter. Why
+-- that stopped being the right design is argued in the migration header -- in
+-- short, one stranger's uncorroborated account naming a street is the permanent
+-- area label concept document section 9 rules out, and a pin plus a timestamp
+-- plus a narrative can identify a victim.
 drop policy if exists "crime_reports_select_all" on public.crime_reports;
 create policy "crime_reports_select_all" on public.crime_reports
     for select to authenticated using (true);

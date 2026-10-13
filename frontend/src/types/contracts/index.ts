@@ -9,3 +9,4 @@
 
 export * from './risk';
 export * from './crime';
+export * from './community';

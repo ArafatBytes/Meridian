@@ -45,12 +45,13 @@ was a plausible-looking score that was quietly doubled.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Final
 
+from app.contracts.community import CommunityCluster
 from app.contracts.risk import IncidentKind, RiskFlag
-from app.contracts.surface import RiskSurface
+from app.contracts.surface import ClusterSurface, RiskSurface
 from app.core.config import settings
 from app.scoring.decay import effective_severity
 
@@ -78,6 +79,18 @@ class ScoredPath:
     composite_score: float  # safety traded against duration, for ranking
     flags: list[RiskFlag]  # worst first, already weighted by confidence
     risk_penalty: float  # what was subtracted from MAX_SAFETY, for debugging
+
+    # B13. Community report clusters along the same corridor, worst first.
+    #
+    # A separate list rather than more entries in `flags`, for the reason
+    # `app/contracts/surface.py::ClusterSurface` gives: these are a different kind
+    # of claim, and a caller that cannot tell them apart will present them
+    # identically. `routing/explain.py` needs that distinction to write an honest
+    # sentence -- "three people reported incidents here" and "the fire service
+    # closed this road" are not the same statement and must not share a phrasing.
+    #
+    # Empty when no `ClusterSurface` was passed, which is the offline path.
+    clusters: list[CommunityCluster] = field(default_factory=list)
 
 
 def _penalty_for(flag: RiskFlag) -> float:
@@ -107,6 +120,28 @@ def _penalty_for(flag: RiskFlag) -> float:
     if flag.kind == IncidentKind.CHRONIC:
         penalty *= max(0.0, min(1.0, settings.ROUTE_CHRONIC_WEIGHT))
     return penalty
+
+
+def _penalty_for_cluster(cluster: CommunityCluster) -> float:
+    """
+    How much one community cluster detracts from a route's safety. B13.
+
+    The same arithmetic as `_penalty_for`, through the same `effective_severity`, so
+    a cluster and a flag are commensurable and `_combine` can rank them together.
+    What differs is where the numbers come from: a cluster's `confidence` is 0.3 or
+    0.6 from `app/policy/community.py`, against a flag's 0.6 or 1.0, and its
+    `severity_0` is capped at 55 against a fire's 70.
+
+    Those two caps are what keep the ordering right without a third weight here.
+    Three independent reporters produce at most 55 x 0.6 = 33, so a live fire at
+    70 x 1.0 always outranks a corroborated cluster, and a cluster still moves a
+    score visibly. There is deliberately no `ROUTE_CLUSTER_WEIGHT` setting: the
+    tier weights already live in one place, and a second multiplier here would mean
+    the published weight of a cluster is not the weight it is scored at.
+    """
+    return effective_severity(
+        severity_now=cluster.severity_now, confidence=cluster.confidence
+    )
 
 
 def _combine(penalties: list[float]) -> float:
@@ -169,24 +204,47 @@ async def score_path(
     *,
     path: list[tuple[float, float]],
     at: datetime,
+    clusters: ClusterSurface | None = None,
 ) -> ScoredPath:
     """
-    Score one path against the risk surface.
+    Score one path against the risk surface, and against community clusters when a
+    `ClusterSurface` is supplied.
 
     `composite_score` is left at 0.0 here and filled in by the caller, because it is
     **relative to the other candidates** — a route cannot know whether it is the fastest
     until the alternatives exist. Computing it per-path would need a guess at what "fast"
     means, which is the absolute-scale mistake `_duration_score` avoids.
+
+    `clusters` is optional, and `None` must stay a supported value: there is no seeded
+    cluster surface, so the offline demo path passes nothing and gets a route scored
+    against news flags alone. That is the honest result in that mode -- no reports have
+    been filed into a fixture.
+
+    **Flags and clusters go into one `_combine` call, not two.** Scoring them separately
+    and adding the results would lose the diminishing-returns property for the total: a
+    corridor with three flags and three clusters would be penalised as two independent
+    worst-cases, and a long route across Dhaka would floor at zero again, which is
+    exactly the failure `_combine` exists to prevent. Combined, the worst single thing
+    on the route dominates whichever kind it is -- which is also the right answer for a
+    traveller, who does not care what sort of object the problem is.
     """
     flags = await surface.flags_near_path(path, settings.ROUTE_CORRIDOR_RADIUS_M, at)
+    found_clusters: list[CommunityCluster] = []
+    if clusters is not None:
+        found_clusters = await clusters.clusters_near_path(
+            path, settings.ROUTE_CORRIDOR_RADIUS_M, at
+        )
+
     penalties = [_penalty_for(flag) for flag in flags]
+    penalties += [_penalty_for_cluster(cluster) for cluster in found_clusters]
     penalty = _combine(penalties)
     safety = max(0.0, MAX_SAFETY - penalty)
 
     logger.debug(
-        "scored path: %d point(s), %d flag(s), penalty %.1f, safety %.1f",
+        "scored path: %d point(s), %d flag(s), %d cluster(s), penalty %.1f, safety %.1f",
         len(path),
         len(flags),
+        len(found_clusters),
         penalty,
         safety,
     )
@@ -195,6 +253,7 @@ async def score_path(
         composite_score=0.0,
         flags=flags,
         risk_penalty=round(penalty, 1),
+        clusters=found_clusters,
     )
 
 

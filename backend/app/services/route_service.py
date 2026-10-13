@@ -52,7 +52,9 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.contracts.community import CommunityCluster
 from app.contracts.risk import RiskFlag
+from app.contracts.surface import ClusterSurface
 from app.core.config import settings
 from app.routing.alternatives import generate_detour, worst_live_flag
 from app.routing.explain import explain_route
@@ -60,11 +62,13 @@ from app.routing.osrm import OsrmRoute, OsrmUnavailable, fetch_routes
 from app.routing.scorer import ScoredPath, apply_filters, composite, score_path
 from app.schemas.route import (
     Location,
+    RouteCluster,
     RouteFlag,
     RouteRequest,
     RouteResponse,
     RouteSegment,
 )
+from app.scoring.clusters import DbClusterSurface
 from app.scoring.factory import get_risk_surface
 from app.scoring.geometry import haversine_m
 
@@ -158,6 +162,28 @@ class RouteService:
             kind=flag.kind.value,
         )
 
+    @staticmethod
+    def _to_route_cluster(cluster: CommunityCluster) -> RouteCluster:
+        """
+        A cluster to its route-card shape. B13.
+
+        Nothing is computed here -- `statement` was framed when the cluster was
+        written and `severity_now` was decayed by the surface. The one job is dropping
+        the fields a card cannot use, which is also what keeps the route response from
+        being coupled to every future change in the cluster contract.
+        """
+        return RouteCluster(
+            cluster_id=str(cluster.cluster_id),
+            lat=cluster.lat,
+            lon=cluster.lon,
+            radius_m=cluster.radius_m,
+            statement=cluster.statement,
+            severity_now=round(cluster.severity_now, 1),
+            status=cluster.status,
+            report_count=cluster.report_count,
+            reporter_count=cluster.reporter_count,
+        )
+
     def _straight_line(
         self, request: RouteRequest, profile: str
     ) -> OsrmRoute:
@@ -218,10 +244,25 @@ class RouteService:
             candidates = [self._straight_line(request, profile)]
 
         surface = get_risk_surface(db)
+        # B13. Community clusters are read from the database directly rather than
+        # through `get_risk_surface`, because there is no seeded implementation of
+        # them -- see `app/scoring/clusters.py` for why a fixture cluster would be a
+        # fabricated claim. On the offline path this stays None and every route is
+        # scored against news flags alone, which is the honest result in that mode.
+        cluster_surface: ClusterSurface | None = None
+        if settings.RISK_SURFACE_IMPL.strip().lower() == "db":
+            cluster_surface = DbClusterSurface(db)
 
         scored: list[tuple[OsrmRoute, ScoredPath]] = []
         for candidate in candidates:
-            scored.append((candidate, await score_path(surface, path=candidate.path, at=moment)))
+            scored.append(
+                (
+                    candidate,
+                    await score_path(
+                        surface, path=candidate.path, at=moment, clusters=cluster_surface
+                    ),
+                )
+            )
 
         # Beat 4 needs something to compare. OSRM offers its own alternatives only when a
         # geometrically distinct road exists -- measured across five Dhaka pairs, about half
@@ -243,7 +284,15 @@ class RouteService:
                 )
                 if detour is not None:
                     scored.append(
-                        (detour, await score_path(surface, path=detour.path, at=moment))
+                        (
+                            detour,
+                            await score_path(
+                                surface,
+                                path=detour.path,
+                                at=moment,
+                                clusters=cluster_surface,
+                            ),
+                        )
                     )
 
         # Durations, corrected before anything ranks on them -- `composite` trades safety
@@ -345,11 +394,15 @@ class RouteService:
                         composite(path_score.safety_score, route.duration_s, fastest_s), 1
                     ),
                     flags=[self._to_route_flag(flag) for flag in path_score.flags],
+                    clusters=[
+                        self._to_route_cluster(cluster) for cluster in path_score.clusters
+                    ],
                     explanation=explain_route(
                         path_score.flags,
                         duration_s=route.duration_s,
                         fastest_duration_s=fastest_s,
                         avoided_count=avoided_counts[index],
+                        clusters=path_score.clusters,
                     ),
                     engine=route.engine,
                     filter_relaxed=filter_relaxed,

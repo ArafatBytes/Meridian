@@ -96,6 +96,51 @@ class RouteFlag(BaseModel):
     """
 
 
+class RouteCluster(BaseModel):
+    """
+    A community report cluster on this route, as the card needs it. B13.
+
+    A deliberate subset of `CommunityCluster`, for the reason `RouteFlag` is a subset
+    of `RiskFlag`: the card needs where it is, how many people, how corroborated and
+    how much it weighs now. `half_life_hours`, `expires_at` and `first_report_at` are
+    the decay story the map's detail sheet narrates, and a route card cannot use them.
+
+    Note what is **not** here, and could not be added later without a migration: no
+    category, no family, no report ids, no narrative. A cluster has nothing to say
+    about what happened -- only that several people independently said something did.
+    """
+
+    cluster_id: str
+    lat: float
+    lon: float
+    radius_m: int
+
+    statement: str
+    """
+    The published form, from `app/policy/community.py::to_cluster_statement`. A count
+    and a recency. Render as-is; never rebuild it on the client.
+    """
+
+    severity_now: float = Field(ge=0.0, le=100.0)
+
+    status: str
+    """
+    `provisional` (2 independent reporters) or `corroborated` (3 or more).
+
+    Carried so the card can render the two tiers differently, the way the map
+    distinguishes `confirmed` from `unconfirmed` flags. Presenting two accounts
+    identically to three would make the tiers decoration.
+    """
+
+    report_count: int = Field(ge=2)
+    reporter_count: int = Field(ge=2)
+    """
+    Both, because they are different facts and the difference is the honest part:
+    ten reports from two accounts is two people, and a card showing only the first
+    number would imply ten witnesses.
+    """
+
+
 class RouteResponse(BaseModel):
     route_id: str
     path: list[RouteSegment]
@@ -127,6 +172,20 @@ class RouteResponse(BaseModel):
     The evidence behind `safety_score`, and what the client highlights on a rejected route
     so the comparison reads without narration. A score with no attached reason is the kind
     of number a judge should distrust.
+    """
+
+    clusters: list[RouteCluster] = Field(default_factory=list)
+    """
+    Community report clusters along this corridor, worst first. B13.
+
+    A separate list from `flags`, never merged into it. The two are different claims --
+    a flag is the product's own mobility claim derived from edited sources, a cluster is
+    a count of what residents reported -- and Defect 54 is the log of what happens when
+    a surface draws them as the same thing.
+
+    Empty on the offline path, which has no cluster surface. Empty is also the normal
+    answer: most corridors have no clusters, because publishing one needs at least two
+    independent people to have filed reports within 200 m of each other.
     """
 
     explanation: str

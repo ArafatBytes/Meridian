@@ -75,3 +75,61 @@ export function crimeCategoryLabel(category: string): string {
 export function isCrimeCategory(value: string): value is CrimeCategory {
   return (CRIME_CATEGORIES as readonly string[]).includes(value);
 }
+
+/**
+ * Every value `crime_reports.status` accepts, after B13.
+ *
+ * Mirrors the `crime_reports_status_check` constraint in
+ * `backend/migrations/versions/20261013120000__report_trust.sql`.
+ *
+ * ## What this replaced, and why
+ *
+ * It used to be `('pending', 'verified', 'investigating', 'resolved')`, which mixed
+ * two unrelated questions and could answer neither:
+ *
+ * - a **trust** question (`pending` -> `verified`), which nothing could ever answer,
+ *   because nothing wrote the column and there was no role to gate an approver on;
+ * - a **casework** question (`investigating` -> `resolved`), which `gd_drafts`
+ *   already owns properly.
+ *
+ * So both report screens showed every user "Pending" forever, beside a `✓` no code
+ * path could produce.
+ *
+ * **A report is no longer approved at all.** A moderator cannot verify that a crime
+ * occurred — only that the prose looks plausible — and a badge meaning "someone
+ * thought this looked fine" is worse than no badge, because users trust it. Trust is
+ * decided over *several independent reports* instead, which is how this system
+ * already decides what to believe about news. See `contracts/community.ts`.
+ *
+ * What is left is three states that are each reachable by code that exists.
+ */
+export const REPORT_STATUSES = ['filed', 'withdrawn', 'removed'] as const;
+
+export type ReportStatus = (typeof REPORT_STATUSES)[number];
+
+/**
+ * What each status is called on screen.
+ *
+ * `filed` is **"On record"**, not "Filed". "Filed" is the wrong word in this app
+ * specifically: filing is what happens at a thana counter, and `gd_drafts` uses it
+ * for exactly that. A user reading "Filed" on their own report would reasonably
+ * think it had reached the police, which is the one thing this product is careful
+ * never to imply (see `test_gd_is_never_filed_for_you.py`).
+ *
+ * None of the three says anything about whether the report is believed, because the
+ * app has no basis for saying it.
+ */
+const REPORT_STATUS_LABELS: Record<ReportStatus, string> = {
+  filed: 'On record',
+  withdrawn: 'Withdrawn',
+  removed: 'Removed',
+};
+
+export function reportStatusLabel(status: string): string {
+  return REPORT_STATUS_LABELS[status as ReportStatus] ?? status;
+}
+
+/** Whether a string from the database is a status this client knows. */
+export function isReportStatus(value: string): value is ReportStatus {
+  return (REPORT_STATUSES as readonly string[]).includes(value);
+}

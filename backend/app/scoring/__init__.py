@@ -6,6 +6,7 @@ Scoring — the risk surface and the arithmetic behind it.
     chronic.py        the chronic baseline, from real police-unit statistics.
     fixture.py        data/fixtures/risk_flags.json, resolved into rows.
     surface_db.py     DbRiskSurface  — the risk_flags table.
+    clusters.py       DbClusterSurface — the community_clusters table (B13).
     surface_seeded.py SeededRiskSurface — the fixture, with no database at all.
     factory.py        get_risk_surface() — the only place that chooses between them.
 

@@ -39,12 +39,14 @@ from __future__ import annotations
 
 from typing import Final
 
+from app.contracts.community import CommunityCluster
 from app.contracts.risk import RiskFlag
 from app.policy.framing import FramingViolation, find_banned_terms
 
 __all__ = [
     "MAX_EXPLANATION_LENGTH",
     "assert_explanation_safe",
+    "community_clause",
     "explain_route",
     "summarise_flag",
     "trade_off_sentence",
@@ -192,12 +194,60 @@ def trade_off_sentence(
     return None
 
 
+_TERSE_COMMUNITY_CLAUSE: Final[str] = "Community reports along this route."
+"""
+The fallback when the full clause will not fit. See `explain_route`.
+
+It drops the counts, which is a real loss -- the counts are the whole substance of a
+cluster -- and keeps the fact that there are reports, which is the part a traveller
+must not lose. The full numbers are still on every cluster in `RouteResponse.clusters`,
+so the card can render them beside the sentence rather than inside it.
+"""
+
+
+def community_clause(clusters: list[CommunityCluster]) -> str | None:
+    """
+    One clause about community report clusters on this corridor, or None. B13.
+
+    Separate from `summarise_flag` and deliberately plainer. A flag's clause carries
+    a `mobility_statement` written by `policy/framing.py` and a source count, because
+    a flag is the product's own claim about a road. A cluster is not: it is a count of
+    what residents reported, and the only honest thing to say about it is that count.
+
+    So this names reporters and a count of stretches and nothing else -- no category,
+    no severity word, no characterisation of the place. The cluster's own `statement`
+    already says it in the published form; this is the route-card phrasing of the
+    same fact.
+
+    Aggregated across clusters rather than one clause each. Three clusters along a
+    corridor is "3 stretches where..." to a traveller, not three sentences, and the
+    corridor is the unit the card is about.
+    """
+    if not clusters:
+        return None
+
+    reporters = sum(cluster.reporter_count for cluster in clusters)
+    corroborated = sum(1 for cluster in clusters if cluster.status == "corroborated")
+
+    where = "one stretch" if len(clusters) == 1 else f"{len(clusters)} stretches"
+    people = "person" if reporters == 1 else "people"
+
+    clause = f"{reporters} {people} filed reports along {where} of this route"
+    # Only claimed when at least one cluster has actually reached the upper tier. A
+    # provisional cluster is two accounts agreeing, and calling that corroborated
+    # would be the over-claim the tiers exist to prevent.
+    if corroborated:
+        clause = f"{clause}, independently corroborated"
+    return f"{clause}."
+
+
 def explain_route(
     flags: list[RiskFlag],
     *,
     duration_s: float,
     fastest_duration_s: float,
     avoided_count: int = 0,
+    clusters: list[CommunityCluster] | None = None,
 ) -> str:
     """
     The sentence shown on the route card. Beat 4.
@@ -208,6 +258,12 @@ def explain_route(
     answer that this product is unusual in being able to give.
 
     `flags` must be worst-first; `scorer.score_path` returns them that way.
+
+    `clusters` is optional and defaults to none, so the offline path -- which has no
+    cluster surface -- produces exactly the sentence it did before B13. When clusters
+    are present they get their own clause after the flags, never mixed into them: the
+    two are different claims, and a sentence that blurred them would be the route card
+    repeating the map's own Defect 54 confusion in prose.
     """
     parts: list[str] = []
 
@@ -222,7 +278,10 @@ def explain_route(
         elif remaining > 1:
             body = f"{body}; and {remaining} other flagged locations"
         parts.append(f"Passes {body}.")
-    else:
+    elif not clusters:
+        # "Nothing flagged" is only true when there is nothing of either kind. A
+        # route with no flags but two report clusters on it is not a clean route,
+        # and saying so would be the one sentence on this card that is a lie.
         parts.append("Nothing flagged along this route.")
 
     trade = trade_off_sentence(
@@ -230,10 +289,35 @@ def explain_route(
         fastest_duration_s=fastest_duration_s,
         avoided_count=avoided_count,
     )
-    if trade:
-        parts.append(trade)
 
-    sentence = " ".join(parts)
+    # The community clause is the one part that may be SHORTENED OR DROPPED, in that
+    # order, to fit `MAX_EXPLANATION_LENGTH`.
+    #
+    # This is not a nicety. Before B13 the sentence was a flag clause plus a trade-off
+    # and comfortably inside 200 characters; adding a third clause can push a worst
+    # case past it, and `assert_explanation_safe` raises rather than truncating. An
+    # uncaught `FramingViolation` here does not produce a shorter card -- it fails the
+    # whole route request, so a route would become unroutable because too much was
+    # known about it.
+    #
+    # Degrading rather than raising is the behaviour `framing.to_mobility_statement`
+    # already chose for the same problem: *"a place name that fails the guard is
+    # dropped and the statement falls back to the placeless form. The flag still
+    # publishes, with less detail -- the right trade."*
+    #
+    # The flag clause and the trade-off are never dropped: the first is what the score
+    # is made of, and the second is why this route is being offered at all.
+    candidates = [
+        community_clause(clusters or []),
+        _TERSE_COMMUNITY_CLAUSE if clusters else None,
+        None,
+    ]
+    sentence = " ".join(parts + ([trade] if trade else []))
+    for community in candidates:
+        attempt = " ".join(parts + ([community] if community else []) + ([trade] if trade else []))
+        if len(attempt) <= MAX_EXPLANATION_LENGTH:
+            sentence = attempt
+            break
 
     # The guard on the finished string, not just on the inputs. Concatenation is the one
     # place a banned term could be assembled out of individually safe parts, and this is

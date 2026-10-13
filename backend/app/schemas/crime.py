@@ -38,7 +38,8 @@ class CrimeReportResponse(BaseModel):
     longitude: str
     location_name: Optional[str]
     status: str
-    verified: bool
+    """filed | withdrawn | removed. Not a trust level -- see app/models/crime.py."""
+
     created_at: datetime
     user_id: str
     
