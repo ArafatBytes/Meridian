@@ -5,7 +5,8 @@
 #   .\scripts\run.ps1 -BackendOnly  just the containers
 #   .\scripts\run.ps1 -Rebuild      force a Docker image rebuild first
 #   .\scripts\run.ps1 -Build        force a native Android rebuild
-#   .\scripts\run.ps1 -Osrm         also start the local routing engine
+#   .\scripts\run.ps1 -NoOsrm       skip the local routing engine
+#   .\scripts\run.ps1 -Osrm         force it even if the graph looks unbuilt
 #   .\scripts\run.ps1 -Down         stop everything
 #   .\scripts\run.ps1 -Logs         tail the backend log
 #
@@ -25,6 +26,7 @@ param(
     [switch]$Rebuild,
     [switch]$Build,
     [switch]$Osrm,
+    [switch]$NoOsrm,
     [switch]$Down,
     [switch]$Logs
 )
@@ -180,8 +182,53 @@ $env:EXPO_PUBLIC_API_BASE_URL = "http://${lanIp}:8000/api/v1"
 # -----------------------------------------------------------------------------
 Step "Backend"
 
+# -----------------------------------------------------------------------------
+# The local routing engine, started by default when its graph is built
+# -----------------------------------------------------------------------------
+# `osrm` sits behind a compose profile, so a plain `docker compose up -d` leaves
+# it out. That was right when the profile was added: the service needs a ~1 GB
+# download and 10-30 minutes of preprocessing, and a container pointed at a graph
+# that does not exist crash-loops with a message about a missing `.fileIndex`
+# that explains nothing to someone on a fresh clone.
+#
+# It was also quietly expensive, because NOTHING SAID IT WAS MISSING. The backend
+# is configured with OSRM_BASE_URL=http://osrm:5000, finds nothing there, falls
+# back to router.project-osrm.org, and every route comes back labelled "Routed by
+# a public demo server". The app works, so the fallback survives for days:
+# slower routes over the internet, on a stranger's rate limiter, and no detour
+# alternatives at all -- `fetch_routes_via` deliberately has no demo fallback, so
+# "4 minutes longer, avoids two flagged corridors" can never appear.
+#
+# So the profile is now decided by whether the graph is actually there, which is
+# the thing the profile was always a proxy for.
+#
+# `.osrm.cell_metrics`, not `.osrm`: it is written by `osrm-customize`, the LAST
+# of the three preprocessing steps. A half-finished build leaves `.osrm` and
+# `.osrm.ebg` behind, and `osrm-routed --algorithm mld` cannot start from those --
+# so testing for `.osrm` would start a container that crash-loops, which is the
+# failure the profile existed to prevent.
+#
+# The filename matches the `command:` on the osrm service in docker-compose.yml.
+# Change one and change the other.
+$osrmGraph = Join-Path $Root 'osrm-data\bangladesh-latest.osrm.cell_metrics'
+$osrmReady = Test-Path $osrmGraph
+$withOsrm = $false
+
+if ($NoOsrm) {
+    Warn "skipping the routing engine (-NoOsrm); routes will use the public demo server"
+} elseif ($Osrm -or $osrmReady) {
+    $withOsrm = $true
+    if (-not $osrmReady) {
+        Warn "-Osrm given but the graph looks unbuilt; the container may crash-loop"
+    }
+} else {
+    Warn "no local routing graph in osrm-data\ - routes will fall back to the public"
+    Warn "demo server (slower, rate-limited, and no detour alternatives)."
+    Warn "Build it once: see the osrm service in docker-compose.yml."
+}
+
 $composeArgs = @('compose')
-if ($Osrm) { $composeArgs += @('--profile', 'osrm') }
+if ($withOsrm) { $composeArgs += @('--profile', 'osrm') }
 $composeArgs += @('up', '-d')
 if ($Rebuild) { $composeArgs += '--build' }
 
@@ -224,6 +271,38 @@ if (-not $healthy) {
 Ok "API healthy at http://localhost:8000"
 Ok "docs           http://localhost:8000/api/docs"
 Ok "from a phone   http://${lanIp}:8000/api/v1"
+
+# -----------------------------------------------------------------------------
+# 4b. Which routing engine actually answered
+# -----------------------------------------------------------------------------
+# Said out loud, because the alternative is finding out from a caveat on a route
+# card three days later. The backend's fallback to the public demo server is
+# deliberate and loud in the LOGS; this puts it where someone starting the stack
+# will actually see it.
+#
+# A real query rather than a container-status check: `osrm-routed` accepts
+# connections before its graph is fully mapped, so "the container is up" and
+# "routing works" are not the same statement. The two points are on Mirpur Road.
+if ($withOsrm) {
+    $probe = 'http://localhost:5000/route/v1/driving/90.3654,23.8041;90.3712,23.8103?overview=false'
+    $routedLocally = $false
+    foreach ($i in 1..15) {
+        try {
+            $r = Invoke-RestMethod -Uri $probe -TimeoutSec 3
+            if ($r.code -eq 'Ok') { $routedLocally = $true; break }
+        } catch { }
+        Start-Sleep -Seconds 2
+    }
+    if ($routedLocally) {
+        Ok "routing        local engine (osrm-data\bangladesh-latest)"
+    } else {
+        Warn "the osrm container did not answer in 30s. Routes will fall back to the"
+        Warn "public demo server, and route cards will say so. Logs:"
+        Warn "    docker compose --profile osrm logs --tail=40 osrm"
+    }
+} else {
+    Warn "routing        public demo server (router.project-osrm.org)"
+}
 
 if ($BackendOnly) {
     Say ""

@@ -80,6 +80,45 @@ export interface RouteCluster {
     reporter_count: number;
 }
 
+/**
+ * One manoeuvre along the route. Mirrors `RouteStep` in `app/schemas/route.py`.
+ *
+ * From OSRM's `steps=true`. Before this existed the client derived turns from the
+ * shape of the polyline, which gives a reliable side and distance and cannot name a
+ * road.
+ *
+ * ## `name` is empty more often than you would expect
+ *
+ * It is the OSM `name` tag of the way, and a great many Dhaka lanes, service roads
+ * and residential streets simply do not have one -- some are tagged in Bangla,
+ * which is correct. **Always check it before using it.** `NavigationBanner` falls
+ * back to the geometric phrasing when it is empty, because "Turn left onto"
+ * trailing off into nothing is worse than "Turn left in 80 m".
+ */
+export interface RouteStep {
+    /** The OSM road name, or "" when the way has none. */
+    name: string;
+    /**
+     * OSRM's own vocabulary: `turn`, `new name`, `depart`, `arrive`, `roundabout`,
+     * `fork`, `merge`, `end of road`, `continue`, `on ramp`, `off ramp`.
+     */
+    maneuver_type: string;
+    /** `left`, `right`, `slight left`, `sharp right`, `straight`, `uturn`, or "". */
+    modifier: string;
+    distance_m: number;
+    duration_s: number;
+    /**
+     * Distance from the route's start to where this step BEGINS.
+     *
+     * Derived server-side and scaled to the route's own total, so it is directly
+     * comparable with the `alongM` the client computes from the polyline. That
+     * scaling is what stops the final manoeuvre sitting past the end of the line.
+     */
+    start_m: number;
+    lat: number;
+    lon: number;
+}
+
 export interface RouteResponse {
     route_id: string;
     path: RouteSegment[];
@@ -107,6 +146,16 @@ export interface RouteResponse {
      * to have filed within 200 m of each other.
      */
     clusters?: RouteCluster[];
+    /**
+     * Turn-by-turn manoeuvres in travel order, for live navigation.
+     *
+     * Optional on the wire so a client running against a backend from before this
+     * change does not break, and empty for the straight-line fallback, which is not
+     * a road route. An empty list means "narrate from the geometry instead", which
+     * is what the banner did before steps existed -- so a router that cannot supply
+     * them degrades to plainer directions rather than to none.
+     */
+    steps?: RouteStep[];
     /** One sentence of plain English, framed server-side. Beat 4. Render as-is. */
     explanation: string;
     /** `local` | `public-demo` | `straight-line`. Which engine answered. */

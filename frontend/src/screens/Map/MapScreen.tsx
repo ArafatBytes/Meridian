@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   StyleSheet,
+  Pressable,
   TouchableOpacity,
   Text,
   Alert,
@@ -48,6 +49,9 @@ import { AS_OF_PRESETS, asOfSummary } from '../../features/risk/scheduled';
 import type { GeoResolution } from '../../types/contracts/geo';
 import type { CommunityCluster } from '../../types/contracts/community';
 import { CommunityClusterMarker } from '../../components/CommunityClusterMarker';
+import { useNavigation as useRouteFollow } from '../../features/navigation/useNavigation';
+import { NavigationBanner } from '../../features/navigation/NavigationBanner';
+import { FollowMarker } from '../../features/navigation/FollowMarker';
 
 /**
  * A report as this screen draws it -- and every one of these belongs to the signed-in
@@ -318,6 +322,77 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   const [routeProfile, setRouteProfile] = useState<'driving' | 'foot'>('driving');
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
   const [isRouting, setIsRouting] = useState(false);
+  /**
+   * Keep the camera on the user while following. On by default, and turned off the
+   * moment the user taps the map -- a camera that fights a pan is worse than one
+   * that does not follow at all.
+   */
+  const [followCamera, setFollowCamera] = useState(true);
+
+  const selectedRoute = calculatedRoutes[selectedRouteIndex];
+
+  /**
+   * Live route following. The path identity is what resets progress, so it is
+   * memoised on the selected route rather than rebuilt on every render -- a new array
+   * every render would re-run the hook's cumulative-distance computation and
+   * restart progress on every fix.
+   */
+  const followPath = useMemo(
+    () =>
+      selectedRoute
+        ? selectedRoute.path.map(p => ({ latitude: p.latitude, longitude: p.longitude }))
+        : null,
+    [selectedRoute],
+  );
+
+  /**
+   * The selected route's manoeuvres, memoised on the route so the hook does not see
+   * a new array identity every render.
+   *
+   * `?? []` because `steps` is optional on the wire -- a backend from before
+   * turn-by-turn landed, and the straight-line fallback, both send nothing. Empty
+   * means the banner narrates from the polyline's geometry instead, which is a
+   * true sentence without a road name rather than no sentence.
+   */
+  const followSteps = useMemo(() => selectedRoute?.steps ?? [], [selectedRoute]);
+
+  /**
+   * Route again from a given position. The one path by which a followed route is
+   * replaced, reached two ways: automatically by the hook after a sustained period
+   * off-route, and by the banner's button at any time.
+   *
+   * It takes `from` rather than reading the live position, which is what lets it be
+   * declared above the hook that would otherwise have to supply it -- see
+   * `onReroute` in `useNavigation.ts`. It also means an automatic re-route uses the
+   * fix that triggered it rather than whatever had reached React state by then.
+   *
+   * `calculateRouteTo` and `getCurrentLocation` are declared further down and
+   * referenced from inside this body, which is fine: the reference is resolved when
+   * this runs, long after both are assigned.
+   */
+  const recalculateFrom = async (from?: Location | null) => {
+    if (!destination) return;
+    const here = from ?? currentLocation ?? (await getCurrentLocation());
+    if (!here) {
+      Alert.alert('Location unavailable', 'Could not work out where you are.');
+      return;
+    }
+    setSourceLocation(here);
+    setSourceQuery('My Location');
+    await calculateRouteTo(here, destination);
+    // The hook resets progress when the path identity changes, so the next fix
+    // re-locates on the new route. Nothing to restart here.
+  };
+
+  const follow = useRouteFollow({
+    path: followPath,
+    totalSeconds: (selectedRoute?.duration_minutes ?? 0) * 60,
+    steps: followSteps,
+    // Automatic re-routing. The hook decides *when* -- sustained off-route, past a
+    // cooldown -- and this decides *what*, which is the same call the banner's
+    // button makes. One path, two triggers.
+    onReroute: recalculateFrom,
+  });
 
   // Search State
   const [sourceLocation, setSourceLocation] = useState<Location | null>(null);
@@ -329,7 +404,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   const [isSearching, setIsSearching] = useState(false);
 
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const requestLocation = async () => {
     try {
@@ -675,6 +750,10 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
    * way is up. So there is no controlled value to fight with here.
    */
   const faceNorth = () => {
+    // Releases camera following as well. While following, the camera is turned
+    // toward the direction of travel on every fix, so without this the map would
+    // swing back within two seconds and the button would look broken.
+    if (follow.active) setFollowCamera(false);
     mapRef.current?.animateCamera({ heading: 0, pitch: 0 }, { duration: 300 });
   };
 
@@ -705,6 +784,8 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   const toggleRouteMode = () => {
     if (routeMode) {
       // Exit route mode
+      follow.stop();
+      setFollowCamera(true);
       setRouteMode(false);
       setDestination(null);
       setCalculatedRoutes([]);
@@ -718,6 +799,15 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
 
   const handleMapPress = async (e: any) => {
     if (!routeMode || !currentLocation) return;
+
+    // While following, a tap on the map means "let me look around" and nothing
+    // else. It must NOT set a new destination: this handler re-routes, so an
+    // accidental touch mid-walk would silently replace the route being followed
+    // with one to whatever patch of Dhaka the thumb landed on.
+    if (follow.active) {
+      setFollowCamera(false);
+      return;
+    }
 
     const coord = e.nativeEvent.coordinate;
     const dest = { latitude: coord.latitude, longitude: coord.longitude };
@@ -742,6 +832,53 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     refreshRiskLayer();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region.latitude, region.longitude]);
+
+  /**
+   * Keep the camera on the user while following.
+   *
+   * Through `mapRef.animateCamera`, and **never** through `setRegion`. That is not
+   * a style preference: the effect above refetches the risk layer whenever
+   * `region` changes, so following by state would fire a flags-and-clusters
+   * request every two seconds for the whole walk. The ref talks to the native map
+   * directly, exactly as `faceNorth` does, and leaves `region` alone.
+   *
+   * The camera is also turned toward the direction of travel. A north-up map while
+   * walking means mentally rotating every instruction; "bear left" is only
+   * unambiguous when the map agrees with which way you are facing. The bearing
+   * comes from the route geometry ahead of you rather than from the phone's
+   * compass, which on this hardware is noisy enough to make the map spin.
+   */
+  useEffect(() => {
+    if (!follow.active || !followCamera || !follow.progress) return;
+    const heading = follow.turn?.bearing;
+    mapRef.current?.animateCamera(
+      {
+        center: follow.progress.snapped,
+        ...(heading !== undefined ? { heading } : {}),
+      },
+      { duration: 600 },
+    );
+  }, [follow.active, followCamera, follow.progress, follow.turn?.bearing]);
+
+  /**
+   * Surface a failure to start following.
+   *
+   * Needed because the banner only renders while `follow.active`, and a refused
+   * permission leaves `active` false -- so without this, tapping Start on a phone
+   * that has denied location does nothing at all and says nothing about why. A
+   * silent no-op is the worst of the three possible behaviours here.
+   */
+  useEffect(() => {
+    if (!follow.error) return;
+    Alert.alert('Cannot follow this route', follow.error);
+  }, [follow.error]);
+
+  // Leaving route mode stops the GPS. Without this, backing out of routing would
+  // leave a high-accuracy subscription running behind the browse map.
+  useEffect(() => {
+    if (!routeMode && follow.active) follow.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeMode, follow.active]);
 
   useEffect(() => {
     if (currentLocation && !hasInitialized) {
@@ -794,6 +931,38 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   // It used to subtract `SOS_SIZE` to stop short of the SOS button. That button
   // is gone, so the badge gets two thirds of the width — enough for the longest
   // real label ("31 risk flags · news 4 min ago") without ellipsis.
+  /**
+   * The tallest the expanded route card may be.
+   *
+   * Two constraints, and the second one is the point.
+   *
+   * **It must not reach the search card.** `76%` of the screen was fine until the
+   * "Plan a route" card grew -- two location fields, a profile row, and a taller
+   * label once a destination is named -- at which point the expanded details
+   * covered the very fields that produced them. `searchHeight` is already measured
+   * by that card's own `onLayout` for the FAB column, so this costs nothing new.
+   *
+   * **And it must leave a band of map visible.** Clearing the search card was not
+   * enough on its own: the card then grew to fill *exactly* the gap, which is
+   * still a screen with no map on it. A route card that hides the route is the
+   * one thing this card must never do -- the whole reason to open the details is
+   * to understand the line drawn on the map, and you cannot read the two against
+   * each other if only one is on screen.
+   *
+   * Nothing is lost to the smaller cap, because the expanded body is a scroll
+   * view. The cost is scrolling; the alternative was an invisible map.
+   */
+  const MIN_MAP_BAND = Math.max(120, windowHeight * 0.16);
+  const routeCardSpace =
+    windowHeight - (searchTop + searchHeight + space.md) - (bottomFloor + space.lg);
+  const routeCardMaxHeight = Math.max(
+    // The floor wins on a cramped screen. Below about this the card stops being
+    // able to show its own controls, and a card you cannot press Start on is
+    // worse than a thin strip of map.
+    260,
+    routeCardSpace - MIN_MAP_BAND,
+  );
+
   const riskBadgeMaxWidth = (windowWidth - space.xl * 2) * 0.66;
 
   return (
@@ -849,6 +1018,46 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
             routes could look identically "second" while one was safe and one was not. */}
         {calculatedRoutes.map((route, index) => {
           const isSelected = index === selectedRouteIndex;
+          // While following, the selected route is drawn in two parts: the stretch
+          // already behind, faint, and the stretch ahead, full strength. That is
+          // what makes the line visibly shrink from the start point as you move,
+          // which is the whole feature.
+          //
+          // The unselected candidates are left whole. They are alternatives being
+          // compared, not routes being followed, and trimming them would imply
+          // progress along a path nobody is on.
+          // `behind`, not `ahead`, is the test. At the very end of a route `ahead`
+          // collapses to the single snapped point, and keying off it would make the
+          // whole untrimmed line reappear at the moment of arrival -- undoing, in
+          // one frame, all the shrinking the user just watched. `behind` only
+          // reaches one point before the first fix, which is exactly when the
+          // untrimmed line IS the right thing to draw.
+          const following = isSelected && follow.active && follow.behind.length > 1;
+
+          if (following) {
+            return (
+              <React.Fragment key={route.route_id}>
+                <Polyline
+                  coordinates={follow.behind}
+                  strokeColor={withAlpha(safetyColour(route.safety_score, t), '4D')}
+                  strokeWidth={5}
+                  zIndex={8}
+                />
+                {/* A Polyline with fewer than two points draws nothing, so this is
+                    simply absent once the route is finished rather than being a
+                    degenerate line. */}
+                {follow.ahead.length > 1 && (
+                  <Polyline
+                    coordinates={follow.ahead}
+                    strokeColor={safetyColour(route.safety_score, t)}
+                    strokeWidth={7}
+                    zIndex={10}
+                  />
+                )}
+              </React.Fragment>
+            );
+          }
+
           return (
             <Polyline
               key={route.route_id}
@@ -862,6 +1071,17 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
             />
           );
         })}
+
+        {/* Where you are on the route, as against where the phone thinks you are.
+            Its own component because it needs the `tracksViewChanges` settle that
+            `RiskFlagMarker` documents: written inline with tracking off from the
+            first render, the native side can snapshot the child before it has
+            drawn and freeze a blank circle -- and unlike a flag marker there is no
+            key change to recover it, so the dot would be missing for the whole
+            walk while the route trimmed correctly around it. */}
+        {follow.active && follow.progress && (
+          <FollowMarker coordinate={follow.progress.snapped} />
+        )}
 
         {/* Flagged corridors along each candidate. D06: *"flagged corridors visibly
             highlighted along the rejected route, so the comparison reads without
@@ -1020,24 +1240,14 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       {/* Route Search Interface (Google Maps Style) */}
       {routeMode && (
         <View style={[styles.searchContainer, { top: searchTop }]}>
-          <Glass style={styles.searchBox} padding={space.lg} radius={radius.card} intensity={30} elevated>
-            {/* The way out of route mode. It lives inside the card because the
-                floating button that used to do this job sat underneath the card and
-                could not be tapped, and route mode has no other exit — a reload was
-                the only escape. A close control belongs on the thing it closes. */}
-            <View style={styles.routeHeader}>
-              <Text style={styles.routeHeaderTitle}>Plan a route</Text>
-              <TouchableOpacity
-                onPress={toggleRouteMode}
-                hitSlop={12}
-                accessibilityRole="button"
-                accessibilityLabel="Close route planning"
-              >
-                <Ionicons name="close" size={20} color={t.textSoft} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Source Input */}
+          {/* `padding` on the prop, never in `searchBox` -- see that style. */}
+          <Glass style={styles.searchBox} padding={space.md} radius={radius.card} intensity={30} elevated>
+            {/* Source input, with the way out of route mode on the same row.
+                A "Plan a route" title used to sit above this in a header of its
+                own, which spent a whole row saying what two labelled fields and a
+                Driving/Walking pair already say. The close control stays -- route
+                mode has no other exit, and a reload was once the only escape --
+                it just no longer needs a row to itself. */}
             <View style={styles.inputRow}>
               <View style={[styles.inputDot, styles.sourceDot]} />
               <TextInput
@@ -1053,6 +1263,15 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                 selectTextOnFocus
               />
               {activeSearch === 'source' && isSearching && <ActivityIndicator size="small" color={t.brand} />}
+              <TouchableOpacity
+                onPress={toggleRouteMode}
+                hitSlop={12}
+                style={styles.routeClose}
+                accessibilityRole="button"
+                accessibilityLabel="Close route planning"
+              >
+                <Ionicons name="close" size={20} color={t.textSoft} />
+              </TouchableOpacity>
             </View>
 
             <View style={styles.connectorLine} />
@@ -1102,7 +1321,9 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                     <Ionicons
                       name={mode === 'driving' ? 'car-outline' : 'walk-outline'}
                       size={15}
-                      color={active ? t.brandStrong : t.textSoft}
+                      // Same reason as `profileChipTextActive`: this sits ON the
+                      // brandStrong fill, so it has to be the on-brand colour.
+                      color={active ? t.onBrand : t.textSoft}
                     />
                     <Text style={[styles.profileChipText, active && styles.profileChipTextActive]}>
                       {mode === 'driving' ? 'Driving' : 'Walking'}
@@ -1190,13 +1411,75 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           index, not a reason. The card now shows the server's framed explanation, the
           trade-off sentence, the flags behind the score, and any caveat about how the
           answer was produced. */}
-      {routeMode && calculatedRoutes.length > 0 && (
+      {/* The comparison card and the navigation banner are mutually exclusive, and
+          that is the design rather than a layout convenience. The card answers
+          "which of these routes should I take" -- three candidates, safety scores,
+          flag lists, a trade-off sentence. Once following has started that question
+          is settled, and the screen's job becomes "am I going the right way".
+          Leaving both up would bury the instruction in a sheet you have to expand
+          one-handed while walking. */}
+      {routeMode && calculatedRoutes.length > 0 && !follow.active && (
         <RouteComparisonCard
           routes={calculatedRoutes}
           selectedIndex={selectedRouteIndex}
           onSelect={setSelectedRouteIndex}
           bottomInset={bottomFloor}
+          maxHeight={routeCardMaxHeight}
+          // Following is opt-in rather than automatic on route calculation: this
+          // screen is a map first and a navigator second, and acquiring
+          // high-accuracy fixes every two seconds because a route happens to be
+          // drawn would flatten a battery for someone who was only comparing
+          // options.
+          onStart={() => {
+            setFollowCamera(true);
+            void follow.start();
+          }}
         />
+      )}
+
+      {routeMode && follow.active && (
+        <NavigationBanner
+          phase={follow.phase}
+          turn={follow.turn}
+          step={follow.step}
+          rerouting={follow.rerouting}
+          remainingM={follow.remainingM}
+          remainingSeconds={follow.remainingSeconds}
+          accuracyM={follow.accuracyM}
+          bottomInset={bottomFloor}
+          recalculating={isRouting}
+          onRecalculate={() => recalculateFrom(follow.position)}
+          onStop={() => {
+            follow.stop();
+            setFollowCamera(true);
+          }}
+        />
+      )}
+
+      {/* Following, but the user has panned away. One tap back, and nothing happens
+          automatically -- a camera that re-centres on its own while someone is
+          looking at a side street is the behaviour that makes people put the phone
+          away. */}
+      {follow.active && !followCamera && (
+        // The wrapper is what centres the chip. `alignSelf` on an absolutely
+        // positioned element with left:0 and right:0 does nothing -- the element
+        // simply spans the width, and a full-width transparent touch target over a
+        // map swallows the taps meant for it. `box-none` lets touches through
+        // everywhere except on the chip itself.
+        <View
+          pointerEvents="box-none"
+          style={[styles.recentreRow, { bottom: bottomFloor + space.lg + 92 }]}
+        >
+          <Pressable
+            onPress={() => setFollowCamera(true)}
+            style={styles.recentreChip}
+            accessibilityRole="button"
+            accessibilityLabel="Re-centre on me"
+          >
+            <Ionicons name="locate" size={14} color={t.brand} />
+            <Text style={styles.recentreText}>Re-centre</Text>
+          </Pressable>
+        </View>
       )}
 
       {/* Risk layer status, refresh, and "fetch news now" (D04).
@@ -1481,6 +1764,37 @@ StyleSheet.create({
     },
     // Risk layer status pill, top-left. Left, because the report and route buttons
     // own the top-right corner.
+    /**
+     * The snapped position marker: a brand dot with a white collar.
+     *
+     * A collar rather than a shadow, because `showsUserLocation` draws Google's own
+     * blue dot in the same place and the two have to be separable at a glance --
+     * one is where the phone thinks you are, the other is where that puts you on
+     * the route, and the distance between them is the honest measure of the fix.
+     */
+    // A full-width row that only exists to centre the chip. See the note at the
+    // call site for why the chip cannot centre itself.
+    recentreRow: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      alignItems: 'center',
+    },
+    // Small, light and out of the way: it appears only after the user has panned,
+    // and it is an offer rather than a prompt.
+    recentreChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space.xs,
+      paddingHorizontal: space.lg,
+      paddingVertical: space.sm,
+      borderRadius: radius.pill,
+      backgroundColor: t.surface,
+      borderWidth: StyleSheet.hairlineWidth * 2,
+      borderColor: t.glassBorder,
+      boxShadow: [{ offsetX: 0, offsetY: 4, blurRadius: 12, color: t.shadow }],
+    },
+    recentreText: { ...type.caption, color: t.brand },
     riskBadge: {
       position: 'absolute',
       left: space.xl,
@@ -1545,16 +1859,9 @@ StyleSheet.create({
       zIndex: 11,
       ...lift(t, 4),
     },
-    routeHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: space.sm,
-    },
-    routeHeaderTitle: {
-      ...type.label,
-      color: t.text,
-    },
+    // Sits at the end of the source row now, where a header used to be a row of
+    // its own. The left margin keeps it clear of the spinner sharing that row.
+    routeClose: { marginLeft: space.sm },
     loadingOverlay: {
       ...StyleSheet.absoluteFill,  // RN 0.86 removed absoluteFillObject; absoluteFill is now the plain object
       backgroundColor: 'rgba(255, 255, 255, 0.7)',
@@ -1688,16 +1995,25 @@ StyleSheet.create({
       zIndex: 10,
     },
     searchBox: {
-      // No fill, border or radius here: `Glass` draws all three. What stays is
-      // the padding. The lift is `Glass`'s own `elevated`, which it applies on
-      // request -- so this does not add one of its own.
+      // No fill, border, radius OR PADDING here. `Glass` draws the first three,
+      // and the fourth was a real bug: `style` lands on the SHELL and the
+      // `padding` prop on the inner content box, so a padding here applies *in
+      // addition* to the prop. The children were inset 32pt on every side instead
+      // of 16 -- 64pt of vertical whitespace, a quarter of this card's height,
+      // spent on nothing.
+      //
+      // Introduced by the glassmorphic migration, whose note read "what stays is
+      // the padding and the elevation". The elevation was right; the padding was
+      // already coming from the prop.
       borderRadius: radius.card,
-      padding: space.lg,
     },
     inputRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      height: 40,
+      // 36, not 40. These are text inputs inside a card and the whole row takes
+      // the tap, so the 44pt target guidance is met by the row's hit area rather
+      // than by its height. Four points, twice, is eight points of map.
+      height: 36,
     },
     activeInputRow: {
       backgroundColor: '#f8f9fa',
@@ -1719,7 +2035,7 @@ StyleSheet.create({
     profileRow: {
       flexDirection: 'row',
       gap: space.sm,
-      paddingTop: space.sm,
+      paddingTop: space.xs,
       marginTop: space.xs,
       borderTopWidth: 1,
       borderTopColor: t.lineSoft,
@@ -1734,14 +2050,21 @@ StyleSheet.create({
       backgroundColor: t.fillSoft,
     },
     profileChipActive: { backgroundColor: t.brandStrong },
-    profileChipText: {      ...type.caption, color: t.textSoft,},
-    profileChipTextActive: { color: t.brandStrong },
+    profileChipText: { ...type.caption, color: t.textSoft },
+    // `onBrand`, not `brandStrong`. The active chip's FILL is `brandStrong`, so
+    // colouring its label the same token painted the text in the background colour
+    // and the selected mode became invisible -- the one chip that most needs to be
+    // readable was the only unreadable one.
+    profileChipTextActive: { color: t.onBrand },
     connectorLine: {
       width: 2,
-      height: 20,
+      // Purely decorative -- it says "these two fields are the ends of one
+      // journey" -- so it is the first thing to give up height. Still long enough
+      // to read as a line rather than as a dash.
+      height: 12,
       backgroundColor: t.fillStrong,
       marginLeft: 3, // slightly offset to align with 8px dot center
-      marginVertical: 2,
+      marginVertical: 1,
     },
     input: {
       ...type.body,

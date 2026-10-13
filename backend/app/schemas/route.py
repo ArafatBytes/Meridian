@@ -96,6 +96,61 @@ class RouteFlag(BaseModel):
     """
 
 
+class RouteStep(BaseModel):
+    """
+    One manoeuvre, as the navigation banner needs it.
+
+    From OSRM's `steps=true`, via `app/routing/osrm.py::OsrmStep`. The client
+    previously derived turns from the shape of the polyline, which gives a reliable
+    side and distance and cannot name a road; this is what lets it say "Turn left
+    onto Mirpur Road".
+
+    ## `name` is optional in practice, whatever the type says
+
+    It is `str` rather than `str | None` because OSRM sends `""` for an unnamed way,
+    and a great many Dhaka lanes, service roads and residential streets have no OSM
+    `name` tag at all. **Every consumer must check it before using it** -- the
+    client falls back to the geometric phrasing ("Turn left in 80 m") when it is
+    empty, which is the honest answer rather than "Turn left onto" trailing off.
+
+    ## `start_m` is derived here, not sent by OSRM
+
+    OSRM gives each step a distance but no position along the route, and the client
+    needs "which step am I on" from a single number it already has
+    (`progress.alongM`). So the backend accumulates the step distances into an offset
+    from the route's start, and **scales them to the route's own total** -- the sum
+    of step distances and the route's reported distance differ by a few metres from
+    rounding, and without the scaling the last manoeuvre would sit slightly past the
+    end of the polyline the client is measuring against.
+    """
+
+    name: str
+    """The OSM road name, or "" when the way has none. Check before using."""
+
+    maneuver_type: str
+    """
+    OSRM's own vocabulary: `turn`, `new name`, `depart`, `arrive`, `roundabout`,
+    `fork`, `merge`, `end of road`, `continue`, `on ramp`, `off ramp`.
+
+    Carried verbatim rather than mapped to a sentence here. The mapping is a
+    presentation decision and belongs with the component that renders it, next to
+    the fallback it shares with the geometric path.
+    """
+
+    modifier: str
+    """`left`, `right`, `slight left`, `sharp right`, `straight`, `uturn`, or ""."""
+
+    distance_m: float = Field(ge=0)
+    duration_s: float = Field(ge=0)
+
+    start_m: float = Field(ge=0)
+    """Distance from the route's start to where this step BEGINS. Derived; see above."""
+
+    lat: float
+    lon: float
+    """Where the manoeuvre happens -- the end of the previous step."""
+
+
 class RouteCluster(BaseModel):
     """
     A community report cluster on this route, as the card needs it. B13.
@@ -172,6 +227,17 @@ class RouteResponse(BaseModel):
     The evidence behind `safety_score`, and what the client highlights on a rejected route
     so the comparison reads without narration. A score with no attached reason is the kind
     of number a judge should distrust.
+    """
+
+    steps: list[RouteStep] = Field(default_factory=list)
+    """
+    Turn-by-turn manoeuvres in travel order, for live navigation.
+
+    Empty for the straight-line fallback, which is not a road route and has no
+    manoeuvres to describe, and empty if OSRM returned none. The client treats an
+    empty list as "narrate from the geometry instead", which is what it did before
+    this field existed -- so a router that cannot supply steps degrades to plainer
+    directions rather than to no directions.
     """
 
     clusters: list[RouteCluster] = Field(default_factory=list)

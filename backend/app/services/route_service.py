@@ -64,6 +64,7 @@ from app.schemas.route import (
     Location,
     RouteCluster,
     RouteFlag,
+    RouteStep,
     RouteRequest,
     RouteResponse,
     RouteSegment,
@@ -101,12 +102,24 @@ optimistic to the point of being wrong. Any real route uses OSRM's own duration.
 """
 
 _CONGESTION_NOTE = (
-    "Driving times are estimated for Dhaka traffic. The road map only knows free-flow "
+    "Driving time is estimated for Dhaka traffic — the road map only knows free-flow "
     "speeds, which would put this journey at roughly three times the speed anyone "
-    "actually travels."
+    "actually travels. Once you start, the time left is measured from your own speed "
+    "instead."
 )
 """
 Shown on the card, because a duration is a claim and this one is a calibration.
+
+The last sentence was added when live navigation landed, and it is there because
+without it the note was *stale rather than wrong*: it described the planning estimate
+accurately and implied that calibration was the best the app could ever do. It is not,
+any more. Once following starts, `features/navigation` replaces this figure with one
+derived from the phone's own smoothed speed, so the scaling below only governs the
+number shown before you move.
+
+Saying so on the card is the honest version. The alternative -- leaving the note as it
+was -- tells a user that the one number they are about to rely on is a guess about
+traffic, when in a minute it will be a measurement of them.
 
 The honest version of the sentence is the second half: OSRM is not wrong, it is answering
 "how long on an empty road". Measured free-flow on the Bangshal -> Mirpur-10 route was
@@ -121,11 +134,21 @@ the more important one.
 
 _WALKING_NOTE = (
     "Walking directions use the driving road map, so the route may include a flyover or "
-    "follow a one-way street. The time is an estimate at 4.8 km/h, not a measured walking "
-    "duration."
+    "follow a one-way street. The time shown is an estimate at 4.8 km/h; once you start, "
+    "it is measured from your own walking speed instead."
 )
 """
-Surfaced to the user, not merely logged. Defect 7 asked for a walking profile and this is as
+Surfaced to the user, not merely logged.
+
+"not a measured walking duration" was the end of this sentence until live navigation
+landed, and it had stopped being true in the only place it mattered. It is still true of
+the card -- nothing has moved yet, so there is nothing to measure -- and it is false of
+the screen the user looks at while actually walking. The rewrite keeps the caveat on the
+estimate and says where the measurement comes from, which is the distinction the old
+wording collapsed.
+
+This note matters more than the driving one, because 4.8 km/h is wrong in both directions
+on a Dhaka footpath and a walker's real pace is exactly what the phone can observe. Defect 7 asked for a walking profile and this is as
 much of one as the graph can honestly support.
 
 Measured 2026-10-09: a `/foot/` request against the local graph returned **7.03 km in 9
@@ -161,6 +184,57 @@ class RouteService:
             source_count=flag.source_count,
             kind=flag.kind.value,
         )
+
+    @staticmethod
+    def _to_route_steps(route: OsrmRoute) -> list[RouteStep]:
+        """
+        OSRM's manoeuvres, with an offset along the route attached to each.
+
+        The offset is the whole job here. OSRM gives every step a distance but no
+        position, and the client needs to answer "which manoeuvre am I approaching"
+        from `progress.alongM`, a single number it already computes from the
+        polyline. So the step distances are accumulated into a start offset.
+
+        **Scaled to the route's own distance**, and that is not cosmetic. The sum of
+        the step distances and the route's reported `distance` disagree by a few
+        metres -- OSRM rounds each independently -- and the client measures `alongM`
+        against the polyline, which is a third number again. Unscaled, the final
+        manoeuvre can sit past the end of the line the client is walking, so "arrive"
+        never becomes the current step and the banner shows the second-to-last
+        instruction all the way to the destination.
+
+        A route with no steps returns an empty list, and the client narrates from the
+        geometry instead.
+        """
+        if not route.steps:
+            return []
+
+        total_step_m = sum(step.distance_m for step in route.steps)
+        # Only scale when there is something to scale against, and when the
+        # disagreement is a rounding difference rather than a sign that these steps
+        # describe a different route than this geometry.
+        scale = 1.0
+        if total_step_m > 0 and route.distance_m > 0:
+            ratio = route.distance_m / total_step_m
+            scale = ratio if 0.9 <= ratio <= 1.1 else 1.0
+
+        mapped: list[RouteStep] = []
+        offset = 0.0
+        for step in route.steps:
+            mapped.append(
+                RouteStep(
+                    name=step.name,
+                    maneuver_type=step.maneuver_type,
+                    modifier=step.modifier,
+                    distance_m=round(step.distance_m * scale, 1),
+                    duration_s=round(step.duration_s, 1),
+                    start_m=round(offset, 1),
+                    lat=step.lat,
+                    lon=step.lon,
+                )
+            )
+            offset += step.distance_m * scale
+        return mapped
 
     @staticmethod
     def _to_route_cluster(cluster: CommunityCluster) -> RouteCluster:
@@ -394,6 +468,7 @@ class RouteService:
                         composite(path_score.safety_score, route.duration_s, fastest_s), 1
                     ),
                     flags=[self._to_route_flag(flag) for flag in path_score.flags],
+                    steps=self._to_route_steps(route),
                     clusters=[
                         self._to_route_cluster(cluster) for cluster in path_score.clusters
                     ],

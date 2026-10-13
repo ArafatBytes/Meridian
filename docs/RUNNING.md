@@ -41,9 +41,26 @@ That is the whole thing. It:
 |---|---|
 | `-BackendOnly` / `--backend-only` | Containers only; start Expo yourself |
 | `-Rebuild` / `--rebuild` | Force an image rebuild (after changing `requirements.txt` or the Dockerfile) |
-| `-Osrm` / `--osrm` | Also start the local routing engine (see §6) |
+| `-NoOsrm` / `--no-osrm` | Skip the local routing engine (see §6) |
+| `-Osrm` / `--osrm` | Start it even when its graph looks unbuilt |
 | `-Down` / `--down` | Stop everything |
 | `-Logs` / `--logs` | Tail the backend log |
+
+**The local routing engine starts automatically** when its graph is present in
+`osrm-data/` — there is no flag to remember. If it is not there, the run prints a
+warning and routing falls back to the public demo server, which is slower,
+rate-limited, and cannot produce detour alternatives at all. §6 builds the graph.
+
+Either way the run states which engine answered, after the API comes up:
+
+```
+    [ok] routing        local engine (osrm-data\bangladesh-latest)
+    [!]  routing        public demo server (router.project-osrm.org)
+```
+
+That line exists because the fallback is otherwise invisible until a route card
+says *"Routed by a public demo server"*, and by then it has usually been running
+that way for days.
 
 **First run takes 5–12 minutes**, almost entirely torch and its dependencies.
 After that the layer is cached and startup is seconds. Ctrl+C stops Expo; the
@@ -285,10 +302,14 @@ re-run just that step.
 
 ### Then start it and prove it routes
 
+`scripts/run.ps1` starts it for you from here on — the graph being on disk is what
+it checks. To bring it up on its own, or to read its logs:
+
 ```powershell
 cd D:\Meridian
 docker compose --profile osrm up -d osrm
-docker compose logs --tail 20 osrm          # look for "running and waiting for requests"
+# --profile is needed for logs too, or compose does not know the service exists
+docker compose --profile osrm logs --tail 20 osrm   # "running and waiting for requests"
 
 # OSRM takes lon,lat — reversed coordinates return NoSegment and look like a broken install.
 curl.exe -s "http://localhost:5000/route/v1/driving/90.4074,23.7104;90.3687,23.8069?overview=false"

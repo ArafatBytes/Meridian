@@ -70,6 +70,29 @@ export interface RouteComparisonCardProps {
   selectedIndex: number;
   onSelect: (index: number) => void;
   bottomInset: number;
+  /**
+   * The tallest the expanded card may be, in points. Omitted falls back to a
+   * percentage.
+   *
+   * A number from the caller rather than a percentage here, because the thing it
+   * has to clear is the "Plan a route" card floating above it — and only the screen
+   * knows how tall that is, since it grows with the suggestion list and the
+   * destination name. `76%` was a guess that held until the search card got taller
+   * than a quarter of the screen, at which point the two overlapped and the route
+   * details covered the destination field that produced them.
+   */
+  maxHeight?: number;
+  /**
+   * Begin following the selected route. Omitted when following is unavailable.
+   *
+   * "Start" lives inside this card rather than floating beside it, and that is a
+   * correctness decision as much as a design one: the card's height is a
+   * percentage of the screen and changes when it expands, so an independently
+   * positioned button either overlaps it or has to guess its height. It also
+   * belongs here on its own merits -- it is the end of the choice this card
+   * exists to support.
+   */
+  onStart?: () => void;
 }
 
 /**
@@ -102,6 +125,8 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
   selectedIndex,
   onSelect,
   bottomInset,
+  maxHeight,
+  onStart,
 }) => {
   const { t } = useTheme();
   const styles = useStyles(makeStyles);
@@ -135,7 +160,14 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
     <Glass
       style={[
         styles.card,
-        expanded ? styles.cardExpanded : styles.cardCollapsed,
+        // A measured cap when the screen supplies one, the old percentage when it
+        // does not. Collapsed keeps its percentage either way: it is short enough
+        // that it has never been the one doing the overlapping.
+        expanded
+          ? maxHeight !== undefined
+            ? { maxHeight }
+            : styles.cardExpanded
+          : styles.cardCollapsed,
         { bottom: bottomInset + space.lg },
       ]}
       contentStyle={styles.body}
@@ -169,7 +201,17 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
               <Text
                 style={[
                   styles.tabScore,
-                  { color: active ? safetyColour(candidate.safety_score, t) : t.textFaint },
+                  // Inverted from how this started, and the inversion is the fix.
+                  //
+                  // It used to paint the ACTIVE tab's score in `safetyColour` -- a
+                  // green or amber number on the brandStrong fill, which at 100/100
+                  // was green-on-blue and unreadable. The safety colour is not lost:
+                  // it moves to the INACTIVE tabs, where it sits on a soft fill and
+                  // reads cleanly, and where it is actually more useful. Comparing
+                  // the options you have not selected is what this row is for; the
+                  // selected route's score is already spelled out underneath in the
+                  // stats row, in its own colour and three times the size.
+                  { color: active ? t.onBrand : safetyColour(candidate.safety_score, t) },
                 ]}
               >
                 {Math.round(candidate.safety_score)}/100
@@ -361,6 +403,22 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
         </Text>
       )}
 
+      {/* Start, and the details toggle, on one row.
+          Start is the primary action and sits on the right, where a thumb reaches
+          on a phone held one-handed. It is a solid gradient against the toggle's
+          plain text so there is no question which of the two is the commitment. */}
+      {onStart && (
+        <Pressable
+          onPress={onStart}
+          style={styles.start}
+          accessibilityRole="button"
+          accessibilityLabel="Start following this route"
+        >
+          <Ionicons name="navigate" size={16} color={t.onBrand} />
+          <Text style={styles.startText}>Start</Text>
+        </Pressable>
+      )}
+
       {hasDetail && (
         <Pressable
           onPress={() => setExpanded(current => !current)}
@@ -412,6 +470,8 @@ StyleSheet.create({
     // shell it resolves against the map container, which is what the old
     // single-piece card did.
     cardCollapsed: { maxHeight: '34%' },
+    // The fallback only. The screen passes a measured `maxHeight` that accounts for
+    // the search card above it; this is what applies if a caller does not.
     cardExpanded: { maxHeight: '76%' },
     // `flexShrink` down the chain, so the shell's cap actually reaches the
     // scroll view. Without it the content keeps its natural height and is
@@ -439,9 +499,12 @@ StyleSheet.create({
       alignItems: 'center',
     },
     tabActive: { backgroundColor: t.brandStrong },
-    tabText: {      ...type.caption, color: t.textSoft,},
-    tabTextActive: { color: t.brandStrong },
-    tabScore: {      ...type.caption, },
+    tabText: { ...type.caption, color: t.textSoft },
+    // `onBrand`, not `brandStrong`. The active tab's FILL is `brandStrong`, so
+    // colouring its label the same token painted the text in the background colour
+    // and the selected route's name vanished into its own chip.
+    tabTextActive: { color: t.onBrand },
+    tabScore: { ...type.caption },
     stats: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -470,6 +533,17 @@ StyleSheet.create({
     flagDot: { width: 9, height: 9, borderRadius: 5, borderWidth: 1.5, marginTop: 4 },
     flagText: {      ...type.caption, flex: 1, color: t.text, lineHeight: 16 },
     flagMeta: { color: t.textFaint },
+    start: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: space.sm,
+      marginTop: space.md,
+      height: 46,
+      borderRadius: radius.pill,
+      backgroundColor: t.brand,
+    },
+    startText: { ...type.label, color: t.onBrand },
     // An overline, matching the section labels everywhere else in the app.
     clusterLabel: {
       ...type.overline,
