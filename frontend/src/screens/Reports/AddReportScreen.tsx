@@ -93,7 +93,7 @@ const CRIME_CATEGORIES = [
 ];
 
 const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
-  const { t, g } = useTheme();
+  const { t, g, mode } = useTheme();
   const styles = useStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const { currentLocation, getCurrentLocation } = useLocationStore();
@@ -1086,6 +1086,9 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
 
           <View style={styles.mapContainer}>
             <MapView
+              // Follow the app's theme, not the phone's. See `MapComponent.tsx`.
+              key={mode}
+              userInterfaceStyle={mode}
               provider={MAP_PROVIDER}
               style={styles.map}
               region={region}
