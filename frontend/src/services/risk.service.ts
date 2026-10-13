@@ -1,5 +1,6 @@
 import apiService from './api.service';
 import type { RiskFlag, SourceRef, TimeProfile } from '../types/contracts/risk';
+import type { CommunityCluster } from '../types/contracts/community';
 
 /**
  * Risk flags from the backend.
@@ -23,6 +24,12 @@ export interface RiskFlagsResult {
   /** The instant the server evaluated the surface at. */
   asOf: string;
   flags: RiskFlag[];
+}
+
+export interface CommunityClustersResult {
+  /** The instant the server evaluated the clusters at. */
+  asOf: string;
+  clusters: CommunityCluster[];
 }
 
 /**
@@ -127,6 +134,58 @@ function toRiskFlag(wire: RiskFlagWire): RiskFlag {
     confidence: wire.confidence ?? 1,
     validFrom: wire.valid_from,
     validTo: wire.valid_to,
+  };
+}
+
+/** What the cluster wire carries. snake_case, dates as ISO strings. */
+interface CommunityClusterWire {
+  cluster_id: string;
+  status: CommunityCluster['status'];
+  lat: number;
+  lon: number;
+  radius_m: number;
+  report_count: number;
+  reporter_count: number;
+  severity_0: number;
+  severity_now: number;
+  half_life_hours: number;
+  observed_at: string;
+  first_report_at: string;
+  expires_at: string;
+  statement: string;
+  corroborated_at: string | null;
+  confidence: number;
+}
+
+interface CommunityClustersResponseWire {
+  as_of: string;
+  count: number;
+  clusters: CommunityClusterWire[];
+}
+
+function toCommunityCluster(wire: CommunityClusterWire): CommunityCluster {
+  return {
+    clusterId: wire.cluster_id,
+    status: wire.status,
+    lat: wire.lat,
+    lon: wire.lon,
+    radiusM: wire.radius_m,
+    reportCount: wire.report_count,
+    reporterCount: wire.reporter_count,
+    severity0: wire.severity_0,
+    severityNow: wire.severity_now,
+    halfLifeHours: wire.half_life_hours,
+    observedAt: wire.observed_at,
+    firstReportAt: wire.first_report_at,
+    expiresAt: wire.expires_at,
+    statement: wire.statement,
+    corroboratedAt: wire.corroborated_at ?? null,
+    // Defaulted to the LOWER tier, unlike `toRiskFlag`, which defaults confidence
+    // to 1. The directions are opposite because the risk is: a flag that lost its
+    // field should still bend a route, while a cluster that lost its field must not
+    // be counted as better evidence than it is. Under-weighting community reports
+    // is the safe failure.
+    confidence: wire.confidence ?? 0.3,
   };
 }
 
@@ -249,6 +308,55 @@ class RiskService {
     return {
       asOf: payload.as_of,
       flags: payload.flags.map(toRiskFlag),
+    };
+  }
+
+  /**
+   * Corroborated community report clusters inside a map region.
+   *
+   * A second request rather than a second array on `/risk/flags`, matching the
+   * server's two routes. The map issues both in parallel, so the extra round trip
+   * costs nothing, and a screen that wants only one kind of claim does not pay for
+   * the other.
+   *
+   * **A single report is never here.** Reports are private to their author -- RLS on
+   * `crime_reports` is `auth.uid() = user_id` -- and nothing is published until at
+   * least two independent people have filed within 200 m of each other. So an empty
+   * list is the normal answer for most of Dhaka and must render as nothing at all,
+   * never as an error.
+   *
+   * `asOf` threads the time control exactly as `getFlagsInRegion` does: dragging it
+   * forward decays each cluster and drops the ones past `expiresAt`. Being able to
+   * show a cluster fade is the point rather than a nicety -- it is the object most at
+   * risk of reading as a permanent label on a street.
+   */
+  async getClustersInRegion(
+    region: MapRegion,
+    asOf?: Date,
+  ): Promise<CommunityClustersResult> {
+    const params = new URLSearchParams({
+      bbox: regionToBbox(region, RISK_FETCH_MIN_SPAN_DEGREES),
+    });
+    if (asOf) {
+      params.set('as_of', asOf.toISOString());
+    }
+
+    const body = (await apiService.get<CommunityClustersResponseWire>(
+      `/risk/clusters?${params.toString()}`,
+    )) as unknown as
+      | CommunityClustersResponseWire
+      | { data?: CommunityClustersResponseWire };
+
+    const payload: CommunityClustersResponseWire | undefined =
+      'clusters' in body ? body : body.data;
+
+    if (!payload || !Array.isArray(payload.clusters)) {
+      return { asOf: asOf?.toISOString() ?? new Date().toISOString(), clusters: [] };
+    }
+
+    return {
+      asOf: payload.as_of,
+      clusters: payload.clusters.map(toCommunityCluster),
     };
   }
 }

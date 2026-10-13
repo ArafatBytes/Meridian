@@ -1,7 +1,7 @@
 """
 Crime report model
 """
-from sqlalchemy import Column, String, DateTime, Boolean, Text, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, String, DateTime, Text, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -57,8 +57,23 @@ class CrimeReport(Base):
     latitude = Column(String, nullable=False)
     longitude = Column(String, nullable=False)
     location_name = Column(String, nullable=True)
-    status = Column(String, default='pending')  # pending, verified, investigating, resolved
-    verified = Column(Boolean, default=False)
+    # filed | withdrawn | removed. NOT a trust level: a report is never approved.
+    #
+    # It used to allow ('pending', 'verified', 'investigating', 'resolved'), which
+    # mixed a trust question with a casework one and could answer neither -- nothing
+    # ever wrote any value but the default, there was no role column to gate an
+    # admin on, and the casework half duplicated `gd_drafts`, which owns that
+    # lifecycle properly. The `verified` boolean is gone for the same reason: this
+    # product cannot establish that an incident happened, so there was no honest way
+    # to set it.
+    #
+    # What replaced it is corroboration over several independent reports --
+    # `app/agents/report_corroboration.py`, publishing to `community_clusters`. See
+    # migrations/versions/20261013120000__report_trust.sql for the whole argument.
+    #
+    # Not writable by `authenticated`: the column-level UPDATE grant omits it, and
+    # withdrawal goes through public.withdraw_crime_report().
+    status = Column(String, default='filed')
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

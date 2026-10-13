@@ -46,7 +46,19 @@ import { TAB_BAR_CLEARANCE } from '../../navigation/metrics';
 import PlaceSearch from '../../components/PlaceSearch';
 import { AS_OF_PRESETS, asOfSummary } from '../../features/risk/scheduled';
 import type { GeoResolution } from '../../types/contracts/geo';
+import type { CommunityCluster } from '../../types/contracts/community';
+import { CommunityClusterMarker } from '../../components/CommunityClusterMarker';
 
+/**
+ * A report as this screen draws it -- and every one of these belongs to the signed-in
+ * user. B13 made reports private to their author: RLS on `crime_reports` is
+ * `auth.uid() = user_id`, so there is no longer a query that returns anyone else's.
+ *
+ * `verified` is gone with the column. There was no honest way for this product to set
+ * it -- the app cannot establish that an incident happened -- so the badge it fed was
+ * unreachable UI. What a stranger sees instead is a `CommunityCluster`: several
+ * independent people reporting in one small area, published as a count.
+ */
 interface CrimeReportData {
   id: string;
   category: CrimeCategory;
@@ -56,7 +68,7 @@ interface CrimeReportData {
   latitude: string;
   longitude: string;
   location_name: string | null;
-  verified: boolean;
+  status: string;
 }
 
 // Defect 3. These keys were capitalised ('Theft') while the database enum and
@@ -136,6 +148,19 @@ const MAX_DRAWN_RADIUS_M = 5000;
  * The fix is to name the sizes and derive the positions from them, so a button that
  * changes size moves the things around it instead of silently overlapping them.
  */
+/**
+ * How far back the user's own report history goes on the map, in days.
+ *
+ * 90 days. Long enough to be a record worth looking at, short enough that it is not a
+ * permanent set of marks on the city -- the same instinct as `half_life_hours` on
+ * everything else this map draws, applied to the one layer that cannot decay because
+ * it is a list of things that happened rather than a claim about now.
+ *
+ * It bounds the query, not just the drawing: a report outside the window is never
+ * fetched.
+ */
+const REPORT_HISTORY_DAYS = 90;
+
 const FAB_SIZE = 56;
 /** Vertical gap between the two stacked right-hand buttons. Was a bare `+ 70`. */
 const FAB_GAP = 14;
@@ -209,6 +234,16 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   const [region, setRegion] = useState(DEFAULT_MAP_REGION);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [crimeReports, setCrimeReports] = useState<CrimeReportData[]>([]);
+  /**
+   * Whether the user's own report history is drawn. **Off by default.**
+   *
+   * Their reports are historical records, not live hazards, and the map's job on open
+   * is to show what is happening now. Defect 54's complaint was that reports and flags
+   * were drawn as interchangeable pins; having to ask for the history is part of
+   * separating them -- the layer that is on by default is the one that decays.
+   */
+  const [showMyReports, setShowMyReports] = useState(false);
+  const [clusters, setClusters] = useState<CommunityCluster[]>([]);
   const [riskFlags, setRiskFlags] = useState<RiskFlag[]>([]);
   const [riskError, setRiskError] = useState<string | null>(null);
   const [ingestion, setIngestion] = useState<IngestionStatus | null>(null);
@@ -405,19 +440,94 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   };
 
 
+  /**
+   * The signed-in user's **own** reports, recent ones only.
+   *
+   * This used to be `select(...).order(...)` with no filter at all: every report ever
+   * filed by anyone, unbounded in time and in space, drawn as a pin beside the risk
+   * flags. Three things were wrong with that and only one of them was a bug.
+   *
+   * 1. **It was somebody else's claim.** One stranger's uncorroborated account naming
+   *    a street is the permanent area label the concept document (section 9) commits
+   *    to never producing.
+   * 2. **It was a privacy surface.** A pin at a corner, plus a timestamp, plus a
+   *    narrative, can identify a victim. That is section 9 and the B14 retention
+   *    registry, not something to wave through because the row was readable.
+   * 3. **It never ended.** No time bound, so a report from a year ago sat on a live
+   *    map looking exactly like one from last night.
+   *
+   * So: `user_id` is filtered here *and* enforced by RLS, which is what makes it more
+   * than a convention -- a client bug cannot leak what the database will not return.
+   * `REPORT_HISTORY_DAYS` bounds it, and `status = 'filed'` leaves out what the author
+   * has withdrawn.
+   *
+   * What other people reported reaches this screen through `fetchClusters`, as counts.
+   */
   const fetchCrimeReports = async () => {
     try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setCrimeReports([]);
+        return;
+      }
+
+      const since = new Date(
+        Date.now() - REPORT_HISTORY_DAYS * 24 * 60 * 60 * 1000,
+      ).toISOString();
+
       const { data, error } = await supabase
         .from('crime_reports')
         .select(
-          'id, category, title, description, incident_date_time, latitude, longitude, location_name, verified',
+          'id, category, title, description, incident_date_time, latitude, longitude, location_name, status',
         )
+        .eq('user_id', user.id)
+        // Excludes the two retired states rather than requiring 'filed', and that
+        // is not a style choice. Rows written before the B13 migration still hold
+        // `status = 'pending'`; `.eq('status', 'filed')` would silently return
+        // nothing against a database whose migrations have not been applied yet, and
+        // "my own reports vanished from the map" is a very confusing way to discover
+        // a pending migration. Written this way, the filter is correct on both sides
+        // of it, and still drops what the author has withdrawn.
+        .not('status', 'in', '("withdrawn","removed")')
+        .gte('incident_date_time', since)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       setCrimeReports(data || []);
     } catch (error: any) {
-      console.error('Error fetching crime reports:', error);
+      console.error('Error fetching your reports:', error);
+    }
+  };
+
+  /**
+   * Corroborated community clusters for the area around the map centre.
+   *
+   * Through the backend, like the flags and for the same reason: decay and the
+   * hour-of-day curve are server arithmetic, and `community_clusters` is RLS-locked
+   * with no policies so the anon key cannot read it at all.
+   *
+   * Shares `riskRequestId` with the flag fetch deliberately. The two always move
+   * together -- same region, same `as of` -- so one counter answers "is this still the
+   * request the user is waiting for" for both, and a cluster layer from a stale
+   * viewport can never outlive the flags it was fetched beside.
+   *
+   * A failure is silent beyond a warning. An empty cluster layer is the *normal*
+   * state for most of Dhaka, so it must not read as an error: publishing one needs at
+   * least two independent people to have filed within 200 m of each other.
+   */
+  const fetchClusters = async (offsetHours = asOfOffsetHours) => {
+    const asOf = asOfFromOffset(offsetHours);
+    const id = riskRequestId.current;
+    try {
+      const result = await riskService.getClustersInRegion(region, asOf);
+      if (id !== riskRequestId.current) return;
+      setClusters(result.clusters);
+    } catch (error: any) {
+      if (id !== riskRequestId.current) return;
+      console.warn('Community clusters unavailable:', error?.message ?? error);
+      setClusters([]);
     }
   };
 
@@ -464,6 +574,10 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   /** D04's refresh: the flags for this instant, and when the news was last read. */
   const refreshRiskLayer = () => {
     fetchRiskFlags();
+    // After `fetchRiskFlags`, which is what bumps `riskRequestId` -- the cluster
+    // fetch reads that counter rather than incrementing it, so the two share one
+    // notion of "still current".
+    fetchClusters();
     refreshNewsStatus();
   };
 
@@ -514,6 +628,11 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     setAsOfOffsetHours(offsetHours);
     setSelectedFlag(null); // its severity and time-remaining belong to the old instant
     fetchRiskFlags(offsetHours);
+    // Clusters decay too, on a 72-hour half-life, and drop out past `expiresAt`.
+    // Leaving them static while the flags moved would make the time control look
+    // like it only applies to news -- and a cluster that never faded on screen is
+    // the permanent street label this whole design is built to avoid.
+    fetchClusters(offsetHours);
   };
 
   /**
@@ -843,7 +962,28 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           />
         )}
 
-        {!routeMode && crimeReports.map(crime => (
+        {/* What other people reported, as counts. B13.
+            Drawn before the user's own pins so an own-report teardrop sits above a
+            cluster pill it overlaps -- the user's own record is the thing they are
+            most entitled to be able to tap.
+
+            Hidden in route mode like every other browse-layer marker: the route card
+            carries its own cluster list, and a corridor cluttered with pills is the
+            problem the route view exists to avoid. */}
+        {!routeMode &&
+          clusters.map(cluster => (
+            <CommunityClusterMarker
+              key={cluster.clusterId}
+              cluster={cluster}
+              onPress={() => {}}
+            />
+          ))}
+
+        {/* The user's own report history, behind an explicit toggle.
+            `showMyReports` defaults to false -- see the state declaration. Every pin
+            here is the signed-in user's own: there is no query that returns anyone
+            else's any more. */}
+        {!routeMode && showMyReports && crimeReports.map(crime => (
           <Marker
             key={crime.id}
             coordinate={{
@@ -851,7 +991,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
               longitude: parseFloat(crime.longitude),
             }}
             title={crime.title}
-            description={crimeCategoryLabel(crime.category)}
+            description={`Your report · ${crimeCategoryLabel(crime.category)}`}
             // Defect 3, the other half. CRIME_COLORS was already defined and was
             // never passed to a marker, so even with correct keys every pin would
             // still have rendered in the default red.
@@ -1094,10 +1234,37 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           >
             <Text style={styles.riskBadgeText} numberOfLines={1}>
               {riskError ??
-                [`${riskFlags.length} risk flags`, newsLabel(ingestion, isFetchingNews)]
+                [
+                  `${riskFlags.length} risk flags`,
+                  // Counted separately, never added to the flag count. They are
+                  // different claims, and "14 things on the map" would be the number
+                  // that hides exactly the distinction this layer exists to make.
+                  clusters.length > 0 ? `${clusters.length} report areas` : '',
+                  newsLabel(ingestion, isFetchingNews),
+                ]
                   .filter(Boolean)
                   .join(' · ')}
             </Text>
+          </TouchableOpacity>
+          {/* Your own report history on and off. In the badge rather than as a third
+              FAB: it is a layer control, and the badge is already the row that says
+              what the map is showing. The icon is filled when the layer is on, so the
+              control states its own position without a label. */}
+          <TouchableOpacity
+            onPress={() => setShowMyReports(current => !current)}
+            style={styles.riskBadgeButton}
+            hitSlop={8}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: showMyReports }}
+            accessibilityLabel={
+              showMyReports ? 'Hide my past reports' : 'Show my past reports'
+            }
+          >
+            <Ionicons
+              name={showMyReports ? 'bookmark' : 'bookmark-outline'}
+              size={16}
+              color={showMyReports ? t.brand : t.textSoft}
+            />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={refreshRiskLayer}
@@ -1276,16 +1443,12 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                     </View>
                   )}
 
-                  {selectedCrime.verified && (
-                    <View style={styles.verifiedBadge}>
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={16}
-                        color={t.ok}
-                      />
-                      <Text style={styles.verifiedText}>Verified Report</Text>
-                    </View>
-                  )}
+                  {/* A "Verified Report" badge was here, gated on a `verified`
+                      boolean that nothing could ever set to true. The column is gone
+                      (B13): this product cannot establish that an incident happened,
+                      so there was no honest way to earn the tick. What replaced it is
+                      the cluster layer -- corroboration by several independent
+                      people, which is a claim the system can actually make. */}
 
                   <View style={styles.divider} />
 
@@ -1497,21 +1660,6 @@ StyleSheet.create({
     infoText: {
       ...type.body,
       color: t.textSoft,
-    },
-    verifiedBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: t.ok,
-      paddingHorizontal: space.lg,
-      paddingVertical: space.sm,
-      borderRadius: radius.md,
-      alignSelf: 'flex-start',
-      marginTop: space.sm,
-      gap: space.xs,
-    },
-    verifiedText: {
-      ...type.label,
-      color: t.ok,
     },
     divider: {
       height: 1,

@@ -23,6 +23,7 @@ import { fontFamily, radius, space, type } from '../../theme/type';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, MAP_PROVIDER } from '../../components/MapComponent';
 import { crimeService } from '../../services/crime.service';
+import { reportStatusLabel } from '../../types/contracts/crime';
 
 // @ts-ignore - generated types fight `style` in this RN version
 const Grad = LinearGradient as any;
@@ -72,6 +73,49 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  /**
+   * Retract the report without destroying it. B13.
+   *
+   * The counterpart of corroboration, and the reason it is not just "delete": once a
+   * report has contributed to a published cluster, deleting the row removes the audit
+   * trail behind a claim that is still on other people's maps. Withdrawing leaves the
+   * row, stops it counting on the corroboration agent's next run, and keeps the
+   * cluster's provenance intact.
+   *
+   * Offered only on a report that is still on record. A withdrawn one has nothing to
+   * withdraw, and `removed` is not the author's state to change.
+   *
+   * It goes through an RPC because the client deliberately has no UPDATE privilege on
+   * `crime_reports.status` -- that column-level revoke is what closed the hole where
+   * any account could self-award `verified = true` on its own row.
+   */
+  const handleWithdraw = () => {
+    Alert.alert(
+      'Withdraw Report',
+      'This keeps your report but stops it counting toward what other people see on ' +
+        'the map. You can still delete it afterwards.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Withdraw',
+          onPress: async () => {
+            try {
+              const withdrawn = await crimeService.withdrawReport(reportId);
+              if (!withdrawn) {
+                // False is a legitimate answer, not an error: already withdrawn,
+                // already removed, or not yours. Re-reading says which.
+                Alert.alert('Already withdrawn', 'This report is no longer on record.');
+              }
+              await fetchReportDetails();
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Failed to withdraw this report');
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleDelete = () => {
@@ -133,16 +177,25 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
     return `${monthName} ${parseInt(day, 10)}, ${year}, ${hour12}:${minutes} ${ampm}`;
   };
 
+  /**
+   * The badge colour for a report status. B13.
+   *
+   * It used to answer `verified`/`investigating`/`resolved` and default to `t.warn`
+   * -- amber -- for everything else, which in practice meant every report the user
+   * had ever filed wore a warning colour forever, because `pending` was the only
+   * value anything ever wrote.
+   *
+   * `filed` is now `t.info`: neutral, "this is on record". Amber would be claiming
+   * something is outstanding, and nothing is -- there is no queue and no approver.
+   */
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'verified':
-        return t.ok;
-      case 'investigating':
-        return t.info;
-      case 'resolved':
-        return t.brand;
+      case 'withdrawn':
+        return t.textFaint;
+      case 'removed':
+        return t.danger;
       default:
-        return t.warn;
+        return t.info;
     }
   };
 
@@ -213,9 +266,27 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
           <Ionicons name="arrow-back" size={24} color={t.onBrand} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Report Details</Text>
-        <TouchableOpacity style={styles.headerButton} onPress={handleDelete}>
-          <Ionicons name="trash-outline" size={24} color={t.onBrand} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          {/* Withdraw before delete, and only while the report is on record. The
+              gentler action sits first because it is the one that keeps the
+              provenance of anything this report has already contributed to. */}
+          {report?.status === 'filed' && (
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={handleWithdraw}
+              accessibilityLabel="Withdraw this report"
+            >
+              <Ionicons name="eye-off-outline" size={24} color={t.onBrand} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={handleDelete}
+            accessibilityLabel="Delete this report"
+          >
+            <Ionicons name="trash-outline" size={24} color={t.onBrand} />
+          </TouchableOpacity>
+        </View>
       </Grad>
 
       <ScrollView
@@ -233,8 +304,10 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
           ]}
         >
           <Text style={styles.statusText}>
-            {report.status.toUpperCase()}
-            {report.verified && ' ✓'}
+            {/* The `✓` was gated on `report.verified`, a column nothing could ever
+                set -- so it was a tick the UI promised and could not deliver. Both
+                the column and the badge are gone; see contracts/crime.ts. */}
+            {reportStatusLabel(report.status).toUpperCase()}
           </Text>
         </View>
 
@@ -498,6 +571,11 @@ StyleSheet.create({
       justifyContent: 'center',
       alignItems: 'center',
     },
+    // The header is a three-column row (back · title · actions) and the title is
+    // centred by the two outer cells being equal. Two action buttons would make the
+    // right cell wider than the left and pull the title off centre, so they share
+    // one cell and the row keeps its balance whether there are one or two.
+    headerActions: { flexDirection: 'row', alignItems: 'center' },
     headerTitle: {
       ...type.heading,
       color: t.onBrand,

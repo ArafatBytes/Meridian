@@ -103,8 +103,17 @@ class CrimeService {
             latitude: reportData.latitude,
             longitude: reportData.longitude,
             location_name: reportData.location_name,
-            status: 'pending',
-            verified: false,
+            // 'filed', not 'pending'. There is nothing to be pending ON: no queue,
+            // no approver, no way for this product to establish that an incident
+            // happened. The report is the author's own record from the moment it is
+            // written, and what reaches a stranger's map is corroboration across
+            // several independent reports -- see types/contracts/community.ts.
+            //
+            // `verified: false` used to be written here too. The column is gone
+            // (B13): the client no longer has UPDATE privilege on `status` either, so
+            // the three lines that used to be able to self-award a tick now fail at
+            // the database rather than being merely unused.
+            status: 'filed',
             created_at: reportData.created_at, // Override Supabase auto timestamp
             evidence_photo_path: reportData.evidence_photo_path ?? null,
             vision_analysis: reportData.vision_analysis ?? null,
@@ -173,6 +182,36 @@ class CrimeService {
       }
     } catch (error: any) {
       throw new Error(error.message || 'Failed to delete report');
+    }
+  }
+
+  /**
+   * Retract one of your own reports.
+   *
+   * An RPC rather than an update, because the client deliberately has no UPDATE
+   * privilege on `crime_reports.status` -- that column-level revoke is what closed
+   * the hole where any account could set `verified = true` on its own row.
+   * `public.withdraw_crime_report` is `security definer`, sets exactly one column to
+   * exactly one value, and only on a row the caller owns that is still `filed`.
+   *
+   * Withdrawal rather than deletion, and the difference matters once a report has
+   * contributed to a published cluster: `delete` would remove the audit trail behind
+   * a claim that is still on other people's maps, while this leaves the row and stops
+   * it counting on the corroboration agent's next run. `deleteReport` is still there
+   * for a report the author simply wants gone.
+   *
+   * Returns false when the report is not yours, does not exist, or has already been
+   * withdrawn or removed. All three are legitimate states, not errors.
+   */
+  async withdrawReport(reportId: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabase.rpc('withdraw_crime_report', {
+        p_report_id: reportId,
+      });
+      if (error) throw error;
+      return data === true;
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to withdraw this report');
     }
   }
 

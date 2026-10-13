@@ -919,7 +919,9 @@ walkthroughs told us nothing about any of it.
 #### Still open
 
 - [ ] **Defect 53:** **CameraX never delivers a video frame to `VideoCapture` on the Vivo V2344 (Unisoc `ums9230`).** At `Quality.LOWEST`, `Quality.SD` and the 1080p default the recording runs its full ten seconds, audio is captured throughout, the encoder is configured correctly, and `Recorder` logs *"waiting for video keyframe"* 43 times a second for the entire duration. Audio works; video never arrives. The remaining lever is CameraX's `PreviewView` implementation mode — `TEXTURE_VIEW` is Google's documented workaround for this class of device bug and the log confirms expo-camera uses `SurfaceViewImpl` — but **expo-camera does not expose it as a prop**, so it needs a native patch. Mitigated by defect 52, not fixed. **Next step is data, not code: try a second Android handset.**
-- [ ] **Defect 54:** **`crime_reports` and `risk_flags` have no pipeline between them**, so a user's own report never becomes a risk flag, never bends a route and never raises a zone alert — while the Map draws both as pins, which makes them look interchangeable. Deliberate (a single unverified report must not steer other people's routes) but a real gap. The bridge is Rumour Guard's existing logic applied to user reports: N independent reports, same area, same window. **B13.**
+- [x] **Defect 54:** ~~**`crime_reports` and `risk_flags` have no pipeline between them**~~ — **fixed, with one correction to the proposed bridge.** The mechanism was right: Rumour Guard's logic applied to user reports, N independent reports, same area, same window. The destination was not. A report cluster cannot be a `risk_flag`: a flag is a *mobility* claim, `MobilityImpact`'s six values are all about traffic flow (a corner where people were robbed is not a road that is blocked), and `policy/framing.py` bans `theft`, `robbery`, `assault` and twenty more from any published flag text — *"a risk flag is the product's own published claim about a place, and it does not get to say any of this."* Promoting into `risk_flags` would have needed a new kind, a wider `MobilityImpact` and a loosened framing guard: three changes to the table whose correctness this project has invested most in.
+      So the pipeline ends in a **sibling** table, `community_clusters`, reusing the mechanism (dedup identity, corroboration count, decay, derived expiry, the sweep) without diluting the contract. What it publishes is a count and a recency — *"3 independent reports within 200 m in the last 6 days"* — which states what the system knows and never characterises the place. Precedent: `scoring/chronic.py` already puts police crime statistics on the map as a framed claim.
+      Also fixed, same commit: `crime_reports.status` allowed `('pending','verified','investigating','resolved')`, mixing a trust question nothing could answer with a casework question `gd_drafts` already owns — every user saw "Pending" forever beside an unreachable `✓`. It is now `('filed','withdrawn','removed')`, `verified` is dropped, and **the self-verify hole is closed**: `crime_reports_update_own` granted UPDATE on your own row and `status` was a column on it, so three lines of Supabase client code self-awarded `verified = true`. Table-level UPDATE is revoked from `authenticated` and granted back column by column, omitting `status`, `user_id` and `created_at`. Reports are also private to their author now (SELECT was `using (true)`; `MapScreen` read every report ever filed, unbounded in time and space). **S29 / B13.**
 - [ ] **Defect 55:** `migrate.py status` reports two of D08's migrations as `pending` when they are applied — run by hand through the Supabase editor without the ledger row. **Do not run `migrate.py up` to tidy it**; that would re-run them. Whoever owns D08 should insert the two rows.
 
 
@@ -1254,9 +1256,27 @@ The Guardian self-trial from S23 continues in the background through this phase.
 
 **Suggested owner:** Arafat. **Prototype:** an unconfirmed flag promoted by nearby users.
 
+**Partly delivered early, from the other direction.** B13 built corroboration over *user
+reports* rather than confirmation of *news flags* — `app/agents/report_corroboration.py`,
+`app/policy/community.py`, `community_clusters`. Async by design (an hourly agent, nothing
+synchronous), and it needed no new UI affordance, which is what made it safe to land before
+the demo. What remains below is the half that asks a user a question.
+
 - [ ] Request confirmation from users physically near an unconfirmed flag (concept doc §5.5)
-- [ ] Rate-limited, privacy-preserving, abuse-resistant: proximity proof, one request per user per flag, reputation weighting
-- [ ] Asynchronous by design — it is an abuse surface, and async is the defensible version
+- [x] Asynchronous by design — it is an abuse surface, and async is the defensible version
+- [x] Abuse controls, as far as they can honestly go: distinct accounts only
+      (`independent_reporters`), one report per account per cluster, and an account-age gate
+      measured against the *incident* rather than the filing time, so waiting a day is not a
+      way around it. Written up plainly in `policy/community.py` — it makes a manufactured
+      cluster expensive and auditable, not impossible.
+- [ ] **Proximity proof.** The remaining tier, and a deliberate privacy trade:
+      `push_devices.last_location` is a single overwritten point, and requiring it would
+      decline reports from anyone who filed from home.
+- [ ] **Phone verification gate.** `users.phone` and `users.is_verified` exist and
+      `eligible_reporters()` is the seam, but registration does not verify a phone today, so
+      requiring it would publish nothing at all.
+- [ ] **Reporter reputation weighting.** Needs ground truth about which past reports were
+      real. There is none.
 - [ ] This closes the concept document's "Deferred to roadmap" list
 
 ### Phase 5 exit criteria

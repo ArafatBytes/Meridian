@@ -187,6 +187,21 @@ def profile_for(kind: IncidentKind) -> TimeProfile:
     return TimeProfile(multipliers=list(_PROFILE_BY_KIND[kind]))
 
 
+def night_weighted_profile() -> TimeProfile:
+    """
+    The after-dark curve, for objects that have no `IncidentKind` to look one up by.
+
+    `community_clusters` is the case. A cluster of user reports is the same kind of
+    thing the chronic layer measures — incidents that are reported more often after
+    dark — so it wants the same shape, and reaching it through
+    `profile_for(IncidentKind.CHRONIC)` would mean a community cluster claiming a
+    kind it does not have.
+
+    One curve, two callers, rather than a second list that drifts from this one.
+    """
+    return TimeProfile(multipliers=list(_NIGHT_WEIGHTED))
+
+
 def hour_multiplier(profile: TimeProfile | None, at: datetime) -> float:
     """
     The multiplier for the Dhaka-local hour of `at`. 1.0 when there is no profile.

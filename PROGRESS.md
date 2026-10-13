@@ -549,9 +549,14 @@ was the cause.
 - **Zone alerts are unverified on a device.** `backend/scripts/seed_flag_here.py` writes one
   live flag at given coordinates so Part 1 can be run from anywhere; the real test is a pocket
   and a walk toward a flagged road in Dhaka.
-- **Filing a crime report does not create a risk flag.** `crime_reports` and `risk_flags` have
-  no pipeline between them, deliberately — a single unverified report must not steer other
-  people's routes. The Map draws both as pins, which makes them look interchangeable. B13.
+- ~~**Filing a crime report does not create a risk flag.**~~ **Closed by B13**, and not the way
+  the entry assumed. A report cluster does *not* become a risk flag: a risk flag is a mobility
+  claim, `MobilityImpact`'s six values are all about traffic flow, and `policy/framing.py` bans
+  the vocabulary a report would need — so the pipeline ends in a sibling table,
+  `community_clusters`, which publishes a count and a recency and nothing else. A single
+  report still steers nobody: reports are now private to their author (RLS), and publishing
+  needs two independent reporters within 200 m, three for the upper tier. The Map draws the two
+  with different shapes, which is the other half of the entry.
 - **Video capture on unsupported hardware.** Degraded to location-only rather than patched.
 - **`ruff format`.** It would reformat 60 existing files including D06's `routing/` and D09's
   `scheduled_risk.py`. That gate is already red and this is not the sprint that fixes it.

@@ -39,9 +39,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.contracts.community import CommunityCluster
 from app.contracts.risk import RiskFlag
 from app.contracts.surface import RiskSurface
+from app.core.config import settings
 from app.core.database import get_db
+from app.scoring.clusters import DbClusterSurface
 from app.scoring.factory import get_risk_surface
 
 router = APIRouter()
@@ -55,6 +58,28 @@ there because a client bug that asks for the whole country would otherwise retur
 `MAX_FLAGS_PER_READ` arbitrary flags and look like a data problem rather than a
 request problem.
 """
+
+
+class CommunityClustersResponse(BaseModel):
+    """
+    Envelope for a bounding-box read of `community_clusters`.
+
+    Same shape as `RiskFlagsResponse` and a separate response on a separate route,
+    rather than a second array inside that one. Two reasons, and the first is the
+    one that matters:
+
+    1. **They are different claims.** A flag is a published mobility claim derived
+       from edited sources; a cluster is a count of what strangers reported. Serving
+       them in one envelope is the first step toward a client that treats them as
+       interchangeable, which is the confusion Defect 54 logs about the map drawing
+       both as the same pin.
+    2. A client that wants only one does not pay for the other, and the map fetches
+       both in parallel anyway.
+    """
+
+    as_of: datetime
+    count: int = Field(ge=0)
+    clusters: list[CommunityCluster]
 
 
 class RiskFlagsResponse(BaseModel):
@@ -190,3 +215,67 @@ async def get_risk_flags(
     flags = await surface.flags_in_bbox(min_lat, min_lon, max_lat, max_lon, at)
 
     return RiskFlagsResponse(as_of=at, count=len(flags), flags=flags)
+
+
+@router.get(
+    "/clusters",
+    response_model=CommunityClustersResponse,
+    summary="Corroborated community report clusters inside a bounding box",
+)
+async def get_community_clusters(
+    bbox: Annotated[
+        str,
+        Query(
+            description="west,south,east,north - e.g. 90.33,23.70,90.50,23.90",
+            examples=["90.33,23.70,90.50,23.90"],
+        ),
+    ],
+    as_of: Annotated[
+        datetime | None,
+        Query(
+            description=(
+                "ISO 8601 instant to evaluate the clusters at; defaults to now. "
+                "Use a Z suffix rather than +00:00."
+            ),
+            examples=["2026-10-13T18:00:00Z"],
+        ),
+    ] = None,
+    db: AsyncSession = Depends(get_db),
+) -> CommunityClustersResponse:
+    """
+    Live community clusters in an area: where several people independently reported
+    something, as a count and a recency.
+
+    **A single report is never here.** The database will not store a cluster with
+    fewer than two independent reporters
+    (`community_clusters_needs_two_reporters`), and reports themselves are private
+    to their author -- `crime_reports` is readable only by the user who filed each
+    row. See `app/policy/community.py` for the thresholds and the reasoning.
+
+    Unauthenticated, matching `/risk/flags`. Nothing served here is user data: a
+    cluster carries counts, a radius and two timestamps. It has no field for a
+    narrative, a category or a report id, and the surface does not select those
+    columns -- so this endpoint cannot leak a report even if a later caller asks it
+    to.
+
+    `as_of` behaves exactly as it does for flags, and for the same reason: dragging
+    the time control forward decays a cluster's `severity_now` and drops it from the
+    response once it is past `expires_at`. A cluster is the object most at risk of
+    becoming a permanent label on a street, so being able to demonstrate that it
+    fades is the point rather than a nicety.
+
+    Returns an empty list under `RISK_SURFACE_IMPL=seeded`. There is deliberately no
+    cluster fixture: a fabricated cluster would be an invented claim that residents
+    of Dhaka reported incidents at a named corner, which is a worse thing to put on
+    a stage than an empty layer. See `app/scoring/clusters.py`.
+    """
+    min_lat, min_lon, max_lat, max_lon = _parse_bbox(bbox)
+    at = _resolve_as_of(as_of)
+
+    if settings.RISK_SURFACE_IMPL.strip().lower() != "db":
+        return CommunityClustersResponse(as_of=at, count=0, clusters=[])
+
+    surface = DbClusterSurface(db)
+    clusters = await surface.clusters_in_bbox(min_lat, min_lon, max_lat, max_lon, at)
+
+    return CommunityClustersResponse(as_of=at, count=len(clusters), clusters=clusters)

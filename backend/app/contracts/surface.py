@@ -40,6 +40,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol, runtime_checkable
 
+from app.contracts.community import CommunityCluster
 from app.contracts.risk import RiskFlag
 
 
@@ -94,3 +95,54 @@ class RiskSurface(Protocol):
         about, and a single point is what `flags_near` is for.
         """
         ...
+
+
+@runtime_checkable
+class ClusterSurface(Protocol):
+    """
+    What a source of community report clusters must answer. B13.
+
+    A second, smaller protocol rather than two more methods on `RiskSurface`, and
+    the reason is the one `app/scoring/clusters.py` opens with: `RiskSurface`'s
+    methods return `RiskFlag`, and a cluster of user reports cannot become one
+    without inventing an `IncidentKind` it does not have and a mobility statement
+    `app/policy/framing.py` will not let it produce.
+
+    Keeping them apart is also what lets a consumer be explicit about which claim it
+    is weighing. `app/routing/scorer.py` takes one of each and applies different
+    weights, because two strangers agreeing is not what two newspapers agreeing is.
+
+    One implementation today -- `app.scoring.clusters.DbClusterSurface`. There is no
+    seeded counterpart on purpose: a fixture cluster would be a fabricated claim
+    that people reported incidents at a named corner, so the offline path serves
+    none. Hence every consumer accepts `ClusterSurface | None` and behaves
+    correctly with `None`, which is also what keeps `RISK_SURFACE_IMPL=seeded`
+    working with no branch in the routing code.
+
+    Every method takes an explicit instant, for the reason `RiskSurface` does:
+    nothing in a surface may read the wall clock.
+    """
+
+    async def clusters_near_path(
+        self,
+        path: Sequence[tuple[float, float]],
+        radius_m: int,
+        at: datetime,
+    ) -> list[CommunityCluster]:
+        """
+        Live clusters within `radius_m` of a polyline, highest current severity first.
+
+        `path` is `(lat, lon)` pairs in travel order, matching `flags_near_path` --
+        callers should not have to remember which convention they are in. Fewer than
+        two points returns `[]`: there is no corridor to ask about.
+        """
+        ...
+
+    async def clusters_in_bbox(
+        self,
+        min_lat: float,
+        min_lon: float,
+        max_lat: float,
+        max_lon: float,
+        at: datetime,
+    ) -> list[CommunityCluster]: ...

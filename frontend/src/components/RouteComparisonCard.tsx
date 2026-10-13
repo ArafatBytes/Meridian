@@ -119,9 +119,14 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
   // Is there anything behind the chevron? With one route, no caveats and no
   // flags, the collapsed view is already the whole card, and offering to expand
   // onto an empty panel is worse than offering nothing.
+  // Optional on the wire, so a backend from before B13 reads as "no clusters"
+  // rather than crashing the card.
+  const clusters = route.clusters ?? [];
+
   const hasDetail =
     caveats.length > 0 ||
     route.flags.length > 0 ||
+    clusters.length > 0 ||
     routes.length === 1 ||
     route.filter_relaxed ||
     route.explanation.length > 110;
@@ -302,6 +307,51 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
               ))}
             </View>
           )}
+
+          {/* Community clusters, in their own block below the flags rather than
+              mixed into them. B13.
+
+              A flag and a cluster are different claims -- one is the product's own
+              mobility statement from edited sources, the other a count of what
+              residents reported -- and interleaving them is the Defect 54 confusion
+              in list form. The section label is what makes the distinction legible
+              without the user having to infer it from a dot style.
+
+              Same dot grammar as the flags above: solid is corroborated, hollow is
+              not. One rule across both lists, in the accent colour rather than a
+              severity colour, because a cluster carries no severity grade -- see
+              `CommunityClusterMarker` for why that restraint is deliberate. */}
+          {clusters.length > 0 && (
+            <View style={styles.flagList}>
+              <Text style={styles.clusterLabel}>Community reports</Text>
+              {clusters.map(cluster => (
+                <View key={cluster.cluster_id} style={styles.flagRow}>
+                  <View
+                    style={[
+                      styles.flagDot,
+                      {
+                        backgroundColor:
+                          cluster.status === 'corroborated' ? t.accent : 'transparent',
+                        borderColor: t.accent,
+                      },
+                    ]}
+                  />
+                  <Text style={styles.flagText}>
+                    {cluster.statement}
+                    <Text style={styles.flagMeta}>
+                      {`  ·  ${cluster.reporter_count} ${
+                        cluster.reporter_count === 1 ? 'person' : 'people'
+                      }${
+                        cluster.report_count > cluster.reporter_count
+                          ? ` from ${cluster.report_count} reports`
+                          : ''
+                      }${cluster.status === 'corroborated' ? '' : ', not yet corroborated'}`}
+                    </Text>
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
         </ScrollView>
       ) : (
         // Collapsed: two lines of the explanation, clamped rather than shortened,
@@ -326,7 +376,15 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
                 ? `Details · ${route.flags.length} ${
                     route.flags.length === 1 ? 'flag' : 'flags'
                   } on this route`
-                : 'Details'}
+                : // Flags first when there are any: they are the stronger claim and
+                  // what the score is mostly made of. Clusters get the label only
+                  // when they are the only thing there is to say, which is also the
+                  // case where a bare "Details" would hide the whole point.
+                  clusters.length > 0
+                  ? `Details · ${clusters.length} report ${
+                      clusters.length === 1 ? 'area' : 'areas'
+                    } on this route`
+                  : 'Details'}
           </Text>
           <Ionicons
             name={expanded ? 'chevron-down' : 'chevron-up'}
@@ -412,4 +470,11 @@ StyleSheet.create({
     flagDot: { width: 9, height: 9, borderRadius: 5, borderWidth: 1.5, marginTop: 4 },
     flagText: {      ...type.caption, flex: 1, color: t.text, lineHeight: 16 },
     flagMeta: { color: t.textFaint },
+    // An overline, matching the section labels everywhere else in the app.
+    clusterLabel: {
+      ...type.overline,
+      color: t.textFaint,
+      marginTop: space.sm,
+      marginBottom: 2,
+    },
   });

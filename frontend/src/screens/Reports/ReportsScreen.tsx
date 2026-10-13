@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TAB_BAR_CLEARANCE } from '../../navigation/metrics';
 import { supabase } from '../../lib/supabase';
 import { crimeService } from '../../services/crime.service';
+import { reportStatusLabel } from '../../types/contracts/crime';
 
 // @ts-ignore - generated types fight `style` in this RN version
 const Grad = LinearGradient as any;
@@ -137,16 +138,25 @@ const ReportsScreen: React.FC<Props> = ({ navigation }) => {
     return location.substring(0, maxLength - 4) + '....';
   };
 
+  /**
+   * The badge colour for a report status. B13.
+   *
+   * It used to answer `verified`/`investigating`/`resolved` and default to `t.warn`
+   * -- amber -- for everything else, which in practice meant every report the user
+   * had ever filed wore a warning colour forever, because `pending` was the only
+   * value anything ever wrote.
+   *
+   * `filed` is now `t.info`: neutral, "this is on record". Amber would be claiming
+   * something is outstanding, and nothing is -- there is no queue and no approver.
+   */
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'verified':
-        return t.ok;
-      case 'investigating':
-        return t.info;
-      case 'resolved':
-        return t.brand;
+      case 'withdrawn':
+        return t.textFaint;
+      case 'removed':
+        return t.danger;
       default:
-        return t.warn;
+        return t.info;
     }
   };
 
@@ -167,7 +177,9 @@ const ReportsScreen: React.FC<Props> = ({ navigation }) => {
             { backgroundColor: getStatusColor(item.status) },
           ]}
         >
-          <Text style={styles.statusText}>{item.status}</Text>
+          <Text style={styles.statusText}>
+            {reportStatusLabel(item.status)}
+          </Text>
         </View>
       </View>
 

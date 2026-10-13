@@ -101,7 +101,12 @@ from (values
     ('crime_reports', 'title'), ('crime_reports', 'description'),
     ('crime_reports', 'incident_date_time'), ('crime_reports', 'latitude'),
     ('crime_reports', 'longitude'), ('crime_reports', 'location_name'),
-    ('crime_reports', 'status'), ('crime_reports', 'verified'),
+    -- `verified` was here and is DROPPED by
+    -- migrations/versions/20261013120000__report_trust.sql. It is not listed as a
+    -- required column any more, and listing it would make a correctly migrated
+    -- database report MISSING. There was no honest way for this product to set it:
+    -- the app cannot establish that an incident happened.
+    ('crime_reports', 'status'),
     ('emergency_contacts', 'user_id'), ('emergency_contacts', 'name'),
     ('emergency_contacts', 'phone'), ('emergency_contacts', 'email'),
     ('emergency_contacts', 'relationship'),

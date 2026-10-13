@@ -46,12 +46,24 @@ async def get_crime_heatmap(
     pass
 
 
-@router.post("/{crime_id}/verify", status_code=status.HTTP_200_OK)
-async def verify_crime_report(
-    crime_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
-):
-    """Verify a crime report (admin only)"""
-    # TODO: Implement crime verification
-    pass
+# `POST /{crime_id}/verify` was here, as a `pass` stub labelled "admin only". It is
+# GONE, not unimplemented, and the difference matters:
+#
+# A moderator cannot verify that a crime occurred. They can only judge whether the
+# prose looks plausible, and stamping "Verified" on that judgement makes the badge
+# mean "someone thought this looked fine" -- worse than no badge, because users
+# will trust it. There was also no role column on `users` to gate the "admin only"
+# on, so the endpoint could not have been written as specified anyway.
+#
+# What replaced it is corroboration, computed: several independent reports in the
+# same small area inside the same window become one published cluster, with the
+# thresholds in `app/policy/community.py` and the pipeline in
+# `app/agents/report_corroboration.py`. Nothing approves a single report, so there
+# is no endpoint for it.
+#
+# The human lever that remains is `status = 'removed'`, a takedown, applied through
+# the service role. The asymmetry is deliberate: the machine promotes, a human only
+# demotes. Nobody needs to approve a claim for it to be removed, so removal is
+# exception-driven and fails in the safe direction.
+#
+# See migrations/versions/20261013120000__report_trust.sql.

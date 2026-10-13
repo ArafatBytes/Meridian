@@ -44,6 +44,42 @@ export interface RouteFlag {
     kind: string;
 }
 
+/**
+ * A community report cluster on this route. B13.
+ *
+ * Kept in its own interface, and carried in its own list on `RouteResponse`, because
+ * it is a different claim from a `RouteFlag`: a flag is the product's own mobility
+ * statement derived from edited sources, a cluster is a count of what residents
+ * reported. Defect 54 is the log of what happens when a surface forgets that.
+ *
+ * `statement` is server-framed prose, from `app/policy/community.py`. **Render it,
+ * never rebuild it** -- a client composing its own sentence from `reporter_count`
+ * would be free to call a place dangerous, which is exactly what the framing guard
+ * exists to prevent.
+ */
+export interface RouteCluster {
+    cluster_id: string;
+    lat: number;
+    lon: number;
+    radius_m: number;
+    /** e.g. "3 independent reports within 200 m in the last 6 days." */
+    statement: string;
+    severity_now: number;
+    /**
+     * `provisional` is two independent reporters, `corroborated` is three or more.
+     *
+     * Rendered differently, like `confirmed` vs `unconfirmed` on a flag. Presenting
+     * two accounts identically to three would make the tiers decoration.
+     */
+    status: 'provisional' | 'corroborated' | string;
+    /**
+     * Both counts, because the difference is the honest part: ten reports from two
+     * accounts is two people. `reporter_count` is the one that decided the tier.
+     */
+    report_count: number;
+    reporter_count: number;
+}
+
 export interface RouteResponse {
     route_id: string;
     path: RouteSegment[];
@@ -62,6 +98,15 @@ export interface RouteResponse {
     composite_score: number;
     /** The evidence behind the score, worst first. Drawn on the map, named in the card. */
     flags: RouteFlag[];
+    /**
+     * Community report clusters along this corridor, worst first. B13.
+     *
+     * Optional on the wire so a client running against a backend from before B13 does
+     * not break; `?? []` at every use site. Empty is also the normal answer -- most
+     * corridors have no clusters, because publishing one needs two independent people
+     * to have filed within 200 m of each other.
+     */
+    clusters?: RouteCluster[];
     /** One sentence of plain English, framed server-side. Beat 4. Render as-is. */
     explanation: string;
     /** `local` | `public-demo` | `straight-line`. Which engine answered. */
