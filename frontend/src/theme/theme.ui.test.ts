@@ -548,3 +548,171 @@ describe('the map follows the app theme, not the phone', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('text is never painted in its own background colour', () => {
+  /**
+   * The bug this catches shipped twice, in two components, from the same
+   * mechanical edit: a selected chip was given `backgroundColor: t.brandStrong`
+   * and its label `color: t.brandStrong`. The control still worked, still
+   * animated, still passed every other test — and the selected option was simply
+   * invisible. Both cases were found from a screenshot, which is the expensive
+   * way to find them.
+   *
+   * It reads the style objects as written rather than rendering anything: the
+   * pattern is a pair of adjacent keys in one `StyleSheet.create`, and that is
+   * exactly what a source scan is good at.
+   *
+   * It is deliberately narrow — the `*Active`/`*Selected` convention this codebase
+   * already follows — because a general contrast checker over every style would
+   * need to resolve composition and inheritance, and would be mostly false
+   * positives. This catches the specific mistake that has actually been made.
+   */
+  const FILL = /^(\s*)([A-Za-z0-9_]+(?:Active|Selected))\s*:\s*\{[^}]*backgroundColor:\s*t\.([A-Za-z0-9_]+)/gm;
+  const TEXT_COLOUR = /color:\s*t\.([A-Za-z0-9_]+)/;
+
+  it('does not give an active style the same token for fill and text', () => {
+    const offenders: string[] = [];
+
+    for (const file of sourceFiles()) {
+      const source = fs.readFileSync(file, 'utf8');
+      const rel = path.relative(SRC, file).split(path.sep).join('/');
+
+      for (const match of source.matchAll(FILL)) {
+        const [, , styleName, fillToken] = match;
+        // The matching text style, by this codebase's own naming: `tabActive`
+        // pairs with `tabTextActive`, `profileChipActive` with
+        // `profileChipTextActive`.
+        const base = styleName.replace(/(Active|Selected)$/, '');
+        const suffix = styleName.endsWith('Active') ? 'Active' : 'Selected';
+        const textName = `${base}Text${suffix}`;
+
+        // Located by string search and matched with a regex LITERAL, never with a
+        // pattern built from a template string. The first version of this used
+        // `new RegExp(\`${textName}\\s*:...\`)` and silently matched nothing: the
+        // backslashes did not survive into the file, so `\s` became a literal `s`
+        // and the pattern read `tabTextActives*:s*...`. The test passed, found
+        // nothing, and would have passed forever.
+        const at = source.indexOf(`${textName}:`);
+        if (at === -1) continue;
+        const close = source.indexOf('}', at);
+        if (close === -1) continue;
+        const textToken = TEXT_COLOUR.exec(source.slice(at, close))?.[1];
+
+        if (textToken === fillToken) {
+          offenders.push(`${rel}: ${textName} is t.${textToken} on t.${fillToken}`);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('uses onBrand for text sitting on a brand fill', () => {
+    // The positive half: the two that were wrong are now right, so a revert shows
+    // up here as well as in the rule above.
+    const map = fs.readFileSync(path.join(SRC, 'screens', 'Map', 'MapScreen.tsx'), 'utf8');
+    expect(map).toContain('profileChipTextActive: { color: t.onBrand }');
+
+    const card = fs.readFileSync(
+      path.join(SRC, 'components', 'RouteComparisonCard.tsx'),
+      'utf8',
+    );
+    expect(card).toContain('tabTextActive: { color: t.onBrand }');
+    // And the score beside it, which was `safetyColour` on the brand fill —
+    // green-on-blue at 100/100.
+    expect(card).toContain('active ? t.onBrand : safetyColour(candidate.safety_score, t)');
+  });
+});
+
+describe('a floating card never covers the whole map', () => {
+  /**
+   * This is the second time the expanded route card has had to be made smaller,
+   * which is why it is pinned rather than left to the next screenshot.
+   *
+   * The first fix stopped it overlapping the "Plan a route" card by measuring the
+   * space below it — and the card then grew to fill exactly that space, which is
+   * still a screen with no map on it. Clearing the control above you is not the
+   * same as leaving the map visible, and a route card that hides the route is the
+   * one thing this card must never do: the point of opening the details is to read
+   * them against the line drawn on the map.
+   *
+   * Source-scanned because it is layout arithmetic in a screen component, with no
+   * renderer here to measure. It checks the shape of the calculation, not the
+   * pixels — the pixels are what a screenshot is for.
+   */
+  const map = fs.readFileSync(path.join(SRC, 'screens', 'Map', 'MapScreen.tsx'), 'utf8');
+
+  it('subtracts a guaranteed band of map from the card’s cap', () => {
+    expect(map).toContain('MIN_MAP_BAND');
+    expect(map).toMatch(/routeCardSpace\s*-\s*MIN_MAP_BAND/);
+  });
+
+  it('measures the space below the search card rather than guessing a percentage', () => {
+    // `searchHeight` is measured by the search card's own onLayout. A percentage
+    // cannot know how tall it is, and it grows with the destination name.
+    expect(map).toContain('searchTop + searchHeight');
+    expect(map).toContain('maxHeight={routeCardMaxHeight}');
+  });
+
+  it('keeps a floor so the card can still show its own controls', () => {
+    // Below roughly this the Start button and the tab row stop fitting, and a card
+    // you cannot press Start on is worse than a thin strip of map.
+    expect(map).toMatch(/Math\.max\(\s*\n?\s*(\/\/[^\n]*\n\s*)*260,/);
+  });
+});
+
+describe('Glass is padded once, not twice', () => {
+  /**
+   * `Glass` puts `style` on the SHELL and its `padding` prop on the inner content
+   * box. So a `padding` in the style is applied *in addition* to the prop, and the
+   * children end up inset by the sum.
+   *
+   * On the map's route planner that was 32pt on every side instead of 16 — 64pt of
+   * vertical whitespace, about a quarter of the card's height, spent on nothing.
+   * It survived because nothing looks broken: the card is simply airier than
+   * intended, and you only notice when you measure it against the map it is
+   * covering.
+   *
+   * The glassmorphic migration introduced it, with a note reading "what stays is
+   * the padding and the elevation" — true of the elevation, and already supplied
+   * by the prop for the padding.
+   */
+
+  /** The body of `name: { ... }` inside a StyleSheet, brace-matched. */
+  function styleBody(source: string, name: string): string | null {
+    const start = source.indexOf(`    ${name}: {`);
+    if (start === -1) return null;
+    let depth = 0;
+    for (let i = source.indexOf('{', start); i < source.length; i++) {
+      if (source[i] === '{') depth++;
+      else if (source[i] === '}') {
+        depth--;
+        if (depth === 0) return source.slice(start, i);
+      }
+    }
+    return null;
+  }
+
+  it('never sets padding in a style handed to Glass', () => {
+    const offenders: string[] = [];
+
+    for (const file of sourceFiles()) {
+      const source = fs.readFileSync(file, 'utf8');
+      if (!source.includes('<Glass')) continue;
+      const rel = path.relative(SRC, file).split(path.sep).join('/');
+
+      for (const match of source.matchAll(/<Glass[^>]*style=\{\[?styles\.(\w+)/g)) {
+        const body = styleBody(source, match[1]);
+        // Brace-matched rather than regex-sliced to the next `},` — a one-line
+        // style like `card: { marginHorizontal: space.lg },` would otherwise
+        // swallow everything up to the next multi-line style and report its
+        // padding. That false positive is why this helper exists.
+        if (body && /\n\s*padding(Top|Bottom|Vertical)?\s*:/.test(body)) {
+          offenders.push(`${rel}: styles.${match[1]} pads a Glass shell`);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+});

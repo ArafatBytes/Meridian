@@ -924,6 +924,51 @@ walkthroughs told us nothing about any of it.
       Also fixed, same commit: `crime_reports.status` allowed `('pending','verified','investigating','resolved')`, mixing a trust question nothing could answer with a casework question `gd_drafts` already owns — every user saw "Pending" forever beside an unreachable `✓`. It is now `('filed','withdrawn','removed')`, `verified` is dropped, and **the self-verify hole is closed**: `crime_reports_update_own` granted UPDATE on your own row and `status` was a column on it, so three lines of Supabase client code self-awarded `verified = true`. Table-level UPDATE is revoked from `authenticated` and granted back column by column, omitting `status`, `user_id` and `created_at`. Reports are also private to their author now (SELECT was `using (true)`; `MapScreen` read every report ever filed, unbounded in time and space). **S29 / B13.**
 - [ ] **Defect 55:** `migrate.py status` reports two of D08's migrations as `pending` when they are applied — run by hand through the Supabase editor without the ledger row. **Do not run `migrate.py up` to tidy it**; that would re-run them. Whoever owns D08 should insert the two rows.
 
+#### Found on a phone, 13 Oct — the UI defects live navigation surfaced
+
+All four were found from screenshots rather than from a gate, which is the thing they have in
+common: **none of them breaks anything.** `tsc`, `jest` and `eslint` were green through every
+one. A control whose label is invisible still works; a card that covers the map still renders.
+That is why they survived, and why the three that generalise now have tests.
+
+- [x] **Defect 56:** ~~`Glass` was padded twice on the route planner~~ — `style` lands on the
+      **shell** and the `padding` prop on the **inner content box**, so a `padding` in the style
+      is applied *in addition to* the prop. `styles.searchBox` set `padding: space.lg` while the
+      component was also passed `padding={space.lg}`, so the content was inset **32pt on every
+      side instead of 16** — 64pt of vertical whitespace, about a quarter of the card's height,
+      spent on nothing. Introduced by the glassmorphic migration, whose note read *"what stays
+      is the padding and the elevation"*: true of the elevation, already supplied by the prop
+      for the padding. **Fixed**, and pinned by a test that brace-matches the style body — a
+      first attempt sliced to the next `},` and reported a false positive on a one-line style.
+- [x] **Defect 57:** ~~The selected mode and the selected route were invisible~~ — `profileChipActive`
+      set `backgroundColor: t.brandStrong` and `profileChipTextActive` set `color: t.brandStrong`:
+      text painted in its own background colour. The same pair existed on the route card's tabs,
+      and the active tab's `100/100` was additionally drawn in `safetyColour`, i.e. green on
+      blue. **Fixed** to `t.onBrand`; the safety colour moved to the *inactive* tabs, where it
+      sits on a soft fill and is more useful anyway — comparing the options you have not picked
+      is what that row is for. **Pinned** by a source scan over the `*Active`/`*Selected`
+      convention, verified to fail on both originals.
+- [x] **Defect 58:** ~~The snapped-position marker never appeared~~ — `tracksViewChanges={false}`
+      from the first render. A `Marker` with React children takes its bitmap from the child on a
+      native draw pass, and with tracking off from the start that snapshot can happen before the
+      child has drawn. **`RiskFlagMarker` already documents this at length and it was
+      reintroduced anyway**, and it was worse there: a flag marker's `key` changes on the next
+      `as of` tap so a blank snapshot recovers itself, while there is one follow dot whose
+      content never changes, so it would have stayed blank for the whole walk — showing as a
+      route trimming perfectly with no dot on it. **Fixed** by extracting `FollowMarker` with the
+      same settle (`onLayout` + two frames + a timeout backstop), pinned by four tests.
+- [x] **Defect 59:** ~~The expanded route card covered the whole map~~ — and it took **two**
+      fixes. `maxHeight: '76%'` was a guess that held until the route planner grew past a quarter
+      of the screen, at which point the details covered the fields that produced them; capping it
+      against the *measured* search-card height fixed the overlap, and the card then grew to fill
+      exactly the gap, which is still a screen with no map on it. **Clearing the control above
+      you is not the same as leaving the map visible.** A route card that hides the route is the
+      one thing it must never do — the point of opening the details is to read them against the
+      line on the map. **Fixed** with two constraints: never reach the search card, and always
+      leave a band of map (16% of the window, floor 120pt). Nothing is lost, because the expanded
+      body is already a scroll view.
+
+
 
 ---
 

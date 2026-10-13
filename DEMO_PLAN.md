@@ -627,6 +627,65 @@ safety score and **one sentence of plain English** saying why it is being sugges
       Validated against four construction forms; it immediately caught that `row[...]` is a
       read, which forced the definition of "forward" to be stated rather than assumed
 
+### Addendum, 13 Oct — the route now follows you
+
+D06 answered *"which route should I take, and why"*. It stopped at the moment the user starts
+walking: the line was drawn once and never moved again, so the screen that mattered most — the
+one you look at while actually on the road — was the least alive in the app.
+
+Built after D06 closed, on the owner's request, in `frontend/src/features/navigation/`:
+
+- [x] **The route trims as you move.** The travelled stretch goes faint, the remaining stretch
+      stays full strength, and a snapped dot sits on the line beside the platform's own raw fix
+      — when the two separate, that gap *is* the GPS error, made visible rather than hidden
+- [x] **Turn-by-turn with real road names.** `steps=true` on the OSRM request, carried through
+      `OsrmStep` → `RouteStep` → the banner. The honest half is the fallback: OSM has no `name`
+      tag for a large share of Dhaka's lanes, so the phrasing degrades named manoeuvre →
+      unnamed manoeuvre → pure geometry, and **never says "onto" with nothing after it**.
+      ⚠️ Step names deliberately do **not** pass through `policy/framing.py` — that guard bans
+      `jatiya`, `awami` and `political`, which appear in ordinary Dhaka road names. A road's
+      name is a fact published by OSM, not this product's claim about a place, and running it
+      through a guard built for a different purpose would silently drop real street names
+- [x] **An ETA from measured speed, not from the road map.** Smoothed, with Android's `null`
+      and negative speed sentinels discarded rather than averaged in, falling back to the
+      route's own pace below 0.5 m/s — `remaining ÷ 0` is infinity, and a naive live-speed ETA
+      reads nonsense at every traffic light. Both route notes now say where the number comes
+      from, because *"not a measured walking duration"* had stopped being true on the one
+      screen where it mattered
+- [x] **Automatic re-routing**, after ~14 s of sustained off-route and no more than once every
+      25 s. ⚠️ **Recorded as an owner decision over a recommendation**: the argument against is
+      that the route being followed was *chosen*, from a comparison that explained what it
+      avoids, and replacing it silently discards the only thing separating this from a maps
+      app — at the moment the user can least afford to look at the screen. The delay and the
+      cooldown carry that argument instead of a refusal, and the manual button stays
+- [x] **Two failures that are invisible in a straight-line test**, both pinned by the 71 tests
+      in `progress.test.ts`. **Teleporting:** the obvious "closest point on the whole polyline"
+      breaks the moment a route comes near itself — an out-and-back, a loop round a block, a
+      flyover — so one sideways wobble puts you kilometres ahead and the app says you have
+      nearly arrived. The search is windowed to ±400 m **measured along the route**, not in
+      vertices, because OSRM vertex density varies from 5 m to 600 m. **The line growing back:**
+      jitter made progress decrease and the route twitched while standing still; progress is
+      monotonic, and a real reversal reads as off-route rather than as a redraw
+- [ ] ⚠️ **Not verified on a device by the author.** The owner ran it on an iPhone through Expo
+      Go and it works; nothing here has been walked by whoever wrote it. Two constants are
+      expected to need tuning against a real walk: `SPEED_SMOOTHING` and `AUTO_REROUTE_AFTER_MS`
+- [ ] ⚠️ **`backend/tests/invariants/test_turn_by_turn.py` is written and has never run** — the
+      backend's dependencies are not installed on the Windows host. Run it in the container
+
+#### And the thing this surfaced: D06 had never used the local routing engine
+
+A route card read *"Routed by a public demo server — the local routing engine did not answer."*
+True, and it had been true for days. The `osrm` service sits behind a compose profile and
+`scripts/run.ps1` only passed `--profile osrm` when asked, so **every route since the graph was
+built came from `router.project-osrm.org`** — rate-limited, over the internet, and with **no
+detour alternatives possible at all**, because `fetch_routes_via` deliberately has no demo
+fallback. D06's own beat-4 comparison could not have appeared.
+
+`run.ps1` and `run.sh` now start it whenever its graph is on disk (testing `.osrm.cell_metrics`,
+which `osrm-customize` writes last, so a half-finished build does not start a crash-looping
+container), and the run prints which engine actually answered. The fallback was always loud in
+the logs; it is now loud where someone starting the stack will see it.
+
 ---
 
 ## D07 — Crime detection from an image, for real
@@ -1171,9 +1230,9 @@ has been lifted out of it.
 | **B6a** | 🟡 **BUILT, NOT YET VERIFIED ON A DEVICE — geofencing.** `docs/walkthroughs/GUARDIAN.md` Part 1. The permission flow and the status block were exercised on a phone; the crossing itself was not, because every risk flag is in Dhaka and testing happened from Jashore, 142 km away, while the app fetches flags within ~19 km. `backend/scripts/seed_flag_here.py` seeds a flag at any coordinates so Part 1 can run from anywhere. **The row said "push notifications"; what was wanted was S17.** Background GPS with OS-level geofencing (`startGeofencingAsync`), a headless task that posts a **local** notification as the user approaches a flagged road, each zone watched at its radius + 250 m so the warning arrives while there is still a junction to turn at, a six-hour per-zone debounce, and a user-visible crossing log that records suppressed crossings too. **No Expo project, no Firebase, no FCM key** — detection is on the phone, so the phone posts the notification. Chronic flags are never geofenced (a 2 km historical average that never expires would fire every time its owner left the house). ⚠️ Still open: route-based prediction ("a road that will take you to a zone") is approximated by the 250 m ring; the real version needs the routing engine and a destination. The **server-side push dispatcher** from the first reading of this row is also built, tested and left in place with `PUSH_ENABLED=false` — real, but not the feature asked for. | S16, S17, S15 |
 | **B6b** | **Ingestion provenance page — what we read, and what we discarded.** One endpoint over `raw_documents` + `extracted_incidents`, plus the contract and its TypeScript mirror. Three articles about one procession collapsing into a single flag; an incident we could not place and refused to guess at, with `discarded_reason` saying which. | S09, S14 | **Deferred from D09 on 10 Oct**, and only for capacity — the idea is stronger than the plain headline page that shipped instead. The columns are already written and already populated, so nothing decays while this waits. Needs backend work on a day that had none left; sits beside B6a rather than renumbering ten rows. |
 | **B7** | Gazetteer density beyond the demo zone | S10 | Gates geographic expansion. Manual work that does not compress — start it as background early. |
-| **B8** | 🟢 **DONE and VERIFIED ON A DEVICE, 11 Oct — shout-to-SOS and shake-to-SOS.** Vivo V2344 / Android 14, `docs/walkthroughs/GUARDIAN.md`. Both triggers run end to end from any screen: countdown, camera, location, email to contacts, hands never touching the phone. ⚠️ **Video capture fails on that handset** — CameraX never delivers a frame to `VideoCapture` (defect 53), so the SOS sends location only and says so; a camera failure used to kill the whole alert (defect 52). `sos_hot_words` is read at last: phrases are matched **on the device**, and a match only counts if the **peak loudness in the preceding 2.5 s** cleared a user-calibrated threshold — so SOS fires on a shout, not on somebody saying the phrase. Both triggers then run the real SOS automatically: video, location, email to emergency contacts, no tap, with a 5-second cancel window that can be switched off. `voice_activated` is finally written to `sos_incidents`. The privacy bar is a **refusal**, not a downgrade — `requiresOnDeviceRecognition` is silently ignored on a device that cannot honour it, so the app checks `supportsOnDeviceRecognition()` and declines to listen rather than streaming the microphone to a server. `/voice/analyze`, `speech.service.ts` and `useVoiceRecorder.ts` are deleted: **zero audio upload paths remain**. ⚠️ **Voice and shake need the app open** — Android has restricted background microphone and sensor access since Android 9, and holding the mic with the app closed needs a native foreground service no Expo module provides. Zone alerts are the one that works from a pocket. ⚠️ **Still open: the trips model**, which is the half B10 depends on — `app/trips/`, the migration, `features/journey/`, live progress and ETA. None of it is built. | S18 |
+| **B8** | 🟢 **DONE and VERIFIED ON A DEVICE, 11 Oct — shout-to-SOS and shake-to-SOS.** Vivo V2344 / Android 14, `docs/walkthroughs/GUARDIAN.md`. Both triggers run end to end from any screen: countdown, camera, location, email to contacts, hands never touching the phone. ⚠️ **Video capture fails on that handset** — CameraX never delivers a frame to `VideoCapture` (defect 53), so the SOS sends location only and says so; a camera failure used to kill the whole alert (defect 52). `sos_hot_words` is read at last: phrases are matched **on the device**, and a match only counts if the **peak loudness in the preceding 2.5 s** cleared a user-calibrated threshold — so SOS fires on a shout, not on somebody saying the phrase. Both triggers then run the real SOS automatically: video, location, email to emergency contacts, no tap, with a 5-second cancel window that can be switched off. `voice_activated` is finally written to `sos_incidents`. The privacy bar is a **refusal**, not a downgrade — `requiresOnDeviceRecognition` is silently ignored on a device that cannot honour it, so the app checks `supportsOnDeviceRecognition()` and declines to listen rather than streaming the microphone to a server. `/voice/analyze`, `speech.service.ts` and `useVoiceRecorder.ts` are deleted: **zero audio upload paths remain**. ⚠️ **Voice and shake need the app open** — Android has restricted background microphone and sensor access since Android 9, and holding the mic with the app closed needs a native foreground service no Expo module provides. Zone alerts are the one that works from a pocket. ⚠️ **Still open: the trips model**, which is the half B10 depends on — `app/trips/`, the migration, `features/journey/`. **Live progress and ETA landed separately on 13 Oct** (`features/navigation/`, see the D06 addendum): the route trims as you walk it, with turn-by-turn road names, an ETA from measured GPS speed and automatic re-routing. That is the *client* half only — it is foreground-only, holds no state across launches, and **persists nothing**, so there is still no trip to detect an anomaly against. The trips model is what B10 needs and it is still unbuilt. | S18 |
 | **B9** | Admin observability — fleet health at a glance | S21 | Once eight agents run on schedules, you cannot operate them without this. |
-| **B10** | **Journey Guardian** — anomaly detection, then graded escalation | S22, S23 | Deferred by the concept document itself. **Its two-week self-trial should start as a background activity as soon as B8's TRIPS half lands** — no sprint can contain it. ⚠️ B8 is only half done as of 10 Oct: hot words shipped, the trips model did not, and the trips model is the part this depends on. Do not read B8's 🟡 as a green light. |
+| **B10** | **Journey Guardian** — anomaly detection, then graded escalation | S22, S23 | Deferred by the concept document itself. **Its two-week self-trial should start as a background activity as soon as B8's TRIPS half lands** — no sprint can contain it. ⚠️ B8 is only half done as of 10 Oct: hot words shipped, the trips model did not, and the trips model is the part this depends on. Do not read B8's 🟡 as a green light — and do not read 13 Oct's live navigation as one either. It gives the *display* of a journey in progress (position on the route, distance left, ETA) and stores none of it, so there is no history for an anomaly detector to call anomalous. |
 | **B11** | Chronic Risk Agent — newspaper archive mining at scale | S24 | The chronic *layer* already exists from D02's police-statistics model; this is what makes it real. |
 | **B11a** | **Widen the Live Risk Agent's sources beyond newspapers — the concept document's `social media` and `early signal` half.** Candidate categories, in the order worth trying: public **RSS/Atom** feeds; public **Telegram** channels (a real API, no ToS problem); **official feeds** — DMP traffic, Fire Service, City Corporation; and **user reports**, which the concept document names in the same breath as social media and which S29/B13 already covers. Facebook and Instagram page scraping is **last**, not first — see *Why here*. Each new source is one file under `app/ingestion/sources/` plus one line in `SOURCES`. ⚠️ **Two constraints that are not optional:** social and user-generated content is lower-reliability than an edited article, so it must feed the **Rumour Guard tiering (D05)** and must never on its own produce a `confirmed` flag — D01's invariant test already forbids it and would catch an attempt; and scraping public posts about named individuals is a **different privacy surface** from quoting a newspaper headline, so it is governed by concept document §9 and the B14 retention registry, not waved through on "it was public". | Concept doc §§ *Read*, *Live Risk Agent*, *Data sources*; S09, S14 | **Deferred, not dropped — and it was never built.** The concept document promises social media in five places, including the Live Risk Agent's own definition (*"monitors news sites **and public social media pages***"). Both plans narrowed it to three newspaper sites, and `DEMO_PLAN.md` §D04's first checkbox took the concept document's own *mitigation* for social-media access restrictions — the source-agnostic interface — **as the deliverable instead of the thing it was mitigating**. That reading is defensible and it is also how a commitment becomes an abstraction. It sits here rather than earlier because the blocker is **access, not effort**: Facebook and Instagram public-page scraping breaks their terms and is brittle, and X's API is paid — which is precisely why the concept document wrote that risk row. The cheap wins (RSS, Telegram, official feeds) are worth pulling forward the moment anyone has a free afternoon. **Until it lands, do not say the system reads social media.** The honest and demonstrable claim is that ingestion is source-agnostic and a new source is one file. |
 | **B12** | Legacy surface retirement and the ৳/day cost model | S25 | Needs a full agent fleet to measure. |

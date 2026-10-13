@@ -5,7 +5,8 @@
 #   ./scripts/run.sh                backend in Docker + Expo on the host
 #   ./scripts/run.sh --backend-only just the containers
 #   ./scripts/run.sh --rebuild      force an image rebuild first
-#   ./scripts/run.sh --osrm         also start the local routing engine
+#   ./scripts/run.sh --no-osrm      skip the local routing engine
+#   ./scripts/run.sh --osrm         force it even if the graph looks unbuilt
 #   ./scripts/run.sh --down         stop everything
 #   ./scripts/run.sh --logs         tail the backend log
 # =============================================================================
@@ -14,12 +15,13 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-BACKEND_ONLY=0; REBUILD=0; OSRM=0
+BACKEND_ONLY=0; REBUILD=0; OSRM=0; NO_OSRM=0
 for arg in "$@"; do
   case "$arg" in
     --backend-only) BACKEND_ONLY=1 ;;
     --rebuild)      REBUILD=1 ;;
     --osrm)         OSRM=1 ;;
+    --no-osrm)      NO_OSRM=1 ;;
     --down)         echo "==> Stopping"; docker compose --profile osrm --profile mobile down; exit 0 ;;
     --logs)         docker compose logs -f api; exit 0 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
@@ -102,8 +104,39 @@ export EXPO_PUBLIC_API_BASE_URL="http://${LAN_IP}:8000/api/v1"
 # 3. Containers
 # -----------------------------------------------------------------------------
 step "Backend"
+
+# The local routing engine, started by default when its graph is built.
+#
+# `osrm` sits behind a compose profile, so a plain `docker compose up -d` leaves
+# it out. That was right when the profile was added -- the service needs a ~1 GB
+# download and 10-30 minutes of preprocessing, and a container pointed at a graph
+# that does not exist crash-loops -- and it was also quietly expensive, because
+# NOTHING SAID IT WAS MISSING: the backend finds nothing at OSRM_BASE_URL, falls
+# back to router.project-osrm.org, and every route card reads "Routed by a public
+# demo server" while the app otherwise looks fine.
+#
+# So the profile now follows whether the graph is actually there, which is what
+# it was always a proxy for. `.osrm.cell_metrics` is written by `osrm-customize`,
+# the LAST preprocessing step, so a half-finished build does not pass this test
+# and start a container that cannot boot. The filename matches the `command:` on
+# the osrm service in docker-compose.yml -- change one, change the other.
+#
+# Mirrors the same block in scripts/run.ps1. Keep them in step.
+OSRM_GRAPH="$ROOT/osrm-data/bangladesh-latest.osrm.cell_metrics"
+WITH_OSRM=0
+if [ "$NO_OSRM" -eq 1 ]; then
+  warn "skipping the routing engine (--no-osrm); routes will use the public demo server"
+elif [ "$OSRM" -eq 1 ] || [ -f "$OSRM_GRAPH" ]; then
+  WITH_OSRM=1
+  [ -f "$OSRM_GRAPH" ] || warn "--osrm given but the graph looks unbuilt; the container may crash-loop"
+else
+  warn "no local routing graph in osrm-data/ - routes will fall back to the public"
+  warn "demo server (slower, rate-limited, and no detour alternatives)."
+  warn "Build it once: see the osrm service in docker-compose.yml."
+fi
+
 ARGS=(compose)
-[ "$OSRM" -eq 1 ] && ARGS+=(--profile osrm)
+[ "$WITH_OSRM" -eq 1 ] && ARGS+=(--profile osrm)
 ARGS+=(up -d)
 [ "$REBUILD" -eq 1 ] && ARGS+=(--build)
 

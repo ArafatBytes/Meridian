@@ -88,6 +88,55 @@ class OsrmUnavailable(RuntimeError):
 
 
 @dataclass(frozen=True)
+class OsrmStep:
+    """
+    One manoeuvre along a route, as OSRM describes it.
+
+    Requested with `steps=true`. Before this the router asked for a geometry and
+    nothing else, so the client derived turns from the shape of the polyline — which
+    gives a reliable side and distance and **cannot name a road**. This is where the
+    names come from.
+
+    ## `name` is very often empty, and that is not a bug
+
+    OSRM reports the OSM `name` tag of the way, and in Dhaka a large share of
+    residential roads, lanes and service roads simply do not have one. Some are
+    tagged in Bangla, which is correct and is what the map shows. So every consumer
+    has to treat `name` as **optional** and fall back to the geometric phrasing;
+    anything that assumes a name exists will print "Turn left onto" followed by
+    nothing. `app/schemas/route.py::RouteStep` carries it as `str` with `""` for
+    absent, and the client checks before using it.
+
+    ## What is deliberately not done to `name`
+
+    It does **not** go through `app/policy/framing.py`. That guard exists to stop the
+    product characterising a place, and its banned list includes `jatiya`, `awami`
+    and `political` — all of which appear in perfectly ordinary Dhaka road names.
+    A road's name is a fact about the road, published by OSM, not this product's
+    claim about anywhere. Running it through a vocabulary guard built for a different
+    purpose would silently drop real street names and leave the user with worse
+    directions.
+    """
+
+    # OSM's name for the way, or "" when it has none. See the docstring.
+    name: str
+    # OSRM's manoeuvre type: "turn", "new name", "depart", "arrive", "roundabout",
+    # "fork", "merge", "on ramp", "end of road", "continue" and a few more. Carried
+    # verbatim rather than mapped here, because the client renders it and the mapping
+    # is a presentation decision.
+    maneuver_type: str
+    # "left", "right", "slight left", "sharp right", "straight", "uturn", or "" when
+    # the manoeuvre type does not take one (depart, arrive).
+    modifier: str
+    # How far this step runs for, and how long OSRM thinks it takes.
+    distance_m: float
+    duration_s: float
+    # Where the manoeuvre happens, (lat, lon). The END of the previous step.
+    lat: float
+    lon: float
+
+
+@dataclass(frozen=True)
 class OsrmRoute:
     """
     One route as OSRM returned it, before anything scores it.
@@ -100,6 +149,9 @@ class OsrmRoute:
     distance_m: float
     duration_s: float
     engine: str  # "local" | "public-demo", for the response and the walkthrough
+    # Turn-by-turn manoeuvres, in travel order. Empty for the straight-line
+    # fallback, which is not a road route and has no manoeuvres to describe.
+    steps: tuple[OsrmStep, ...] = ()
 
 
 def _base_url() -> tuple[str, bool]:
@@ -135,9 +187,49 @@ def _parse(payload: dict[str, Any], engine: str) -> list[OsrmRoute]:
                 distance_m=float(raw.get("distance", 0.0)),
                 duration_s=float(raw.get("duration", 0.0)),
                 engine=engine,
+                steps=_parse_steps(raw),
             )
         )
     return routes
+
+
+def _parse_steps(raw: dict[str, Any]) -> tuple[OsrmStep, ...]:
+    """
+    Manoeuvres out of a route's legs, flattened into travel order.
+
+    A route has one leg per waypoint pair. Every route this app asks for has exactly
+    two waypoints and therefore one leg, but the detour builder adds a via point and
+    gets two — so the legs are flattened rather than indexed, which costs nothing and
+    does not quietly drop the second half of a detour's directions.
+
+    Anything malformed is skipped rather than raising. A route with no usable steps is
+    a route the client narrates geometrically, which is exactly what it did before
+    `steps=true` existed; a route lost because one manoeuvre was missing a field would
+    be a worse outcome than slightly plainer directions.
+    """
+    steps: list[OsrmStep] = []
+    for leg in raw.get("legs") or []:
+        for step in leg.get("steps") or []:
+            maneuver = step.get("maneuver") or {}
+            location = maneuver.get("location") or []
+            if len(location) < 2:
+                continue
+            steps.append(
+                OsrmStep(
+                    # `or ""` rather than a default: OSRM sends an explicit empty
+                    # string for an unnamed way, and `.get("name", "")` would pass
+                    # `None` through if it ever sent null.
+                    name=str(step.get("name") or "").strip(),
+                    maneuver_type=str(maneuver.get("type") or "").strip(),
+                    modifier=str(maneuver.get("modifier") or "").strip(),
+                    distance_m=float(step.get("distance") or 0.0),
+                    duration_s=float(step.get("duration") or 0.0),
+                    # OSRM speaks (lon, lat), like the geometry above.
+                    lat=float(location[1]),
+                    lon=float(location[0]),
+                )
+            )
+    return tuple(steps)
 
 
 async def _request(base_url: str, profile: Profile, coords: str, engine: str) -> list[OsrmRoute]:
@@ -148,6 +240,10 @@ async def _request(base_url: str, profile: Profile, coords: str, engine: str) ->
             params={
                 "overview": "full",
                 "geometries": "geojson",
+                # Turn-by-turn manoeuvres with OSM road names. Without this the
+                # client can only derive a side and a distance from the polyline's
+                # shape -- correct, but unable to name a road. See `OsrmStep`.
+                "steps": "true",
                 # OSRM returns alternatives only when it finds genuinely distinct ones,
                 # so asking for 3 does not guarantee 3 -- and a corridor with one sane
                 # road through it *should* return one route rather than two near-copies.
@@ -189,7 +285,7 @@ async def _request_via(
     async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
         response = await client.get(
             url,
-            params={"overview": "full", "geometries": "geojson"},
+            params={"overview": "full", "geometries": "geojson", "steps": "true"},
         )
     response.raise_for_status()
     return _parse(response.json(), engine)
