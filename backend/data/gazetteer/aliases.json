@@ -18,10 +18,24 @@
     ],
     "convention": "An entry listed here counts as reviewed: a person read it and supplied its local names.",
     "note_on_scope": [
-      "Only entries a demo or a judge is likely to type are listed. The other ~1,000",
+      "Only entries a demo or a judge is likely to type are listed. The other ~5,900",
       "harvested entries resolve on their own OSM names and are marked reviewed: false.",
       "That is honest rather than complete. Extending this file is the work that B7",
       "(gazetteer density) continues."
+    ],
+    "maintenance_after_a_re_harvest": [
+      "An alias can be made redundant, and then harmful, by a later harvest. If a newly",
+      "harvested entry carries as its OWN name a string listed here as somebody else's",
+      "alias, two entries match that query exactly, so resolve() refuses as ambiguous and",
+      "the lookup stops working. The loader logs a warning naming both entries, and",
+      "tests/invariants/test_unresolvable_places_are_discarded.py fails on it.",
+      "",
+      "The fix is to DELETE the alias, not to rename anything: the harvested entry bears",
+      "the name itself and is almost always the better answer. S31 removed five on exactly",
+      "these grounds, and each query became more precise as a result --",
+      "'Mohakhali flyover' now resolves to the 250 m flyover instead of the 1,200 m",
+      "Mohakhali area, and 'Sayedabad bus terminal' to the 300 m terminal 70 m away",
+      "instead of the 1,200 m Saydabad area."
     ]
   },
   "osm-way-24787810": [
@@ -133,9 +147,14 @@
   ],
   "osm-node-5118172307": [
     "Mohakhali mor",
-    "মহাখালী মোড়",
-    "Mohakhali flyover",
-    "মহাখালী ফ্লাইওভার"
+    "মহাখালী মোড়"
+  ],
+  "osm-relation-7390108": [
+    "Hatirjheel",
+    "হাতিরঝিল",
+    "Hatir jheel",
+    "Hatirjheel lake",
+    "হাতিরঝিল লেক"
   ],
   "osm-node-5162463804": [
     "ধানমণ্ডি",
@@ -150,8 +169,7 @@
     "Gabtoli",
     "Gabtoli bus terminal",
     "গাবতলী বাস টার্মিনাল",
-    "Gabtali bus stand",
-    "Gabtoli bus stand"
+    "Gabtali bus stand"
   ],
   "osm-node-4774174062": [
     "Kamalapur station",
@@ -163,8 +181,6 @@
   "osm-node-9032373442": [
     "Sayedabad",
     "সায়েদাবাদ",
-    "Sayedabad bus terminal",
-    "সায়দাবাদ বাস টার্মিনাল",
     "Saidabad",
     "Sayadabad"
   ]

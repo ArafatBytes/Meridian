@@ -58,12 +58,20 @@ DATA_DIR: Final = Path(__file__).resolve().parents[1].parent / "data" / "gazette
 GAZETTEER_PATH: Final = DATA_DIR / "dhaka_central.json"
 ALIASES_PATH: Final = DATA_DIR / "aliases.json"
 
-# The pilot box, matching scripts/harvest_gazetteer.py and the D02 fixture. Also
-# the sanity gate the LLM tier is checked against.
-BBOX_S: Final = 23.70
-BBOX_W: Final = 90.33
-BBOX_N: Final = 23.90
-BBOX_E: Final = 90.50
+# The pilot box, matching scripts/harvest_gazetteer.py. Also the sanity gate the
+# LLM tier is checked against, which is why it is not simply "all of Bangladesh":
+# the wider this box, the less an out-of-box answer tells us.
+#
+# S31 widened it from 23.70–23.90 / 90.33–90.50 to cover both Dhaka city
+# corporations. The old box stopped inside the city — Uttarkhan, Dakshinkhan and
+# Turag in the north, Demra, Matuail and Kadamtali in the south were all outside
+# it, so an article about any of them was discarded for being out of area rather
+# than for anything to do with the article. Savar, Narayanganj city and Gazipur
+# city are still outside on purpose: they are different cities.
+BBOX_S: Final = 23.66
+BBOX_W: Final = 90.30
+BBOX_N: Final = 23.94
+BBOX_E: Final = 90.54
 
 # Bengali digits are a different Unicode block from Latin ones, so "মিরপুর ১০"
 # and "Mirpur 10" share no numeric characters at all. 55 entries in the pilot box
@@ -140,15 +148,68 @@ class GazetteerError(RuntimeError):
     """The gazetteer file is missing or malformed. Not a lookup failure."""
 
 
+@dataclass(frozen=True, slots=True)
+class _Name:
+    """
+    One name form of one entry, with everything matching needs precomputed.
+
+    Every tier used to call `normalise`, `tokens` and `numbers` on every name of
+    every entry on every lookup. That was affordable at 1,022 entries and is not
+    at six thousand: `resolve_place` is on a request path (`/geo/resolve`), and
+    the fuzzy tier alone was running two regex substitutions and a findall per
+    name per query before it got as far as comparing anything.
+    """
+
+    entry: GazetteerEntry
+    raw: str
+    text: str
+    """`normalise(raw)`."""
+    tokens: frozenset[str]
+    numbers: tuple[str, ...]
+    position: int
+    """Index of this name within its entry's `all_names()`, to keep tier 2's
+    "first matching name wins" behaviour identical to the unindexed version."""
+
+
 @dataclass
 class Gazetteer:
     entries: tuple[GazetteerEntry, ...]
     _exact: dict[str, list[GazetteerEntry]] = field(default_factory=dict, repr=False)
+    _names: tuple[_Name, ...] = field(default=(), repr=False)
+    _by_token: dict[str, frozenset[int]] = field(default_factory=dict, repr=False)
+    _by_numbers: dict[tuple[str, ...], tuple[int, ...]] = field(
+        default_factory=dict, repr=False
+    )
 
     def __post_init__(self) -> None:
+        names: list[_Name] = []
+        by_token: dict[str, set[int]] = {}
+        by_numbers: dict[tuple[str, ...], list[int]] = {}
         for entry in self.entries:
-            for name in entry.all_names():
-                self._exact.setdefault(normalise(name), []).append(entry)
+            for position, raw in enumerate(entry.all_names()):
+                text = normalise(raw)
+                self._exact.setdefault(text, []).append(entry)
+                if not text:
+                    continue
+                index = len(names)
+                token_set = frozenset(text.split())
+                digits = numbers(raw)
+                names.append(
+                    _Name(
+                        entry=entry,
+                        raw=raw,
+                        text=text,
+                        tokens=token_set,
+                        numbers=digits,
+                        position=position,
+                    )
+                )
+                for token in token_set:
+                    by_token.setdefault(token, set()).add(index)
+                by_numbers.setdefault(digits, []).append(index)
+        self._names = tuple(names)
+        self._by_token.update({token: frozenset(rows) for token, rows in by_token.items()})
+        self._by_numbers.update({key: tuple(rows) for key, rows in by_numbers.items()})
 
     def __len__(self) -> int:
         return len(self.entries)
@@ -173,6 +234,20 @@ class Gazetteer:
         hit = self._exact_hit(wanted)
         if hit is not None:
             return hit
+
+        # A refusal for ambiguity is a decision, and the tiers below do not get
+        # to overturn it. The module docstring already says this about the LLM
+        # tier; it has to hold *inside* the gazetteer too, and it did not.
+        #
+        # "Sector 11" is the case. Two entries carry that exact name 10 km
+        # apart, so `_exact_hit` correctly declines — and then `_subset_hit`
+        # resolved it anyway, to a different entry, and reported 0.90. Falling
+        # through means "we know this name is ambiguous" is treated as "we have
+        # never heard of it", which are opposite facts.
+        if self._exact_is_ambiguous_only(wanted):
+            logger.info("gazetteer refusing %r — its exact matches are ambiguous", wanted)
+            return None
+
         hit = self._subset_hit(wanted)
         if hit is not None:
             return hit
@@ -204,14 +279,25 @@ class Gazetteer:
         want = frozenset(wanted.split())
         if not want:
             return False
+        postings = [self._by_token.get(token) for token in want]
+        if any(rows is None for rows in postings):
+            return False
+        ordered = sorted((rows for rows in postings if rows is not None), key=len)
+        candidates: frozenset[int] = ordered[0]
+        for rows in ordered[1:]:
+            candidates &= rows
+            if not candidates:
+                return False
         # Only reached once `resolve()` has already declined, so any ambiguous
         # entry the query fits is the reason it declined.
-        return any(
-            entry.ambiguous and any(want <= tokens(name) for name in entry.all_names())
-            for entry in self.entries
-        )
+        return any(self._names[index].entry.ambiguous for index in candidates)
 
     # -- tiers ---------------------------------------------------------------
+
+    def _exact_is_ambiguous_only(self, wanted: str) -> bool:
+        """Does this exact name belong to entries, and all of them ambiguous?"""
+        rows = self._exact.get(wanted, [])
+        return bool(rows) and all(entry.ambiguous for entry in rows)
 
     def _exact_hit(self, wanted: str) -> GazetteerHit | None:
         candidates = self._usable(self._exact.get(wanted, []))
@@ -222,50 +308,108 @@ class Gazetteer:
         return GazetteerHit(candidates[0], 1.0, wanted)
 
     def _subset_hit(self, wanted: str) -> GazetteerHit | None:
-        """"Mirpur 10" should find "Mirpur-10 Circle". Every token must appear."""
+        """
+        "Mirpur 10" should find "Mirpur-10 Circle". Every token must appear.
+
+        Every token must appear, so the candidates are exactly the intersection
+        of the token index's posting lists — and a query token no name contains
+        settles it with no scan at all.
+        """
         want = frozenset(wanted.split())
         if not want:
             return None
-        found: list[tuple[GazetteerEntry, str]] = []
-        for entry in self.entries:
-            for name in entry.all_names():
-                if want <= tokens(name):
-                    found.append((entry, name))
-                    break
-        usable = [(e, n) for e, n in found if not e.ambiguous]
-        if not usable:
+        postings = [self._by_token.get(token) for token in want]
+        if any(rows is None for rows in postings):
             return None
+        # Intersect smallest-first; one rare token usually reduces this to a
+        # handful of candidates before the common ones are touched.
+        ordered = sorted((rows for rows in postings if rows is not None), key=len)
+        candidates: frozenset[int] = ordered[0]
+        for rows in ordered[1:]:
+            candidates &= rows
+            if not candidates:
+                return None
+
+        # Numbers are identity here too, and this tier was the one place that did
+        # not enforce it. `_fuzzy_hit` has refused a number mismatch since D03,
+        # on the grounds that "Sector 11" and "Sector 10" are 0.89 similar and
+        # 2 km apart — but a *token subset* can mismatch far more wildly than a
+        # misspelling and still pass:
+        #
+        #     query "Sector 11"          -> {sector, 11}
+        #     name  "Road 11 Sector 1"   -> {road, 11, sector, 1}   superset!
+        #
+        # so the query matched a road in Sector 1 and reported 0.90. It was
+        # harmless while the gazetteer held no roads and is a fabrication now
+        # that it holds three thousand, which is the shape of hole worth
+        # remembering: the new data did not break this tier, it revealed it.
+        #
+        # Requiring the same multiset of digits keeps every case this tier is
+        # for — "Mirpur 10" still finds "Mirpur-10 Circle", ("10",) both sides —
+        # and drops the ones where a number is doing the lying.
+        wanted_numbers = numbers(wanted)
+
+        # One name per entry, the first in `all_names()` order, exactly as the
+        # unindexed version's `break` produced.
+        best_by_entry: dict[str, _Name] = {}
+        for index in candidates:
+            name = self._names[index]
+            if name.entry.ambiguous or name.numbers != wanted_numbers:
+                continue
+            held = best_by_entry.get(name.entry.id)
+            if held is None or name.position < held.position:
+                best_by_entry[name.entry.id] = name
+        if not best_by_entry:
+            return None
+
         # Prefer the shortest matching name: it is the closest thing to what was
         # actually typed. "Sayedabad" should find the Sayedabad area, not
         # "Golden Line Sayedabad Counter", which also contains the word. Refuse
         # only when two *different* places tie at the shortest length, because
         # then there genuinely is no way to choose.
-        fewest = min(len(tokens(name)) for _, name in usable)
-        shortest = [(e, n) for e, n in usable if len(tokens(n)) == fewest]
-        if len({e.id for e, _ in shortest}) != 1:
+        usable = list(best_by_entry.values())
+        fewest = min(len(name.tokens) for name in usable)
+        shortest = [name for name in usable if len(name.tokens) == fewest]
+        if len({name.entry.id for name in shortest}) != 1:
             return None
-        entry, name = shortest[0]
-        return GazetteerHit(entry, 0.9, name)
+        return GazetteerHit(shortest[0].entry, 0.9, shortest[0].raw)
 
     def _fuzzy_hit(self, wanted: str) -> GazetteerHit | None:
-        want_numbers = numbers(wanted)
+        # Numbers are identity, not spelling. "Sector 11" and "Sector 10" are
+        # 0.89 similar as strings and are different places 2 km apart; likewise
+        # "Mirpur 10" and "Mirpur 11", or "Road 27" and "Road 2". Before this
+        # guard the matcher resolved "Sector 11" to Sector 10 and reported 0.89
+        # confidence, which is the wrong-pin failure the discard invariant exists
+        # to prevent. Letters may be misspelt. Digits may not. As an index it is
+        # also the cheapest filter available, so it goes first.
+        bucket = self._by_numbers.get(numbers(wanted))
+        if not bucket:
+            return None
+
+        wanted_length = len(wanted)
+        # `difflib` guarantees ratio <= quick_ratio <= real_quick_ratio, and both
+        # bounds are symmetric in their arguments, so they can be computed from a
+        # matcher that keeps `wanted` as seq2 and never rebuilds its index. The
+        # surviving few are then scored in the original argument order, so the
+        # confidence a hit reports is unchanged.
+        gate = difflib.SequenceMatcher(None, "", wanted)
         scored: list[tuple[float, GazetteerEntry, str]] = []
-        for entry in self.entries:
-            if entry.ambiguous:
+        for index in bucket:
+            name = self._names[index]
+            if name.entry.ambiguous:
                 continue
-            for name in entry.all_names():
-                # Numbers are identity, not spelling. "Sector 11" and "Sector 10"
-                # are 0.89 similar as strings and are different places 2 km apart;
-                # likewise "Mirpur 10" and "Mirpur 11", or "Road 27" and "Road 2".
-                # Before this guard the matcher resolved "Sector 11" to Sector 10
-                # and reported 0.89 confidence, which is the wrong-pin failure the
-                # discard invariant exists to prevent. Letters may be misspelt.
-                # Digits may not.
-                if numbers(name) != want_numbers:
-                    continue
-                ratio = difflib.SequenceMatcher(None, wanted, normalise(name)).ratio()
-                if ratio >= FUZZY_FLOOR:
-                    scored.append((ratio, entry, name))
+            text = name.text
+            # ratio = 2M/(la+lb) and M <= min(la, lb), so a name whose length is
+            # too far from the query's cannot reach the floor however it is spelt.
+            # Exact, not a heuristic: no match is lost to it.
+            if 2 * min(len(text), wanted_length) < FUZZY_FLOOR * (len(text) + wanted_length):
+                continue
+            gate.set_seq1(text)
+            if gate.real_quick_ratio() < FUZZY_FLOOR or gate.quick_ratio() < FUZZY_FLOOR:
+                continue
+            ratio = difflib.SequenceMatcher(None, wanted, text).ratio()
+            if ratio >= FUZZY_FLOOR:
+                scored.append((ratio, name.entry, name.raw))
         if not scored:
             return None
         scored.sort(key=lambda row: row[0], reverse=True)

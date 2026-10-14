@@ -27,6 +27,22 @@ from app.ingestion.fetcher import Fetcher
 
 DHAKA_TZ: Final = timezone(timedelta(hours=6), "Asia/Dhaka")
 
+MIN_LATIN_PARAGRAPH_CHARS: Final = 40
+"""
+Shorter than this, an English paragraph is not body text.
+
+The Bangla rule below filters on *script*, because a Bangla article's captions and
+credits are the paragraphs with no Bangla in them. An English article has no such
+tell — everything is Latin — so length stands in for it. Forty characters was read
+off the real pages on 2026-10-14: Dhaka Tribune's shortest genuine sentence in the
+sample was 67 characters, while the non-body nodes (empty `<p>` used as spacers,
+"Topics:", photo credits) came out at 0 to about 20.
+
+A page that is not an article therefore yields no body at all and `read()` returns
+None for it. That is the correct outcome rather than a bug — nothing should be
+extracted from a photo gallery or a pull-quote card.
+"""
+
 
 @dataclass(frozen=True, slots=True)
 class ArticleRef:
@@ -97,3 +113,23 @@ def bangla_paragraphs(paragraphs: list[str]) -> str:
     """Join article paragraphs, dropping empty ones and captions with no Bangla in them."""
     kept = [re.sub(r"\s+", " ", p).strip() for p in paragraphs if any("ঀ" <= c <= "৿" for c in p)]
     return "\n\n".join(p for p in kept if p)
+
+
+def latin_paragraphs(paragraphs: list[str]) -> str:
+    """Join article paragraphs, dropping anything too short to be body text."""
+    kept = [re.sub(r"\s+", " ", p).strip() for p in paragraphs]
+    return "\n\n".join(p for p in kept if len(p) >= MIN_LATIN_PARAGRAPH_CHARS)
+
+
+def article_body(paragraphs: list[str], *, language: str) -> str:
+    """
+    An article's body, joined by whichever rule suits its script.
+
+    One call site per source, so a publisher's language is declared once in
+    `sources/__init__.py` and nothing downstream has to guess. `mixed` takes the
+    Bangla rule: a mixed document is a Bangla document with English in it, and the
+    script filter is the stronger of the two signals.
+    """
+    return latin_paragraphs(paragraphs) if language == "en" else bangla_paragraphs(paragraphs)
+
+

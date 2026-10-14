@@ -66,6 +66,8 @@ from app.agents.live_risk import (
     EXCLUDED_SECTIONS,
     MAX_BODY_CHARS,
     MIN_CONFIDENCE,
+    boundary_pattern,
+    interleave,
     resolve_news_place,
 )
 from app.contracts.agents import AgentContext, AgentResult, AgentStatus, BaseAgent
@@ -174,8 +176,86 @@ EVENT_WORDS: Final = (
     "পানি সরবরাহ",
 )
 
+# The English halves, for Dhaka Tribune (added 2026-10-14). Matched between word
+# boundaries, with every inflection spelled out, for the reason recorded at
+# `live_risk.INCIDENT_WORDS_EN` — a suffix wildcard reintroduces exactly the false
+# positives the boundary exists to stop.
+#
+# Both halves are still required, which is what keeps these broad lists cheap:
+# `tomorrow` alone is every weather forecast, `rally` alone is this afternoon's
+# procession, and only their conjunction is an announcement of a road event.
+FUTURE_WORDS_EN: Final = (
+    "tomorrow",
+    "today",
+    "tonight",
+    "next",
+    "upcoming",
+    "announce",
+    "announces",
+    "announced",
+    "announcement",
+    "call",
+    "calls",
+    "called",
+    "programme",
+    "program",
+    "schedule",
+    "scheduled",
+    "will",
+    "to be held",
+    "begins",
+    "begin",
+    "start",
+    "starts",
+    "starting",
+    "ahead of",
+    "observe",
+)
+
+EVENT_WORDS_EN: Final = (
+    "hartal",
+    "blockade",
+    "blockades",
+    "strike",
+    "strikes",
+    "procession",
+    "processions",
+    "rally",
+    "rallies",
+    "gathering",
+    "human chain",
+    "protest",
+    "protests",
+    "demonstration",
+    "demonstrations",
+    "march",
+    "siege",
+    "gherao",
+    "exam",
+    "exams",
+    "admission test",
+    "repair",
+    "repairs",
+    "digging",
+    "construction",
+    "metro rail",
+    "road closure",
+    "road closed",
+    "diversion",
+    "route change",
+    "power outage",
+    "gas supply",
+    "water supply",
+    "shutdown",
+)
+
+
+_FUTURE_PATTERN_EN: Final = boundary_pattern(FUTURE_WORDS_EN)
+_EVENT_PATTERN_EN: Final = boundary_pattern(EVENT_WORDS_EN)
+
 SYSTEM_PROMPT: Final = (
-    "You read Bangla news articles for a navigation app in Dhaka, Bangladesh. "
+    "You read Bangla and English news articles for a navigation app in Dhaka, "
+    "Bangladesh. "
     "List only events that have NOT HAPPENED YET and will affect movement on roads "
     "inside Dhaka city: announced processions, rallies, hartals, blockades, "
     "strikes, large gatherings, exam days, scheduled road works, and announced "
@@ -185,6 +265,15 @@ SYSTEM_PROMPT: Final = (
     "For each, give location_text: the most specific place name, copied from the "
     "article in its own script, without words like রাজধানীর, এলাকায় or নম্বর "
     "(write শাহবাগ মোড়, not রাজধানীর শাহবাগ মোড় এলাকায়). "
+    "In an English article, copy the romanised name the same way: write "
+    "Shahbagh intersection, not the capital's Shahbagh intersection area. Keep any "
+    "number that is part of the name. "
+    # See the same clause in live_risk.py for why this is phrased as permission.
+    # It matters more here: this agent has no retry queue, so an announcement it
+    # locates to a road the gazetteer cannot place is the only chance to publish
+    # that event before it happens.
+    "A road name is a place name: write সাতমসজিদ রোড or Satmasjid Road when that "
+    "is the most specific place the article names. "
     "day is today, tomorrow or day_after, relative to THIS ARTICLE's date. "
     "start_hour is the hour it begins, 0-23, Bangladesh time. Set end_hour only if "
     "the article states when it ends; otherwise leave it null. Never guess a time: "
@@ -211,14 +300,22 @@ def is_announcement(ref: ArticleRef, now: datetime) -> bool:
     Both halves are required. `আগামীকাল` alone matches tomorrow's weather and
     tomorrow's match; `মিছিল` alone matches the procession that happened this
     afternoon, which is D04's article and not ours.
+
+    The two halves may be satisfied in **different languages**, which is not an
+    oversight: Dhaka English copy writes "hartal called for tomorrow", where the
+    event word is a loan from Bangla and the future marker is English.
     """
     if ref.section in EXCLUDED_SECTIONS:
         return False
     if ref.published_at is not None and ref.published_at < now - LOOKBACK:
         return False
-    return any(w in ref.title for w in FUTURE_WORDS) and any(
-        w in ref.title for w in EVENT_WORDS
+    has_future = any(w in ref.title for w in FUTURE_WORDS) or bool(
+        _FUTURE_PATTERN_EN.search(ref.title)
     )
+    has_event = any(w in ref.title for w in EVENT_WORDS) or bool(
+        _EVENT_PATTERN_EN.search(ref.title)
+    )
+    return has_future and has_event
 
 
 def _window(event: ScheduledEvent, published_at: datetime) -> tuple[datetime, datetime]:
@@ -487,19 +584,24 @@ class ScheduledRiskAgent(BaseAgent):
             0.0,
         )
 
-        fresh: list[RawDocument] = []
+        by_source: list[list[RawDocument]] = []
         async with Fetcher() as fetcher:
             for source in SOURCES:
                 try:
-                    fresh += await self._ingest(source, fetcher, db, ctx, metrics, errors)
+                    by_source.append(await self._ingest(source, fetcher, db, ctx, metrics, errors))
                     if not ctx.dry_run:
                         await db.commit()
                 except Exception as problem:  # noqa: BLE001 - one publisher must not stop the rest
                     await db.rollback()
                     errors.append(f"{source.source_id}: {type(problem).__name__}: {problem}")
 
-        # No retry queue, deliberately. See the module docstring.
-        queue = fresh[:MAX_EXTRACTIONS_PER_RUN]
+        # No retry queue, deliberately. See the module docstring — which is exactly
+        # why the round-robin matters more here than in D04: a document this agent
+        # does not extract in the run that fetched it is not deferred, it is gone,
+        # and with it the only chance to publish an event *before* it happens. Under
+        # the old concatenate-then-truncate, every publisher after the second in
+        # `SOURCES` would have had its announcements silently dropped, for ever.
+        queue = interleave(by_source)[:MAX_EXTRACTIONS_PER_RUN]
 
         consecutive_misses = 0
         for doc in queue:
@@ -533,7 +635,12 @@ class ScheduledRiskAgent(BaseAgent):
 
         status: AgentStatus = "ok"
         if errors:
-            nothing_worked = not fresh and metrics["documents_read"] == 0
+            # `any(by_source)` is "did any publisher yield a document at all".
+            # It used to read `not fresh`, against a flat list of every document
+            # ingested; S30's round-robin replaced that list with one list per
+            # publisher and missed this reference, leaving a `NameError` on a
+            # path that only runs when something else has already gone wrong.
+            nothing_worked = not any(by_source) and metrics["documents_read"] == 0
             status = "failed" if nothing_worked else "partial"
         return AgentResult(
             agent=self.name,

@@ -1,6 +1,7 @@
 """
-Expiry sweep — retire flags and clusters past `expires_at`. D02's housekeeping,
-scheduled in D04, extended to `community_clusters` in B13.
+Expiry sweep — retire flags, clusters and news crime past `expires_at`. D02's
+housekeeping, scheduled in D04, extended to `community_clusters` in B13 and to
+`news_crime_incidents` in S30.
 
 The same statement as `scripts/sweep_expired_flags.py`, which stays as the manual
 path. **The sweep does not decide what is live** — every surface stops serving a
@@ -9,10 +10,17 @@ keeps the tables from accumulating live-status rows that are not live, and it ke
 them (`status = 'expired'`) rather than deleting them, because an expired row is the
 evidence that the surface retires things on its own.
 
-Two tables, one agent. They are swept together because they are one piece of
+Three tables, one agent. They are swept together because they are one piece of
 housekeeping with one schedule and one failure mode; a second agent would mean a
 second `agent_runs` row saying the same thing. The predicates differ only in which
 statuses count as live, which is the one thing each table disagrees about.
+
+`news_crime_incidents` matters most of the three for this sweep, because it is the
+surface whose rows would be worst to leave standing. A decayed mobility flag is a
+stale traffic claim; a news crime incident that never retires is a permanent
+accusation attached to a street corner. Its five-day half-life means it falls below
+the serve threshold about eighteen days after the report, and this is what moves it
+out of `published` once it does.
 
 `community_clusters` is swept *as well as* being reconciled by
 `report_corroboration`, and the two are not redundant. The corroboration agent
@@ -37,10 +45,14 @@ from app.contracts.agents import AgentContext, AgentResult, BaseAgent
 
 _FLAGS_DUE: Final = "status in ('unconfirmed', 'confirmed') and expires_at <= :now"
 _CLUSTERS_DUE: Final = "status in ('provisional', 'corroborated') and expires_at <= :now"
+# One live status rather than two: corroboration on this surface is derived on read
+# from `source_count`, not stored as a status. See `app/scoring/news_crime.py`.
+_NEWS_CRIME_DUE: Final = "status = 'published' and expires_at <= :now"
 
 _TABLES: Final[tuple[tuple[str, str], ...]] = (
     ("public.risk_flags", _FLAGS_DUE),
     ("public.community_clusters", _CLUSTERS_DUE),
+    ("public.news_crime_incidents", _NEWS_CRIME_DUE),
 )
 
 
@@ -84,6 +96,7 @@ class ExpirySweepAgent(BaseAgent):
             metrics={
                 "flags_expired": float(swept["public.risk_flags"]),
                 "clusters_expired": float(swept["public.community_clusters"]),
+                "news_crime_expired": float(swept["public.news_crime_incidents"]),
             },
         )
 

@@ -26,6 +26,11 @@
  * them. Adding one here without adding it to the database enum produces an insert
  * that Postgres rejects; adding it to the database without adding it here leaves
  * reports the map cannot colour.
+ *
+ * As of S30 this list also governs `news_crime_incidents.category`, which carries
+ * the same eight values so that a crime reported by a newspaper and a crime
+ * reported by a user share one vocabulary, one colour and one label everywhere
+ * they are shown.
  */
 export const CRIME_CATEGORIES = [
   'theft',
@@ -133,3 +138,37 @@ export function reportStatusLabel(status: string): string {
 export function isReportStatus(value: string): value is ReportStatus {
   return (REPORT_STATUSES as readonly string[]).includes(value);
 }
+
+/**
+ * One colour per category, for every surface that draws a crime.
+ *
+ * Lives beside `CRIME_CATEGORIES` rather than inside a screen, and that move is
+ * the point of the Defect 3 note at the top of this file. The two must be keyed
+ * off one list — `Record<CrimeCategory, string>` makes a missing colour a compile
+ * error rather than a grey pin — and they cannot be if the list is a contract and
+ * the colours are a local constant in `MapScreen`. S30 added a second drawer of
+ * crime markers (`NewsCrimeMarker`), which is exactly when a second copy would
+ * have appeared.
+ */
+export const CRIME_COLORS: Record<CrimeCategory, string> = {
+  theft: '#FF9800', // Orange
+  robbery: '#F44336', // Red
+  assault: '#E91E63', // Pink
+  harassment: '#9C27B0', // Purple
+  vandalism: '#607D8B', // Blue Grey
+  burglary: '#FF5722', // Deep Orange
+  fraud: '#2196F3', // Blue
+  other: '#9E9E9E', // Grey
+};
+
+export const CRIME_FALLBACK_COLOR = '#9E9E9E';
+
+/**
+ * Colour for a category that may not be one we know.
+ *
+ * Reports come straight out of Supabase with no validation step, so a row written
+ * before an enum change can carry anything. Returning grey beats returning
+ * `undefined`, which is how Defect 3 looked for the whole of S01.
+ */
+export const crimeColor = (category: string): string =>
+  CRIME_COLORS[category as CrimeCategory] ?? CRIME_FALLBACK_COLOR;

@@ -32,7 +32,9 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import UTC, datetime, timedelta
+from itertools import zip_longest
 from pathlib import Path
 from typing import Any, Final
 from uuid import UUID
@@ -40,15 +42,23 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.crime_guard import find_duplicate as find_crime_duplicate
+from app.agents.crime_guard import merge_into as merge_crime_into
 from app.agents.rumour_guard import find_duplicate, merge_into
 from app.contracts.agents import AgentContext, AgentResult, AgentStatus, BaseAgent
 from app.contracts.risk import GeoResolution, IncidentKind, MobilityImpact, RawDocument
 from app.geo.agent import resolve_place
 from app.ingestion import store
 from app.ingestion.fetcher import Fetcher
-from app.ingestion.sources import SOURCES, ArticleRef, Source
+from app.ingestion.sources import SOURCES, ArticleRef, Source, publisher_name
 from app.llm.client import FEATURE_EXTRACT, LLMUnavailable, complete
-from app.llm.models import NewsExtraction, NewsIncident
+from app.llm.models import NewsCrime, NewsExtraction, NewsIncident
+from app.policy.attribution import (
+    NEWS_CRIME_HALF_LIFE_HOURS,
+    radius_for,
+    to_attributed_statement,
+)
+from app.policy.attribution import severity_for as severity_for_crime
 from app.policy.framing import to_mobility_statement
 from app.scoring.fixture import REPLAY_PATH, SEED_KEY_PREFIX
 from app.scoring.kinds import defaults_for, severity_for
@@ -57,6 +67,12 @@ logger = logging.getLogger(__name__)
 
 LIVE_KEY_PREFIX: Final = "live-"
 """Every flag this agent writes. The seeder's `seed-` rows are never touched by it."""
+
+CRIME_KEY_PREFIX: Final = "crime-"
+"""Every `news_crime_incidents` row this agent writes. A separate namespace from
+`LIVE_KEY_PREFIX` so the two surfaces can never collide on an event key, even
+though they live in different tables and could not collide anyway — the prefix is
+there so a key read out of a log says which surface it belongs to."""
 
 LOOKBACK: Final = timedelta(hours=12)
 """Older articles are skipped: a road accident's flag would be born already expired."""
@@ -68,12 +84,21 @@ MIN_CONFIDENCE: Final = 0.5
 PROMPT_VERSION: Final = "live_risk_v1"
 
 # Sections that are never about movement inside Dhaka. Checked against the first
-# URL path segment, which all three publishers use for the desk.
+# URL path segment, which every publisher in `SOURCES` uses for the desk.
 EXCLUDED_SECTIONS: Final = frozenset(
     {
         "international",
         "world",
+        # Bangla Tribune's foreign desk. Same class of miss as `sport` below, found
+        # the same way: a Houthi drone strike on Saudi Aramco passed the relevance
+        # filter on আগুন and would have been fetched and extracted.
+        "foreign",
         "sports",
+        # Singular, because Dhaka Tribune's desk is /sport/ and the plural did not
+        # match it. Found on the first live run with the paper wired in, 2026-10-14:
+        # "US women rally to draw 2-2 with Spain" passed the relevance filter on
+        # `rally` and would have cost a fetch and an extraction out of the free tier.
+        "sport",
         "entertainment",
         "lifestyle",
         "tech",
@@ -90,12 +115,29 @@ EXCLUDED_SECTIONS: Final = frozenset(
         "countries",
     }
 )
+"""
+A desk name, not a topic, so this list only works for publishers whose URLs carry
+one. Three caveats worth knowing before adding to it:
+
+* **Ittefaq has no desk segment at all.** Its article URLs are `/815086/<slug>`, so
+  `ArticleRef.section` is the numeric id and nothing here can ever match it. Its
+  articles are filtered by headline vocabulary and then by the gazetteer, which is
+  the backstop for every publisher anyway. The cost is a few wasted extractions per
+  run on foreign stories that happen to contain an incident word.
+* **`country-news` and `whole-country` are deliberately absent.** They are where
+  Jugantor and Samakal file domestic news, including events in Tongi, Gazipur and
+  Narayanganj — adjacent to Dhaka and sometimes genuinely on a route out of it.
+  Excluding them would be cheap and would throw away real events; the pilot-box
+  check in `geo/gazetteer.py` is the honest filter for "is this near enough".
+* Desk names vary by publisher and are not guessable. Every entry below was read
+  off a live listing, never assumed.
+"""
 
 # Headline vocabulary for events that change how a road can be used. Substring
 # matches on the Bangla headline, so inflected forms (আগুনে, সংঘর্ষে) are caught.
 # This decides which articles are worth a fetch and a model request; the model
 # decides what, if anything, they actually report.
-INCIDENT_WORDS: Final = (
+INCIDENT_WORDS_BN: Final = (
     "আগুন",
     "অগ্নি",
     "দুর্ঘটনা",
@@ -130,6 +172,124 @@ INCIDENT_WORDS: Final = (
     "ভবন ধস",
 )
 
+INCIDENT_WORDS_EN: Final = (
+    # Inflections are written out rather than produced by a suffix wildcard. See
+    # the note below: the wildcard is what breaks this list, not what completes it.
+    "fire",
+    "fires",
+    "blaze",
+    "accident",
+    "accidents",
+    "crash",
+    "crashes",
+    "crashed",
+    "collision",
+    "collisions",
+    "killed",
+    "injured",
+    "run over",
+    "overturn",
+    "overturns",
+    "overturned",
+    "blockade",
+    "blockades",
+    "block",
+    "blocks",
+    "blocked",
+    "blocking",
+    "protest",
+    "protests",
+    "protesters",
+    "demonstration",
+    "demonstrations",
+    "rally",
+    "rallies",
+    "procession",
+    "processions",
+    "march",
+    "marches",
+    "strike",
+    "strikes",
+    "hartal",
+    "clash",
+    "clashes",
+    "waterlogging",
+    "waterlogged",
+    "flood",
+    "floods",
+    "flooded",
+    "flooding",
+    "rain",
+    "rains",
+    "traffic",
+    "gridlock",
+    "jam",
+    "jams",
+    "congestion",
+    "road",
+    "roads",
+    "street",
+    "streets",
+    "highway",
+    "closure",
+    "closures",
+    "closed",
+    "digging",
+    "construction",
+    "repair",
+    "repairs",
+    "electricity",
+    "power cut",
+    "gas line",
+    "explosion",
+    "explosions",
+    "blast",
+    "blasts",
+    "collapse",
+    "collapsed",
+)
+"""
+The English half, for Dhaka Tribune (added 2026-10-14).
+
+**Matched between word boundaries**, which is the one place the two languages need
+different machinery rather than a different list. Bangla inflects by suffix — আগুন
+is a prefix of আগুনে — so a substring test is what catches the inflected form, and
+it is safe because a Bangla compound rarely contains an unrelated word by accident.
+English is the opposite: a substring test for `fire` matches *fired*, *firearm* and
+*misfired*, and `jam` matches *Jamuna* and *Jamalpur*, two Bangladeshi proper nouns
+that appear in the news constantly.
+
+**The first version of this used `\\b(?:...)\\w*`** — a leading boundary plus a
+suffix wildcard, to get *blocked* and *blockade* from one stem. That is wrong in a
+way worth recording, because it looks careful: `\\bjam\\w*` matches *Jamuna*
+perfectly well, so the wildcard hands back exactly the false positives the boundary
+was there to prevent. It was caught by the test that had been written for that
+case. Every form is therefore spelled out, and the pattern closes with `\\b` too.
+
+The list is as broad as the Bangla one and for the same reason: `road`, `street`
+and `traffic` admit a lot, but the headline filter's job is to be cheap and
+generous, and the model decides whether an article actually reports anything. A
+tight filter here fails silently, and a missed road closure is not recoverable from
+the logs.
+"""
+
+
+def boundary_pattern(words: tuple[str, ...]) -> re.Pattern[str]:
+    """
+    A case-insensitive alternation anchored by a word boundary at **both** ends.
+
+    Longest-first so that `power cut` is tried before `power`, which matters because
+    Python's alternation is first-match, not longest-match.
+    """
+    ordered = sorted(words, key=len, reverse=True)
+    return re.compile(
+        r"\b(?:" + "|".join(re.escape(word) for word in ordered) + r")\b",
+        re.IGNORECASE,
+    )
+
+
+_EN_PATTERN: Final = boundary_pattern(INCIDENT_WORDS_EN)
+
 # Words that wrap a place name in news copy without being part of it. D03's
 # gazetteer resolves "মিরপুর ১০ গোলচত্বর" and "কড়াইল" but not
 # "রাজধানীর মিরপুর ১০ নম্বর গোলচত্বর এলাকায়" or "কড়াইল বস্তি" (measured
@@ -159,6 +319,40 @@ PLACE_FILLER: Final = frozenset(
         "মহল্লায়",
     }
 )
+
+PLACE_FILLER_EN: Final = frozenset(
+    {
+        # The English counterpart, compared casefolded. Same rule as above: these
+        # wrap a place name in news copy without being part of it, and removing
+        # them can only ever make a match possible, never make one up.
+        "the",
+        "in",
+        "at",
+        "of",
+        "near",
+        "beside",
+        "front",
+        "capital",
+        "capital's",
+        "city",
+        "city's",
+        "dhaka's",
+        "area",
+        "areas",
+        "no",
+        "no.",
+        "number",
+        "police",
+        "station",
+        "thana",
+    }
+)
+"""
+Deliberately **no digits and no bare numerals.** D03's number-identity rule is what
+stops `গুলশান ৯৭ গোলচত্বর` being rounded up to Gulshan, and the same protection has
+to hold for `Gulshan 97 circle`. Adding "one", "two" or a digit pattern here would
+quietly delete the part of a name that distinguishes Mirpur 10 from Mirpur 1.
+"""
 
 # Generic place-*type* nouns that trail a specific name in Bangla news copy, with
 # the case suffixes the copy actually uses. Stripped from the END only, because
@@ -225,19 +419,91 @@ PLACE_GENERIC_TAIL: Final = (
     "রাস্তা",
 )
 
+PLACE_GENERIC_TAIL_EN: Final = (
+    # The English counterpart, matched casefolded and stripped from the END only —
+    # English puts the specific name first too ("Mohakhali bus terminal"), so the
+    # head is the identity and the tail is the category.
+    #
+    # Multi-word entries first; `_without_generic_tail` sorts by length anyway, so
+    # "bus terminal" strips as a unit before "terminal" can take half of it.
+    "bus terminal",
+    "bus stand",
+    "bus stop",
+    "railway station",
+    "rail station",
+    "train station",
+    "launch terminal",
+    "truck stand",
+    "fish market",
+    "kacha bazar",
+    "flyover",
+    "overpass",
+    "overbridge",
+    "footbridge",
+    "underpass",
+    "intersection",
+    "crossing",
+    "roundabout",
+    "circle",
+    "junction",
+    "terminal",
+    "station",
+    "square",
+    "market",
+    "bazar",
+    "bazaar",
+    "mor",
+    "more",
+    "chowrasta",
+    "bridge",
+    "road",
+    "street",
+    "avenue",
+    "lane",
+    "highway",
+)
+
 SYSTEM_PROMPT: Final = (
-    "You read Bangla news articles for a navigation app in Dhaka, Bangladesh. "
+    "You read Bangla and English news articles for a navigation app in Dhaka, "
+    "Bangladesh. "
     "List only events that affect movement on roads inside Dhaka city today: road "
     "accidents, fires, clashes, road blockades, processions or rallies, waterlogging, "
     "road construction, utility works. "
     "For each, give location_text: the most specific place name, copied from the "
     "article in its own script, without words like রাজধানীর, এলাকায় or নম্বর "
     "(write মিরপুর ১০ গোলচত্বর, not রাজধানীর মিরপুর ১০ নম্বর গোলচত্বর এলাকায়). "
+    "In an English article, copy the romanised name the same way: write "
+    "Mirpur 10 circle, not the capital's Mirpur 10 circle area. Keep any number "
+    "that is part of the name — Mirpur 10 and Mirpur 1 are different places. "
+    # Permission, not preference. "Most specific place name" above already does
+    # the ordering; this only says a road qualifies. It was added with S31's road
+    # layer, because until the gazetteer held roads a model that correctly copied
+    # "সাতমসজিদ রোড" produced a guaranteed discard, and the cheapest-looking fix
+    # would have been to teach it to answer "ধানমন্ডি" instead — generalising the
+    # article's own words, which is the opposite of what this prompt is for.
+    "A road name is a place name: write সাতমসজিদ রোড or Satmasjid Road when that "
+    "is the most specific place the article names. "
     "mobility_impact is road_blocked, heavy_crowd, delay_likely, lane_closed, "
     "impassable, or none if traffic is not affected. "
-    "Ignore events outside Dhaka city, events more than a day old, court cases, "
-    "arrests, statements and announcements. Most articles report no such event: "
-    "then return an empty list. Never invent a place the article does not name."
+    "For `incidents`, ignore events outside Dhaka city, events more than a day old, "
+    "court cases, arrests, statements and announcements. "
+    "\n\n"
+    "Separately, in `crimes`, list crimes the article reports as having happened at "
+    "a named place in or near Dhaka: theft, assault, harassment, vandalism, "
+    "burglary, robbery, fraud, or other. "
+    "An arrest report or a charge-sheet report counts if it says where the crime "
+    "itself happened; the place you give must be where the CRIME happened, never "
+    "the police station, the court or the hospital. "
+    "Give the same kind of specific place name as above. "
+    "summary_en is one short factual English sentence for an internal audit log. "
+    "Do not name any person — not a suspect, a victim, a witness or an officer — "
+    "and do not name any political party, religious group or ethnic group. "
+    "Do not say an area is dangerous or unsafe; report only what happened and where. "
+    "One event is one entry: an article about a robbery and the arrest that "
+    "followed it is a single crime, not two. "
+    "\n\n"
+    "Most articles report nothing for either list: then return empty lists. Never "
+    "invent a place the article does not name."
 )
 
 
@@ -246,13 +512,166 @@ SYSTEM_PROMPT: Final = (
 # ---------------------------------------------------------------------------
 
 
+CRIME_WORDS_BN: Final = (
+    "ছিনতাই",  # snatching / mugging
+    "ডাকাতি",  # dacoity, armed robbery
+    "ডাকাত",
+    "চুরি",  # theft
+    "চোর",
+    "ছুরিকাঘাত",  # stabbing
+    "কুপিয়ে",  # hacked
+    "খুন",  # murder
+    "হত্যা",  # killing
+    "লাশ",  # body
+    "ধর্ষণ",  # rape
+    "শ্লীলতাহানি",  # molestation
+    "যৌন হয়রানি",  # sexual harassment
+    "উত্ত্যক্ত",  # eve-teasing / harassment
+    "মারধর",  # beating
+    "হামলা",  # attack
+    "অপহরণ",  # abduction
+    "মুক্তিপণ",  # ransom
+    "চাঁদাবাজি",  # extortion
+    "ভাঙচুর",  # vandalism
+    "লুট",  # looting
+    "প্রতারণা",  # fraud
+    "জালিয়াতি",  # forgery
+    "গ্রেপ্তার",  # arrested
+    "গ্রেফতার",
+    "আটক",  # detained
+    "ছিনিয়ে",  # snatched away
+)
+
+CRIME_WORDS_EN: Final = (
+    "robbery",
+    "robbed",
+    "robbers",
+    "mugging",
+    "mugged",
+    "snatching",
+    "snatched",
+    "theft",
+    "stolen",
+    "burglary",
+    "burgled",
+    "stabbing",
+    "stabbed",
+    "murder",
+    "murdered",
+    "killed",
+    "body recovered",
+    "rape",
+    "raped",
+    "molested",
+    "molestation",
+    "harassment",
+    "harassed",
+    "assault",
+    "assaulted",
+    "beaten",
+    "attacked",
+    "abduction",
+    "abducted",
+    "kidnapped",
+    "ransom",
+    "extortion",
+    "vandalism",
+    "vandalised",
+    "looted",
+    "fraud",
+    "forgery",
+    "arrested",
+    "detained",
+    "mugger",
+)
+"""
+What makes a headline worth fetching for the **crime** half of the extraction.
+
+This is new cost, and it should be understood as such: before this, a crime story
+with no mobility word in its headline was never fetched at all, so publishing
+news-sourced crime necessarily means reading more articles. The cap that protects
+the free tier is still `MAX_EXTRACTIONS_PER_RUN`, and one model call now returns
+both vocabularies — see `NewsExtraction` — so the extra cost is in fetching, not in
+extraction.
+
+`arrested` and `detained` are deliberately included even though D04's mobility
+prompt explicitly discards "court cases, arrests, statements". That instruction is
+right for the mobility surface and wrong here: an arrest report is usually the
+first *confirmed* account of the underlying crime, and it is the one that names the
+place. The extraction prompt is what decides whether an article describes a crime
+at a locatable place in Dhaka; this list only decides whether it is worth reading.
+"""
+
+_CRIME_PATTERN_EN: Final = boundary_pattern(CRIME_WORDS_EN)
+
+
+def names_a_crime(title: str) -> bool:
+    """Does this headline name a crime at a place? Both scripts, as above."""
+    return any(word in title for word in CRIME_WORDS_BN) or bool(
+        _CRIME_PATTERN_EN.search(title)
+    )
+
+
+def names_an_incident(title: str) -> bool:
+    """
+    Does this headline name something that could change how a road can be used?
+
+    Both vocabularies are tried against every headline regardless of the
+    publisher's declared language, and that is deliberate rather than lazy: Dhaka
+    English copy routinely keeps Bangla terms (*hartal*, *gherao*), Bangla copy
+    carries English ones, and a headline is too short to language-detect reliably.
+    Trying both costs one regex and removes a whole class of silent miss.
+    """
+    return any(word in title for word in INCIDENT_WORDS_BN) or bool(_EN_PATTERN.search(title))
+
+
+def interleave(batches: list[list[RawDocument]]) -> list[RawDocument]:
+    """
+    One document from each publisher in turn, then the next from each, and so on.
+
+    **This is a corroboration requirement, not a fairness nicety**, and the
+    distinction matters enough to spell out. The extraction queue is cut to
+    `MAX_EXTRACTIONS_PER_RUN` because that is the free tier. Concatenating the
+    publishers in order and then truncating means the first publisher in `SOURCES`
+    fills the whole budget on any busy day: with nine sources and up to
+    `MAX_READS_PER_SOURCE` documents each, the cut falls inside the first or
+    second publisher's batch every single run.
+
+    What that costs is not a few late articles. It is **every confirmation**. A
+    flag reaches `confirmed` only when two or more independent publishers are seen
+    to describe one event, which can only happen if both accounts are extracted —
+    and under concatenation the second publisher's account of this morning's fire
+    is never in the same budget as the first's. The surface would stay entirely
+    `unconfirmed` no matter how many outlets were added, and the obvious diagnosis
+    would be "Rumour Guard is too strict", which would be wrong.
+
+    Round-robin spreads one run's budget across the publishers, so the articles
+    that corroborate each other arrive in the same pass.
+
+    Order within each batch is preserved, and a publisher that returned nothing
+    simply drops out. Nothing is lost when the cut falls mid-cycle either: what is
+    not extracted this run stays in `raw_documents` with `extracted_at` null, which
+    is the retry queue the next run drains.
+    """
+    queued: list[RawDocument] = []
+    for row in zip_longest(*batches):
+        queued.extend(doc for doc in row if doc is not None)
+    return queued
+
+
 def is_relevant(ref: ArticleRef, now: datetime) -> bool:
-    """Worth fetching? Recent, not from an excluded desk, headline names an incident."""
+    """
+    Worth fetching? Recent, not from an excluded desk, and the headline names
+    either a mobility incident or a crime.
+
+    One filter for both halves of the extraction, because one fetch feeds both. An
+    article that mentions a road blockade and a stabbing is read once.
+    """
     if ref.section in EXCLUDED_SECTIONS:
         return False
     if ref.published_at is not None and ref.published_at < now - LOOKBACK:
         return False
-    return any(word in ref.title for word in INCIDENT_WORDS)
+    return names_an_incident(ref.title) or names_a_crime(ref.title)
 
 
 def _without_generic_tail(text: str) -> str:
@@ -265,12 +684,22 @@ def _without_generic_tail(text: str) -> str:
     its own it identifies nowhere.
     """
     current = text
+    tails = sorted(
+        [(tail, False) for tail in PLACE_GENERIC_TAIL]
+        + [(tail, True) for tail in PLACE_GENERIC_TAIL_EN],
+        key=lambda pair: len(pair[0]),
+        reverse=True,
+    )
     while True:
-        for tail in sorted(PLACE_GENERIC_TAIL, key=len, reverse=True):
-            if current == tail:
+        for tail, fold in tails:
+            # Bangla has no case, so it is compared as written; English is compared
+            # casefolded because copy writes "Mirpur Road" and "Mirpur road" alike.
+            subject = current.casefold() if fold else current
+            candidate = tail.casefold() if fold else tail
+            if subject == candidate:
                 return current  # nothing but a category; let it fail to resolve
-            if current.endswith(" " + tail):
-                current = current[: len(current) - len(tail)].strip()
+            if subject.endswith(" " + candidate):
+                current = current[: len(current) - len(candidate)].strip()
                 break
         else:
             return current
@@ -290,9 +719,42 @@ def place_candidates(location_text: str) -> list[str]:
     itself and never to its own prefix.
     """
     original = " ".join(location_text.split())
-    cleaned = " ".join(w for w in original.replace("-", " ").split() if w not in PLACE_FILLER)
-    trimmed = _without_generic_tail(cleaned)
-    return [c for c in dict.fromkeys((original, cleaned, trimmed)) if c]
+
+    def reduce(text: str) -> tuple[str, str]:
+        cleaned = " ".join(
+            w
+            for w in text.replace("-", " ").split()
+            if w not in PLACE_FILLER and w.casefold() not in PLACE_FILLER_EN
+        )
+        return cleaned, _without_generic_tail(cleaned)
+
+    cleaned, trimmed = reduce(original)
+    candidates = [original, cleaned, trimmed]
+
+    # Comma-separated qualifiers, most specific first.
+    #
+    # News copy names a place by narrowing: "Road No 1 in Lake Circus, Kalabagan",
+    # "সাতমসজিদ রোড, ধানমন্ডি". The reductions above only strip wrapping words and
+    # trailing category nouns, so neither form resolves even when one of the parts
+    # is an entry the gazetteer knows perfectly well — which is exactly what
+    # happened on the first live crime extraction, 2026-10-14: `Kalabagan` resolves
+    # on its own and `Road No 1 in Lake Circus, Kalabagan` did not, so a located
+    # report was discarded for want of a comma.
+    #
+    # Each segment is a contiguous sub-phrase of what the article wrote, so this
+    # stays on the right side of "discarded, never guessed" for the same reason
+    # the other two reductions do: it can make a match possible, it cannot invent
+    # one. The ordering is what keeps it honest — the whole phrase and its
+    # reductions are tried first, so a place the gazetteer knows in full always
+    # wins over its own less specific qualifier.
+    if "," in original:
+        for segment in (part.strip() for part in original.split(",")):
+            if not segment:
+                continue
+            segment_cleaned, segment_trimmed = reduce(segment)
+            candidates += [segment, segment_cleaned, segment_trimmed]
+
+    return [c for c in dict.fromkeys(candidates) if c]
 
 
 async def resolve_news_place(location_text: str) -> GeoResolution:
@@ -359,6 +821,67 @@ def flag_row(
     }
 
 
+def crime_discard_reason(crime: NewsCrime, place: GeoResolution) -> str | None:
+    """
+    Why an extracted crime must not be published, or None if it may.
+
+    The mobility version has a third test — `mobility_impact == NONE` — which has
+    no analogue here. A crime with no effect on traffic is still a crime that was
+    reported, and this surface is not making a traffic claim about it.
+    """
+    if crime.confidence < MIN_CONFIDENCE:
+        return "low_confidence"
+    if place.method == "unresolved":
+        return "unresolved_location"
+    return None
+
+
+def crime_row(
+    *, doc: RawDocument, index: int, crime: NewsCrime, place: GeoResolution, now: datetime
+) -> dict[str, Any]:
+    """
+    One crime as an insert-shaped `news_crime_incidents` row.
+
+    `expires_at` is absent because the database trigger derives it, and
+    `source_count` is 1 whatever the input, because this agent publishes exactly
+    one publisher's account at a time — corroboration happens in `crime_guard`,
+    not here.
+    """
+    observed_at = doc.published_at or doc.fetched_at
+    return {
+        "event_key": f"{CRIME_KEY_PREFIX}{doc.doc_id[:16]}-{index}",
+        "category": crime.category,
+        "status": "published",
+        "lat": place.lat,
+        "lon": place.lon,
+        # The wider of the category's own reach and our uncertainty about where it
+        # is, capped at the column's 1 km. Same rule as `flag_row`, a tighter cap:
+        # a street crime resolved only to a whole thana is a claim about a corner we
+        # cannot locate, and widening it to cover the thana is how one incident
+        # becomes an area label.
+        "radius_m": min(1_000, max(radius_for(crime.category), place.radius_m)),
+        "severity_0": severity_for_crime(crime.category),
+        "half_life_hours": NEWS_CRIME_HALF_LIFE_HOURS,
+        "observed_at": observed_at,
+        "source_count": 1,
+        "sources": [
+            {
+                "source_id": doc.source_id,
+                "url": doc.url,
+                "published_at": observed_at.isoformat(),
+                "title": doc.title,
+                "snippet": None,
+            }
+        ],
+        "statement": to_attributed_statement(
+            category=crime.category,
+            publishers=[publisher_name(doc.source_id)],
+            observed_at=observed_at,
+            now=now,
+        ),
+    }
+
+
 def user_prompt(doc: RawDocument) -> str:
     published = doc.published_at.isoformat() if doc.published_at else "unknown"
     return f"Headline: {doc.title}\nPublished: {published}\n\n{doc.body[:MAX_BODY_CHARS]}"
@@ -381,6 +904,139 @@ _INSERT_FLAG: Final = text(
     returning flag_id
     """
 )
+
+_INSERT_CRIME: Final = text(
+    """
+    insert into public.news_crime_incidents
+        (event_key, category, status, location, radius_m, severity_0, half_life_hours,
+         observed_at, source_count, sources, statement)
+    values
+        (:event_key, :category, :status,
+         extensions.ST_SetSRID(extensions.ST_MakePoint(:lon, :lat), 4326)::extensions.geography,
+         :radius_m, :severity_0, :half_life_hours, :observed_at,
+         :source_count, cast(:sources as jsonb), :statement)
+    returning incident_id
+    """
+)
+
+_INSERT_EXTRACTED_CRIME: Final = text(
+    """
+    insert into public.extracted_crimes
+        (doc_id, category, summary_en, location_text, extraction_confidence,
+         source, news_crime_id, discarded_reason)
+    values
+        (:doc_id, :category, :summary_en, :location_text, :confidence,
+         cast(:source as jsonb), :news_crime_id, :discarded_reason)
+    """
+)
+
+_SOURCES_OF: Final = text(
+    "select sources from public.news_crime_incidents where incident_id = :incident_id"
+)
+
+
+async def _publish_crime(
+    db: AsyncSession, doc: RawDocument, index: int, crime: NewsCrime, dry_run: bool
+) -> tuple[bool, str | None]:
+    """
+    Write one extracted crime and, if it qualifies, its published incident.
+
+    The mobility path's twin, and it runs the same three steps in the same order —
+    resolve the place without an LLM, decide whether it may be published, then ask
+    the corroboration guard whether this is a new event or another account of one
+    already on the map.
+
+    The one structural difference is where the statement comes from. A flag's
+    statement depends only on the flag, so `flag_row` can build it once. An
+    attributed statement names **every** publisher that has carried the story, so
+    it has to be rebuilt at merge time from the combined source list — which is why
+    `crime_guard.merge_into` takes a statement rather than writing one.
+    """
+    place = await resolve_news_place(crime.location_text)
+    reason = crime_discard_reason(crime, place)
+    now = datetime.now(UTC)
+    logger.info(
+        "%s crime #%d %s at %r -> %s",
+        doc.source_id,
+        index,
+        crime.category,
+        crime.location_text,
+        reason or f"incident near {place.resolved_name}",
+    )
+    if dry_run:
+        return reason is None, reason
+
+    source = {
+        "source_id": doc.source_id,
+        "url": doc.url,
+        "title": doc.title,
+        "published_at": doc.published_at.isoformat() if doc.published_at else None,
+    }
+
+    incident_id: UUID | None = None
+    if reason is None:
+        row = crime_row(doc=doc, index=index, crime=crime, place=place, now=now)
+        match = await find_crime_duplicate(
+            db,
+            category=crime.category,
+            lat=row["lat"],
+            lon=row["lon"],
+            radius_m=row["radius_m"],
+            observed_at=row["observed_at"],
+            summary_en=crime.summary_en,
+            now=now,
+        )
+        if match is None:
+            result = await db.execute(
+                _INSERT_CRIME, {**row, "sources": json.dumps(row["sources"], ensure_ascii=False)}
+            )
+            incident_id = result.scalar_one()
+        else:
+            # Another outlet's account of something already published. Append this
+            # publisher if it is not already cited -- `source_count` counts
+            # publishers, not articles -- and rebuild the sentence so it names them
+            # all.
+            existing = (
+                await db.execute(_SOURCES_OF, {"incident_id": match.incident_id})
+            ).scalar_one() or []
+            combined = list(existing)
+            if doc.source_id not in {s.get("source_id") for s in combined}:
+                combined.append(row["sources"][0])
+            publishers = [
+                publisher_name(s["source_id"])
+                for s in combined
+                if s.get("source_id")
+            ]
+            incident_id = await merge_crime_into(
+                db,
+                match,
+                source=source,
+                sources=combined,
+                statement=to_attributed_statement(
+                    category=crime.category,
+                    publishers=publishers,
+                    observed_at=row["observed_at"],
+                    now=now,
+                ),
+                observed_at=row["observed_at"],
+                now=now,
+            )
+
+    await db.execute(
+        _INSERT_EXTRACTED_CRIME,
+        {
+            "doc_id": doc.doc_id,
+            "category": crime.category,
+            "summary_en": crime.summary_en,
+            "location_text": crime.location_text,
+            "confidence": crime.confidence,
+            "source": json.dumps(source, ensure_ascii=False),
+            "news_crime_id": incident_id,
+            "discarded_reason": reason,
+        },
+    )
+    return reason is None, reason
+
 
 _INSERT_INCIDENT: Final = text(
     """
@@ -497,21 +1153,29 @@ class LiveRiskAgent(BaseAgent):
                 "low_confidence",
                 "unresolved_location",
                 "rejected",
+                # The crime half, counted separately so a run's log says which
+                # surface the work went to. `dict.fromkeys` pre-seeds them because
+                # the publish loop increments by key and a missing key would raise.
+                "crimes",
+                "crimes_published",
+                "crime_low_confidence",
+                "crime_unresolved_location",
             ),
             0.0,
         )
 
-        fresh: list[RawDocument] = []
+        by_source: list[list[RawDocument]] = []
         async with Fetcher() as fetcher:
             for source in SOURCES:
                 try:
-                    fresh += await self._ingest(source, fetcher, db, ctx, metrics, errors)
+                    by_source.append(await self._ingest(source, fetcher, db, ctx, metrics, errors))
                     if not ctx.dry_run:
                         await db.commit()
                 except Exception as problem:  # noqa: BLE001 - one publisher must not stop the rest
                     await db.rollback()
                     errors.append(f"{source.source_id}: {type(problem).__name__}: {problem}")
 
+        fresh = interleave(by_source)
         fresh_ids = {doc.doc_id for doc in fresh}
         retry = await store.unextracted(db, since=ctx.now - LOOKBACK, limit=MAX_EXTRACTIONS_PER_RUN)
         queue = (fresh + [doc for doc in retry if doc.doc_id not in fresh_ids])[
@@ -541,6 +1205,13 @@ class LiveRiskAgent(BaseAgent):
                     metrics["incidents"] += 1
                     published, reason = await _publish(db, doc, index, incident, ctx.dry_run)
                     metrics["published" if published else str(reason)] += 1
+                # The second half of the same extraction, down a path that shares
+                # nothing with the first but the article it came from: a different
+                # table, a different guard, a different decay. See `NewsExtraction`.
+                for index, crime in enumerate(extraction.crimes):
+                    metrics["crimes"] += 1
+                    published, reason = await _publish_crime(db, doc, index, crime, ctx.dry_run)
+                    metrics["crimes_published" if published else f"crime_{reason}"] += 1
                 if not ctx.dry_run:
                     await store.mark_extracted(db, doc.doc_id, ctx.now)
                     await db.commit()
