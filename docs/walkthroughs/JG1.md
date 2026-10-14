@@ -46,8 +46,9 @@ Expect one of two outcomes:
   `drop table public.journeys;` and paste the file again. Nothing is lost — such a table has never
   held a journey, because the endpoint that writes them did not exist before it.
 
-`migrate.py up` will refuse, and not because of this migration: the ledger carries a row for version
-`20261014120000` with no file on disk to explain it. See **Rough edges**.
+**Already done.** `migrate.py status` reads `12 applied, 0 pending` with no drift, and
+`20261014150000__journeys` is among them. The section above is kept because it is what to do on a
+database where this has not been run — a fresh clone, or the demo database if it is rebuilt.
 
 ## Steps
 
@@ -73,12 +74,14 @@ Expect one of two outcomes:
 
 ## Rough edges
 
-* **`migrate.py up` is blocked by a ledger row nobody can account for.** `public.schema_migrations`
-  has a row for version `20261014120000`, applied 2026-10-14 08:19 UTC, with no file in the
-  repository on any branch and nothing in git history that ever added one. `up` refuses to run while
-  any applied migration has changed or vanished, so it refuses for *all* migrations, not just this
-  one. Hence step 0 being a paste. **Whoever ran that needs to say what it was** — until then,
-  deleting the row would be destroying the only evidence of it.
+* **Step 0 is a paste, not `migrate.py up`, and that was once forced.** While JG1 was being built
+  the ledger carried a row for version `20261014120000` with no file in this branch to explain it,
+  and `up` refuses to run while *any* applied migration has changed or vanished — so it refused for
+  every migration. Merging `develop` resolved it: the row is
+  `20261014120000__news_crime_incidents`, applied on 2026-10-14 before the branch that carries it
+  was pushed, and the file's sha256 matches the ledger exactly. Nothing was deleted and nothing was
+  lost. The lesson stands, though: applying a migration by paste before its file is pushed blocks
+  the runner for everybody else on the team until they fetch.
 * **Two taps to resume, not one.** `Resume` restores route mode and the route and then stops at the
   comparison card; you press `Start` again. That is on purpose for two reasons. A fresh route is a
   fresh set of candidates and which one to take is a question worth seeing the answer to. And the
