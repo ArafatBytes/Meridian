@@ -10,6 +10,11 @@ receive Android push (removed in SDK 53) and cannot load a native module like
 delivery waits for the build. Track B walkthroughs are **not part of the finale** — nothing in the
 demo script depends on them.
 
+**Journey Guardian lands as `JG1.md` ... `JG7.md`**, one per phase, written as each phase is
+finished. The phases are in [`../../JOURNEY_GUARDIAN.md`](../../JOURNEY_GUARDIAN.md) and indexed in
+`DEMO_PLAN.md` §6. None of them exist yet, and an empty one should not be created ahead of the work:
+a walkthrough describes what was built, so writing it first guarantees it describes something else.
+
 **A walkthrough is a play-script you run on a phone, as the user, with no knowledge of the code.**
 It is written by the sprint owner, at the end of the sprint, in the same commit as the work, and the
 owner must have actually run it on a real device before pushing. `DEMO_PLAN.md` §0 makes this a
