@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   TextInput,
   Keyboard,
+  Linking,
   Platform,
   useWindowDimensions,
 } from 'react-native';
@@ -35,7 +36,7 @@ import { DEFAULT_MAP_REGION } from '../../constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { CrimeCategory, MainTabParamList } from '../../types';
-import { crimeCategoryLabel } from '../../types/contracts/crime';
+import { CRIME_COLORS, crimeCategoryLabel, crimeColor } from '../../types/contracts/crime';
 import type { RiskFlag } from '../../types/contracts/risk';
 import { routeService, RouteResponse, Location } from '../../services/route.service';
 import { riskService, type IngestionStatus } from '../../services/risk.service';
@@ -50,6 +51,8 @@ import { AS_OF_PRESETS, asOfSummary } from '../../features/risk/scheduled';
 import type { GeoResolution } from '../../types/contracts/geo';
 import type { CommunityCluster } from '../../types/contracts/community';
 import { CommunityClusterMarker } from '../../components/CommunityClusterMarker';
+import { NewsCrimeMarker } from '../../components/NewsCrimeMarker';
+import type { NewsCrimeIncident } from '../../types/contracts/newsCrime';
 import { useNavigation as useRouteFollow } from '../../features/navigation/useNavigation';
 import { NavigationBanner } from '../../features/navigation/NavigationBanner';
 import { FollowMarker } from '../../features/navigation/FollowMarker';
@@ -80,31 +83,13 @@ interface CrimeReportData {
 
 // Defect 3. These keys were capitalised ('Theft') while the database enum and
 // everything the app sends are lowercase ('theft'), so every lookup returned
-// undefined and NO crime marker had a colour. Typed as Record<CrimeCategory, ...>
-// against the single list in types/contracts/crime.ts, so a missing category is
-// now a compile error rather than a grey pin.
-const CRIME_COLORS: Record<CrimeCategory, string> = {
-  theft: '#FF9800', // Orange
-  robbery: '#F44336', // Red
-  assault: '#E91E63', // Pink
-  harassment: '#9C27B0', // Purple
-  vandalism: '#607D8B', // Blue Grey
-  burglary: '#FF5722', // Deep Orange
-  fraud: '#2196F3', // Blue
-  other: '#9E9E9E', // Grey
-};
-
-const CRIME_FALLBACK_COLOR = '#9E9E9E';
-
-/**
- * Colour for a category that may not be one we know.
- *
- * Reports come straight out of Supabase with no validation step, so a row written
- * before an enum change can carry anything. Returning grey beats returning
- * undefined, which is how this bug looked for the whole of S01.
- */
-const crimeColor = (category: string): string =>
-  CRIME_COLORS[category as CrimeCategory] ?? CRIME_FALLBACK_COLOR;
+// undefined and NO crime marker had a colour.
+//
+// `CRIME_COLORS` and `crimeColor` now live in `types/contracts/crime.ts`, beside
+// the single `CRIME_CATEGORIES` list they are keyed off. Moved there in S30, when
+// `NewsCrimeMarker` became the second drawer of crime markers and a local copy
+// here would have been the second definition waiting to drift -- which is the
+// whole of Defect 3, repeated.
 
 // ---------------------------------------------------------------------------
 // Risk flags
@@ -252,6 +237,18 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
    */
   const [showMyReports, setShowMyReports] = useState(false);
   const [clusters, setClusters] = useState<CommunityCluster[]>([]);
+  /**
+   * S30. Crime reported by named publishers, as attributed citations.
+   *
+   * A third list rather than entries merged into `clusters` or `riskFlags`: three
+   * kinds of claim with three reliability models, and a screen that cannot tell
+   * them apart will draw them alike. That is Defect 54, which is already on the
+   * record once.
+   */
+  const [newsCrime, setNewsCrime] = useState<NewsCrimeIncident[]>([]);
+  const [selectedNewsCrime, setSelectedNewsCrime] = useState<NewsCrimeIncident | null>(
+    null,
+  );
   const [riskFlags, setRiskFlags] = useState<RiskFlag[]>([]);
   const [riskError, setRiskError] = useState<string | null>(null);
   const [ingestion, setIngestion] = useState<IngestionStatus | null>(null);
@@ -627,6 +624,33 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   /**
+   * Crime reported by named news publishers, for the area around the map centre.
+   *
+   * The third layer, fetched the same way as the other two and guarded by the same
+   * `riskRequestId` so a slow reply for an old viewport cannot overwrite a newer
+   * one. Through the backend rather than Supabase: `news_crime_incidents` is
+   * RLS-locked with no policies, and the decay and the hour-of-day curve that make
+   * `severityNow` meaningful are server arithmetic.
+   *
+   * A failure is silent beyond a warning, and an empty layer is the *normal*
+   * answer for most of Dhaka — most corridors have had no published crime report
+   * within the last few days.
+   */
+  const fetchNewsCrime = async (offsetHours = asOfOffsetHours) => {
+    const asOf = asOfFromOffset(offsetHours);
+    const id = riskRequestId.current;
+    try {
+      const result = await riskService.getNewsCrimeInRegion(region, asOf);
+      if (id !== riskRequestId.current) return;
+      setNewsCrime(result.incidents);
+    } catch (error: any) {
+      if (id !== riskRequestId.current) return;
+      console.warn('News crime unavailable:', error?.message ?? error);
+      setNewsCrime([]);
+    }
+  };
+
+  /**
    * Load risk flags for the area around the current map centre.
    *
    * Through the backend, not Supabase: `risk_flags` is RLS-locked with no policies
@@ -673,6 +697,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     // fetch reads that counter rather than incrementing it, so the two share one
     // notion of "still current".
     fetchClusters();
+    fetchNewsCrime();
     refreshNewsStatus();
   };
 
@@ -728,6 +753,11 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     // like it only applies to news -- and a cluster that never faded on screen is
     // the permanent street label this whole design is built to avoid.
     fetchClusters(offsetHours);
+    // And the news-crime layer, on a five-day half-life. This is the layer where a
+    // stuck pin would matter most: a mobility flag that failed to fade is a stale
+    // traffic claim, while a crime pin that never fades is a permanent accusation
+    // attached to a street corner.
+    fetchNewsCrime(offsetHours);
   };
 
   /**
@@ -1350,6 +1380,24 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
               key={cluster.clusterId}
               cluster={cluster}
               onPress={() => {}}
+            />
+          ))}
+
+        {/* What the newspapers reported, as attributed citations. S30.
+            Drawn after the clusters and before the user's own pins, which puts the
+            three published layers in ascending order of how specific their claim is:
+            a count of anonymous reports, then a named publisher's account, then the
+            user's own record on top.
+
+            Hidden in route mode for the same reason as the clusters -- the route card
+            carries its own list, and the browse map's job in route mode is to show
+            the line. */}
+        {!routeMode &&
+          newsCrime.map(incident => (
+            <NewsCrimeMarker
+              key={incident.incidentId}
+              incident={incident}
+              onPress={setSelectedNewsCrime}
             />
           ))}
 
@@ -1994,6 +2042,74 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
 
       {/* Crime Details Modal */}
       {/* A detail the user opened by tapping a pin, so `dismissable`. */}
+      {/* A tapped news-crime pin. S30.
+
+          Its own sheet rather than a branch inside the crime-report one, because
+          the two say different things: that sheet shows the user their own filed
+          record, and this shows somebody else's published article. The only
+          interactive element here is the link out — the point of an attributed
+          claim is that the reader can go and check it. */}
+      <Sheet
+        visible={selectedNewsCrime !== null}
+        variant="bottom"
+        onClose={() => setSelectedNewsCrime(null)}
+        dismissable
+        padding={space.xl}
+      >
+        {selectedNewsCrime && (
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.categoryBadge}>
+                <Text
+                  style={[
+                    styles.categoryText,
+                    { color: crimeColor(selectedNewsCrime.category) },
+                  ]}
+                >
+                  {crimeCategoryLabel(selectedNewsCrime.category)}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedNewsCrime(null)}>
+                <Ionicons name="close" size={28} color={t.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Verbatim. It names the publisher, which is the licence for this
+                layer to use the word above at all. Never rebuilt here. */}
+            <Text style={styles.newsCrimeStatement}>{selectedNewsCrime.statement}</Text>
+
+            <Text style={styles.newsCrimeMeta}>
+              {selectedNewsCrime.sourceCount === 1
+                ? 'Reported by one publisher'
+                : `Reported independently by ${selectedNewsCrime.sourceCount} publishers`}
+            </Text>
+
+            {selectedNewsCrime.sources.map(source => (
+              <TouchableOpacity
+                key={source.url}
+                style={styles.newsCrimeSource}
+                onPress={() => Linking.openURL(source.url).catch(() => {})}
+                accessibilityRole="link"
+                accessibilityLabel={`Open the article from ${source.sourceId}`}
+              >
+                <Ionicons name="open-outline" size={16} color={t.brand} />
+                <Text style={styles.newsCrimeSourceText} numberOfLines={2}>
+                  {source.title?.trim() || source.url}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            {/* The honest caveat, on the screen rather than only in a docstring.
+                This layer repeats what a newspaper published; it is not a finding
+                of fact and it is not a rating of the area. */}
+            <Text style={styles.newsCrimeCaveat}>
+              This repeats what a news outlet published. It is not a judgement about
+              this area, and it fades from the map as it ages.
+            </Text>
+          </View>
+        )}
+      </Sheet>
+
       <Sheet
         visible={isModalVisible}
         variant="bottom"
@@ -2321,6 +2437,36 @@ StyleSheet.create({
     },
     categoryText: {
       ...type.bodyStrong,
+    },
+    // S30, the news-crime sheet.
+    newsCrimeStatement: {
+      ...type.heading,
+      color: t.text,
+      marginBottom: space.sm,
+    },
+    newsCrimeMeta: {
+      ...type.caption,
+      color: t.textSoft,
+      marginBottom: space.lg,
+    },
+    newsCrimeSource: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space.sm,
+      paddingVertical: space.sm,
+    },
+    newsCrimeSourceText: {
+      ...type.body,
+      color: t.brand,
+      flex: 1,
+    },
+    newsCrimeCaveat: {
+      ...type.caption,
+      color: t.textSoft,
+      marginTop: space.lg,
+      // The caveat is the smallest text on the sheet and still has to be legible:
+      // it is the sentence that keeps this layer honest.
+      lineHeight: 18,
     },
     crimeTitle: {
       ...type.heading,

@@ -1,0 +1,1011 @@
+{
+  "entries": 6054,
+  "groups": {
+    "roads": {
+      "counts": {
+        "RESOLVED": 25,
+        "REFUSED": 6,
+        "UNKNOWN": 10
+      },
+      "rows": [
+        {
+          "query": "Satmasjid Road",
+          "outcome": "RESOLVED",
+          "detail": "Satmasjid Road [road] r=1154m"
+        },
+        {
+          "query": "সাতমসজিদ রোড",
+          "outcome": "RESOLVED",
+          "detail": "Satmasjid Road [road] r=1154m"
+        },
+        {
+          "query": "Mirpur Road",
+          "outcome": "REFUSED",
+          "detail": "known, but the name cannot identify one place"
+        },
+        {
+          "query": "মিরপুর রোড",
+          "outcome": "REFUSED",
+          "detail": "known, but the name cannot identify one place"
+        },
+        {
+          "query": "Airport Road",
+          "outcome": "RESOLVED",
+          "detail": "Airport Road [road] r=822m"
+        },
+        {
+          "query": "Begum Rokeya Sarani",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "বেগম রোকেয়া সরণি",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "Pragati Sarani",
+          "outcome": "RESOLVED",
+          "detail": "Pragati Sarani [road] r=1150m"
+        },
+        {
+          "query": "প্রগতি সরণি",
+          "outcome": "RESOLVED",
+          "detail": "Pragati Sarani [road] r=1150m"
+        },
+        {
+          "query": "Bijoy Sarani",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "বিজয় সরণি",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "Manik Mia Avenue",
+          "outcome": "RESOLVED",
+          "detail": "Manik Mia Avenue [road] r=640m"
+        },
+        {
+          "query": "Kazi Nazrul Islam Avenue",
+          "outcome": "REFUSED",
+          "detail": "known, but the name cannot identify one place"
+        },
+        {
+          "query": "Elephant Road",
+          "outcome": "REFUSED",
+          "detail": "known, but the name cannot identify one place"
+        },
+        {
+          "query": "New Elephant Road",
+          "outcome": "RESOLVED",
+          "detail": "New Elephant Road [road] r=254m"
+        },
+        {
+          "query": "Green Road",
+          "outcome": "RESOLVED",
+          "detail": "Green Road [road] r=640m"
+        },
+        {
+          "query": "Panthapath",
+          "outcome": "RESOLVED",
+          "detail": "Panthopath [area] r=1200m"
+        },
+        {
+          "query": "পান্থপথ",
+          "outcome": "RESOLVED",
+          "detail": "Panthopath [area] r=1200m"
+        },
+        {
+          "query": "Bailey Road",
+          "outcome": "RESOLVED",
+          "detail": "Baily Road [road] r=250m"
+        },
+        {
+          "query": "বেইলি রোড",
+          "outcome": "RESOLVED",
+          "detail": "New Baily Road [road] r=250m"
+        },
+        {
+          "query": "Gulshan Avenue",
+          "outcome": "RESOLVED",
+          "detail": "Bir Uttam Mir Shawkat Sarak [road] r=915m"
+        },
+        {
+          "query": "Kemal Ataturk Avenue",
+          "outcome": "RESOLVED",
+          "detail": "Kamal Ataturk Avenue [road] r=712m"
+        },
+        {
+          "query": "Tejgaon Link Road",
+          "outcome": "RESOLVED",
+          "detail": "Tejgaon Link Road [road] r=250m"
+        },
+        {
+          "query": "Hatirjheel",
+          "outcome": "RESOLVED",
+          "detail": "Hatirjheel Lake [water] r=1314m"
+        },
+        {
+          "query": "হাতিরঝিল",
+          "outcome": "RESOLVED",
+          "detail": "Hatirjheel Lake [water] r=1314m"
+        },
+        {
+          "query": "Toyenbee Circular Road",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "Shahid Tajuddin Ahmed Sarani",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "Rokeya Sarani",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "DIT Road",
+          "outcome": "REFUSED",
+          "detail": "known, but the name cannot identify one place"
+        },
+        {
+          "query": "Progoti Sarani",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "Shaheed Buddhijibi Road",
+          "outcome": "RESOLVED",
+          "detail": "Shaheed Buddhijibi Bridge Aproach Road [road] r=606m"
+        },
+        {
+          "query": "Kakrail",
+          "outcome": "RESOLVED",
+          "detail": "Kakrail [neighbourhood] r=600m"
+        },
+        {
+          "query": "কাকরাইল",
+          "outcome": "RESOLVED",
+          "detail": "Kakrail [neighbourhood] r=600m"
+        },
+        {
+          "query": "Nawabpur Road",
+          "outcome": "RESOLVED",
+          "detail": "Nawabpur Road [road] r=352m"
+        },
+        {
+          "query": "Johnson Road",
+          "outcome": "RESOLVED",
+          "detail": "Johnson Road [road] r=250m"
+        },
+        {
+          "query": "Hare Road",
+          "outcome": "RESOLVED",
+          "detail": "Hare Road [road] r=250m"
+        },
+        {
+          "query": "Minto Road",
+          "outcome": "RESOLVED",
+          "detail": "Minto Road [road] r=528m"
+        },
+        {
+          "query": "Sonargaon Road",
+          "outcome": "RESOLVED",
+          "detail": "Bir Uttam CR Datta Road [road] r=409m"
+        },
+        {
+          "query": "Mymensingh Road",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "Outer Circular Road",
+          "outcome": "REFUSED",
+          "detail": "known, but the name cannot identify one place"
+        },
+        {
+          "query": "Inner Circular Road",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        }
+      ]
+    },
+    "thanas": {
+      "counts": {
+        "RESOLVED": 57,
+        "REFUSED": 1,
+        "UNKNOWN": 6
+      },
+      "rows": [
+        {
+          "query": "Hazaribagh",
+          "outcome": "RESOLVED",
+          "detail": "Hazaribagh [area] r=1200m"
+        },
+        {
+          "query": "হাজারীবাগ",
+          "outcome": "RESOLVED",
+          "detail": "Hazaribagh [area] r=1200m"
+        },
+        {
+          "query": "Kamrangirchar",
+          "outcome": "RESOLVED",
+          "detail": "Kamrangirchar Thana [police] r=400m"
+        },
+        {
+          "query": "কামরাঙ্গীরচর",
+          "outcome": "RESOLVED",
+          "detail": "Kamrangirchor [area] r=1200m"
+        },
+        {
+          "query": "Shyampur",
+          "outcome": "RESOLVED",
+          "detail": "Shyampur [area] r=1200m"
+        },
+        {
+          "query": "শ্যামপুর",
+          "outcome": "RESOLVED",
+          "detail": "Shyampur [area] r=1200m"
+        },
+        {
+          "query": "Kadamtali",
+          "outcome": "RESOLVED",
+          "detail": "Kadamtali [area] r=1200m"
+        },
+        {
+          "query": "কদমতলী",
+          "outcome": "RESOLVED",
+          "detail": "Kadamtali [area] r=1200m"
+        },
+        {
+          "query": "Jatrabari",
+          "outcome": "RESOLVED",
+          "detail": "Jatrabari [area] r=1200m"
+        },
+        {
+          "query": "যাত্রাবাড়ী",
+          "outcome": "RESOLVED",
+          "detail": "Jatrabari [area] r=1200m"
+        },
+        {
+          "query": "Demra",
+          "outcome": "RESOLVED",
+          "detail": "Demra [area] r=1200m"
+        },
+        {
+          "query": "ডেমরা",
+          "outcome": "RESOLVED",
+          "detail": "Demra [area] r=1200m"
+        },
+        {
+          "query": "Khilgaon",
+          "outcome": "RESOLVED",
+          "detail": "Khilgaon [area] r=1200m"
+        },
+        {
+          "query": "খিলগাঁও",
+          "outcome": "RESOLVED",
+          "detail": "Khilgaon [area] r=1200m"
+        },
+        {
+          "query": "Sabujbagh",
+          "outcome": "RESOLVED",
+          "detail": "Sabujbag [neighbourhood] r=600m"
+        },
+        {
+          "query": "সবুজবাগ",
+          "outcome": "RESOLVED",
+          "detail": "Sabujbag [neighbourhood] r=600m"
+        },
+        {
+          "query": "Mugda",
+          "outcome": "RESOLVED",
+          "detail": "Mugda [area] r=1200m"
+        },
+        {
+          "query": "মুগদা",
+          "outcome": "RESOLVED",
+          "detail": "Mugda [area] r=1200m"
+        },
+        {
+          "query": "Badda",
+          "outcome": "RESOLVED",
+          "detail": "Badda [area] r=1200m"
+        },
+        {
+          "query": "বাড্ডা",
+          "outcome": "RESOLVED",
+          "detail": "Badda [area] r=1200m"
+        },
+        {
+          "query": "Vatara",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "ভাটারা",
+          "outcome": "RESOLVED",
+          "detail": "Bhatara [area] r=1200m"
+        },
+        {
+          "query": "Khilkhet",
+          "outcome": "RESOLVED",
+          "detail": "Khilkhet [area] r=1200m"
+        },
+        {
+          "query": "খিলক্ষেত",
+          "outcome": "RESOLVED",
+          "detail": "Khilkhet [area] r=1200m"
+        },
+        {
+          "query": "Uttarkhan",
+          "outcome": "RESOLVED",
+          "detail": "Uttar Khan [area] r=1200m"
+        },
+        {
+          "query": "উত্তরখান",
+          "outcome": "RESOLVED",
+          "detail": "Uttar Khan General Hospitl [hospital] r=250m"
+        },
+        {
+          "query": "Dakshinkhan",
+          "outcome": "RESOLVED",
+          "detail": "Dakshinkhan Bazar [market] r=200m"
+        },
+        {
+          "query": "দক্ষিণখান",
+          "outcome": "RESOLVED",
+          "detail": "Dokkhin Khan [area] r=1200m"
+        },
+        {
+          "query": "Turag",
+          "outcome": "RESOLVED",
+          "detail": "Turag Housing [neighbourhood] r=600m"
+        },
+        {
+          "query": "তুরাগ",
+          "outcome": "RESOLVED",
+          "detail": "Turag Housing [neighbourhood] r=600m"
+        },
+        {
+          "query": "Pallabi",
+          "outcome": "RESOLVED",
+          "detail": "Pallabi [terminal] r=1200m"
+        },
+        {
+          "query": "পল্লবী",
+          "outcome": "RESOLVED",
+          "detail": "Pallabi [terminal] r=1200m"
+        },
+        {
+          "query": "Rupnagar",
+          "outcome": "REFUSED",
+          "detail": "known, but the name cannot identify one place"
+        },
+        {
+          "query": "Darus Salam",
+          "outcome": "RESOLVED",
+          "detail": "Darus Salam [neighbourhood] r=600m"
+        },
+        {
+          "query": "Shah Ali",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "Kafrul",
+          "outcome": "RESOLVED",
+          "detail": "Kafrul [area] r=1200m"
+        },
+        {
+          "query": "কাফরুল",
+          "outcome": "RESOLVED",
+          "detail": "Kafrul [area] r=1200m"
+        },
+        {
+          "query": "Bhashantek",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "Cantonment",
+          "outcome": "RESOLVED",
+          "detail": "Mirpur Cantonment [area] r=1200m"
+        },
+        {
+          "query": "Tejgaon",
+          "outcome": "RESOLVED",
+          "detail": "Tejgaon [area] r=1200m"
+        },
+        {
+          "query": "তেজগাঁও",
+          "outcome": "RESOLVED",
+          "detail": "Tejgaon [area] r=1200m"
+        },
+        {
+          "query": "Ramna",
+          "outcome": "RESOLVED",
+          "detail": "Ramna [area] r=1200m"
+        },
+        {
+          "query": "রমনা",
+          "outcome": "RESOLVED",
+          "detail": "Ramna [area] r=1200m"
+        },
+        {
+          "query": "Paltan",
+          "outcome": "RESOLVED",
+          "detail": "Paltan [area] r=1200m"
+        },
+        {
+          "query": "পল্টন",
+          "outcome": "RESOLVED",
+          "detail": "Paltan [area] r=1200m"
+        },
+        {
+          "query": "Sutrapur",
+          "outcome": "RESOLVED",
+          "detail": "Sutrapur [area] r=1200m"
+        },
+        {
+          "query": "সূত্রাপুর",
+          "outcome": "RESOLVED",
+          "detail": "Sutrapur [area] r=1200m"
+        },
+        {
+          "query": "Kotwali",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "কোতোয়ালী",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "Bangshal",
+          "outcome": "RESOLVED",
+          "detail": "Bongshal [area] r=1200m"
+        },
+        {
+          "query": "বংশাল",
+          "outcome": "RESOLVED",
+          "detail": "Bongshal [area] r=1200m"
+        },
+        {
+          "query": "Chawkbazar",
+          "outcome": "RESOLVED",
+          "detail": "Chawkbazar [area] r=1200m"
+        },
+        {
+          "query": "চকবাজার",
+          "outcome": "RESOLVED",
+          "detail": "Chawkbazar [area] r=1200m"
+        },
+        {
+          "query": "Lalbagh",
+          "outcome": "RESOLVED",
+          "detail": "Lalbagh Road [road] r=663m"
+        },
+        {
+          "query": "লালবাগ",
+          "outcome": "RESOLVED",
+          "detail": "Lalbag [area] r=1200m"
+        },
+        {
+          "query": "Gendaria",
+          "outcome": "RESOLVED",
+          "detail": "Gendaria [area] r=1200m"
+        },
+        {
+          "query": "গেন্ডারিয়া",
+          "outcome": "RESOLVED",
+          "detail": "Gendaria [area] r=1200m"
+        },
+        {
+          "query": "Wari",
+          "outcome": "RESOLVED",
+          "detail": "Wari [area] r=1200m"
+        },
+        {
+          "query": "ওয়ারী",
+          "outcome": "RESOLVED",
+          "detail": "Wari [area] r=1200m"
+        },
+        {
+          "query": "Adabor",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "আদাবর",
+          "outcome": "RESOLVED",
+          "detail": "Adabar [area] r=1200m"
+        },
+        {
+          "query": "Sher-e-Bangla Nagar",
+          "outcome": "RESOLVED",
+          "detail": "Sher-E-Bangla Nagar [area] r=1200m"
+        },
+        {
+          "query": "Mohammadpur",
+          "outcome": "RESOLVED",
+          "detail": "Mohammadpur [area] r=1200m"
+        },
+        {
+          "query": "মোহাম্মদপুর",
+          "outcome": "RESOLVED",
+          "detail": "Mohammadpur [area] r=1200m"
+        }
+      ]
+    },
+    "outer city": {
+      "counts": {
+        "RESOLVED": 26,
+        "REFUSED": 2,
+        "UNKNOWN": 3
+      },
+      "rows": [
+        {
+          "query": "Matuail",
+          "outcome": "RESOLVED",
+          "detail": "Matuail [area] r=1200m"
+        },
+        {
+          "query": "মাতুয়াইল",
+          "outcome": "RESOLVED",
+          "detail": "Matuail [area] r=1200m"
+        },
+        {
+          "query": "Konapara",
+          "outcome": "RESOLVED",
+          "detail": "Konapara [neighbourhood] r=600m"
+        },
+        {
+          "query": "কোনাপাড়া",
+          "outcome": "RESOLVED",
+          "detail": "Konapara [neighbourhood] r=600m"
+        },
+        {
+          "query": "Dania",
+          "outcome": "RESOLVED",
+          "detail": "Dania Road [road] r=250m"
+        },
+        {
+          "query": "ডেমরা স্টাফ কোয়ার্টার",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "Sarulia",
+          "outcome": "RESOLVED",
+          "detail": "Sarulia [area] r=1200m"
+        },
+        {
+          "query": "Amulia",
+          "outcome": "RESOLVED",
+          "detail": "Amulia [area] r=1200m"
+        },
+        {
+          "query": "Nandipara",
+          "outcome": "RESOLVED",
+          "detail": "Nandipara [area] r=1200m"
+        },
+        {
+          "query": "নন্দীপাড়া",
+          "outcome": "RESOLVED",
+          "detail": "Nandipara [area] r=1200m"
+        },
+        {
+          "query": "Trimohoni",
+          "outcome": "RESOLVED",
+          "detail": "Trimohani [area] r=1200m"
+        },
+        {
+          "query": "Beraid",
+          "outcome": "RESOLVED",
+          "detail": "Beraid [area] r=1200m"
+        },
+        {
+          "query": "বেরাইদ",
+          "outcome": "RESOLVED",
+          "detail": "Beraid [area] r=1200m"
+        },
+        {
+          "query": "Satarkul",
+          "outcome": "RESOLVED",
+          "detail": "Satarkul [area] r=1200m"
+        },
+        {
+          "query": "সাতারকুল",
+          "outcome": "RESOLVED",
+          "detail": "Satarkul [area] r=1200m"
+        },
+        {
+          "query": "Dumni",
+          "outcome": "RESOLVED",
+          "detail": "Dumni [area] r=1200m"
+        },
+        {
+          "query": "Uttara Sector 18",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "Abdullahpur",
+          "outcome": "REFUSED",
+          "detail": "known, but the name cannot identify one place"
+        },
+        {
+          "query": "আব্দুল্লাহপুর",
+          "outcome": "REFUSED",
+          "detail": "known, but the name cannot identify one place"
+        },
+        {
+          "query": "Kamarpara",
+          "outcome": "RESOLVED",
+          "detail": "Kamarpara [neighbourhood] r=600m"
+        },
+        {
+          "query": "Diabari",
+          "outcome": "RESOLVED",
+          "detail": "Diabari [area] r=1200m"
+        },
+        {
+          "query": "দিয়াবাড়ী",
+          "outcome": "RESOLVED",
+          "detail": "Chhoto Diabari [neighbourhood] r=600m"
+        },
+        {
+          "query": "Baunia",
+          "outcome": "RESOLVED",
+          "detail": "Baunia [area] r=1200m"
+        },
+        {
+          "query": "Keraniganj",
+          "outcome": "RESOLVED",
+          "detail": "Keraniganj [town] r=1500m"
+        },
+        {
+          "query": "কেরানীগঞ্জ",
+          "outcome": "RESOLVED",
+          "detail": "Keraniganj [town] r=1500m"
+        },
+        {
+          "query": "Zinzira",
+          "outcome": "RESOLVED",
+          "detail": "Zinzira [area] r=1200m"
+        },
+        {
+          "query": "Postogola",
+          "outcome": "RESOLVED",
+          "detail": "Postogola [area] r=1200m"
+        },
+        {
+          "query": "পোস্তগোলা",
+          "outcome": "RESOLVED",
+          "detail": "Postogola [area] r=1200m"
+        },
+        {
+          "query": "Fatullah",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "Tongi",
+          "outcome": "RESOLVED",
+          "detail": "Tongi [town] r=1500m"
+        },
+        {
+          "query": "টঙ্গী",
+          "outcome": "RESOLVED",
+          "detail": "Tongi [town] r=1500m"
+        }
+      ]
+    },
+    "landmarks (regression)": {
+      "counts": {
+        "RESOLVED": 55,
+        "REFUSED": 0,
+        "UNKNOWN": 2
+      },
+      "rows": [
+        {
+          "query": "Karwan Bazar",
+          "outcome": "RESOLVED",
+          "detail": "Karwan Bazar [terminal] r=300m"
+        },
+        {
+          "query": "কারওয়ান বাজার",
+          "outcome": "RESOLVED",
+          "detail": "Karwan Bazar [terminal] r=300m"
+        },
+        {
+          "query": "New Market",
+          "outcome": "RESOLVED",
+          "detail": "Dhaka New Market [market] r=200m"
+        },
+        {
+          "query": "নিউ মার্কেট",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "Gulistan",
+          "outcome": "RESOLVED",
+          "detail": "Gulistan [area] r=1200m"
+        },
+        {
+          "query": "গুলিস্তান",
+          "outcome": "RESOLVED",
+          "detail": "Gulistan [area] r=1200m"
+        },
+        {
+          "query": "Nilkhet",
+          "outcome": "RESOLVED",
+          "detail": "Nilkhet [neighbourhood] r=600m"
+        },
+        {
+          "query": "নীলক্ষেত",
+          "outcome": "RESOLVED",
+          "detail": "Nilkhet [neighbourhood] r=600m"
+        },
+        {
+          "query": "Shewrapara",
+          "outcome": "RESOLVED",
+          "detail": "Shewrapara [terminal] r=1200m"
+        },
+        {
+          "query": "শেওড়াপাড়া",
+          "outcome": "RESOLVED",
+          "detail": "Shewrapara [terminal] r=1200m"
+        },
+        {
+          "query": "Kazipara",
+          "outcome": "RESOLVED",
+          "detail": "Kazipara [terminal] r=1200m"
+        },
+        {
+          "query": "কাজীপাড়া",
+          "outcome": "RESOLVED",
+          "detail": "Kazipara [terminal] r=1200m"
+        },
+        {
+          "query": "Agargaon",
+          "outcome": "RESOLVED",
+          "detail": "Agargaon [terminal] r=1200m"
+        },
+        {
+          "query": "আগারগাঁও",
+          "outcome": "RESOLVED",
+          "detail": "Agargaon [terminal] r=1200m"
+        },
+        {
+          "query": "Nakhalpara",
+          "outcome": "RESOLVED",
+          "detail": "Nakhalpara [area] r=1200m"
+        },
+        {
+          "query": "নাখালপাড়া",
+          "outcome": "RESOLVED",
+          "detail": "Nakhalpara [area] r=1200m"
+        },
+        {
+          "query": "Monipuripara",
+          "outcome": "RESOLVED",
+          "detail": "Monipuri Para [neighbourhood] r=600m"
+        },
+        {
+          "query": "Mohakhali",
+          "outcome": "RESOLVED",
+          "detail": "Mohakhali [area] r=1200m"
+        },
+        {
+          "query": "মহাখালী",
+          "outcome": "RESOLVED",
+          "detail": "Mohakhali [area] r=1200m"
+        },
+        {
+          "query": "Farmgate",
+          "outcome": "RESOLVED",
+          "detail": "Farmgate [terminal] r=600m"
+        },
+        {
+          "query": "ফার্মগেট",
+          "outcome": "RESOLVED",
+          "detail": "Farmgate [terminal] r=600m"
+        },
+        {
+          "query": "Shahbagh",
+          "outcome": "RESOLVED",
+          "detail": "Shahbagh [terminal] r=1200m"
+        },
+        {
+          "query": "শাহবাগ",
+          "outcome": "RESOLVED",
+          "detail": "Shahbagh [terminal] r=1200m"
+        },
+        {
+          "query": "Motijheel",
+          "outcome": "RESOLVED",
+          "detail": "Motijheel [terminal] r=1200m"
+        },
+        {
+          "query": "মতিঝিল",
+          "outcome": "RESOLVED",
+          "detail": "Motijheel [terminal] r=1200m"
+        },
+        {
+          "query": "Dhanmondi",
+          "outcome": "RESOLVED",
+          "detail": "Dhanmondi [area] r=1200m"
+        },
+        {
+          "query": "ধানমন্ডি",
+          "outcome": "RESOLVED",
+          "detail": "Dhanmondi [area] r=1200m"
+        },
+        {
+          "query": "Gulshan 1",
+          "outcome": "RESOLVED",
+          "detail": "Gulshan 1 [neighbourhood] r=600m"
+        },
+        {
+          "query": "Gulshan 2",
+          "outcome": "RESOLVED",
+          "detail": "Gulshan 2 [neighbourhood] r=600m"
+        },
+        {
+          "query": "Banani",
+          "outcome": "RESOLVED",
+          "detail": "Banani [area] r=1200m"
+        },
+        {
+          "query": "বনানী",
+          "outcome": "RESOLVED",
+          "detail": "Banani [area] r=1200m"
+        },
+        {
+          "query": "Notun Bazar",
+          "outcome": "RESOLVED",
+          "detail": "Notun Bazar [neighbourhood] r=600m"
+        },
+        {
+          "query": "নতুন বাজার",
+          "outcome": "RESOLVED",
+          "detail": "Notun Bazar [neighbourhood] r=600m"
+        },
+        {
+          "query": "Kuril",
+          "outcome": "RESOLVED",
+          "detail": "Kuril [area] r=1200m"
+        },
+        {
+          "query": "কুড়িল",
+          "outcome": "RESOLVED",
+          "detail": "Kuril [area] r=1200m"
+        },
+        {
+          "query": "Bashundhara",
+          "outcome": "UNKNOWN",
+          "detail": "no entry of any kind"
+        },
+        {
+          "query": "Rampura",
+          "outcome": "RESOLVED",
+          "detail": "Rampura [area] r=1200m"
+        },
+        {
+          "query": "রামপুরা",
+          "outcome": "RESOLVED",
+          "detail": "Rampura [area] r=1200m"
+        },
+        {
+          "query": "Malibagh",
+          "outcome": "RESOLVED",
+          "detail": "Malibagh [area] r=1200m"
+        },
+        {
+          "query": "মালিবাগ",
+          "outcome": "RESOLVED",
+          "detail": "Malibagh [area] r=1200m"
+        },
+        {
+          "query": "Mouchak",
+          "outcome": "RESOLVED",
+          "detail": "Mouchak [neighbourhood] r=600m"
+        },
+        {
+          "query": "Sayedabad",
+          "outcome": "RESOLVED",
+          "detail": "Saydabad [area] r=1200m"
+        },
+        {
+          "query": "সায়েদাবাদ",
+          "outcome": "RESOLVED",
+          "detail": "Saydabad [area] r=1200m"
+        },
+        {
+          "query": "Gabtoli",
+          "outcome": "RESOLVED",
+          "detail": "Gabtoli Bus station [terminal] r=300m"
+        },
+        {
+          "query": "গাবতলী",
+          "outcome": "RESOLVED",
+          "detail": "গাবতলী [terminal] r=1200m"
+        },
+        {
+          "query": "Mirpur 1",
+          "outcome": "RESOLVED",
+          "detail": "Mirpur 1 [neighbourhood] r=600m"
+        },
+        {
+          "query": "Mirpur 2",
+          "outcome": "RESOLVED",
+          "detail": "Mirpur 2 [neighbourhood] r=600m"
+        },
+        {
+          "query": "Mirpur 10",
+          "outcome": "RESOLVED",
+          "detail": "Mirpur 10 [terminal] r=600m"
+        },
+        {
+          "query": "Uttara",
+          "outcome": "RESOLVED",
+          "detail": "Uttara [area] r=1200m"
+        },
+        {
+          "query": "উত্তরা",
+          "outcome": "RESOLVED",
+          "detail": "Uttara [area] r=1200m"
+        },
+        {
+          "query": "Azampur",
+          "outcome": "RESOLVED",
+          "detail": "Azampur [area] r=1200m"
+        },
+        {
+          "query": "আজমপুর",
+          "outcome": "RESOLVED",
+          "detail": "Azampur [area] r=1200m"
+        },
+        {
+          "query": "Jasimuddin",
+          "outcome": "RESOLVED",
+          "detail": "Jasimuddin Avenue [road] r=250m"
+        },
+        {
+          "query": "House Building",
+          "outcome": "RESOLVED",
+          "detail": "House Building [stop] r=120m"
+        },
+        {
+          "query": "Mohakhali bus terminal",
+          "outcome": "RESOLVED",
+          "detail": "Mohakhali Bus Terminal Bus depot [terminal] r=300m"
+        },
+        {
+          "query": "Jatrabari chourasta",
+          "outcome": "RESOLVED",
+          "detail": "Jatrabari Mor [junction] r=150m"
+        },
+        {
+          "query": "Mirpur 10 golchattar",
+          "outcome": "RESOLVED",
+          "detail": "Mirpur-10 Circle [junction] r=250m"
+        }
+      ]
+    }
+  },
+  "totals": {
+    "RESOLVED": 163,
+    "REFUSED": 9,
+    "UNKNOWN": 21
+  }
+}

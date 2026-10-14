@@ -62,6 +62,7 @@ import { Glass } from './motion';
 import { useTheme } from '../theme/ThemeProvider';
 import { useStyles } from '../theme/useStyles';
 import type { Palette } from '../theme/palette';
+import { crimeColor } from '../types/contracts/crime';
 import { fontFamily, radius, space, type } from '../theme/type';
 import type { RouteResponse } from '../services/route.service';
 
@@ -147,11 +148,16 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
   // Optional on the wire, so a backend from before B13 reads as "no clusters"
   // rather than crashing the card.
   const clusters = route.clusters ?? [];
+  // Same `?? []` and the same reason: optional on the wire so a client running
+  // against a backend from before S30 reads as "no news crime" rather than
+  // crashing the card.
+  const newsCrime = route.news_crime ?? [];
 
   const hasDetail =
     caveats.length > 0 ||
     route.flags.length > 0 ||
     clusters.length > 0 ||
+    newsCrime.length > 0 ||
     routes.length === 1 ||
     route.filter_relaxed ||
     route.explanation.length > 110;
@@ -398,6 +404,49 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
                           ? ` from ${cluster.report_count} reports`
                           : ''
                       }${cluster.status === 'corroborated' ? '' : ', not yet corroborated'}`}
+                    </Text>
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Crime reported in the news, in a third block below the other two. S30.
+
+              Three claims, three sections, for the reason the clusters got their
+              own: a list that interleaves them invites the reader to weigh them
+              alike, and they are not alike. The section label does the work that a
+              dot style alone cannot.
+
+              Two things are deliberate here. The statement is rendered **verbatim**
+              — it already names the publisher, and a sentence rebuilt from
+              `category` would be this app asserting a crime occurred. And the dot
+              is in the category colour rather than a severity colour, matching
+              `NewsCrimeMarker`: what was reported is a fact about an article, how
+              bad the place is is not. */}
+          {newsCrime.length > 0 && (
+            <View style={styles.flagList}>
+              <Text style={styles.clusterLabel}>Reported in the news</Text>
+              {newsCrime.map(incident => (
+                <View key={incident.incident_id} style={styles.flagRow}>
+                  <View
+                    style={[
+                      styles.flagDot,
+                      {
+                        backgroundColor:
+                          incident.status === 'corroborated'
+                            ? crimeColor(incident.category)
+                            : 'transparent',
+                        borderColor: crimeColor(incident.category),
+                      },
+                    ]}
+                  />
+                  <Text style={styles.flagText}>
+                    {incident.statement}
+                    <Text style={styles.flagMeta}>
+                      {incident.source_count > 1
+                        ? `  ·  ${incident.source_count} independent publishers`
+                        : ''}
                     </Text>
                   </Text>
                 </View>

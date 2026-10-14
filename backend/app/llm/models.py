@@ -90,16 +90,86 @@ class NewsIncident(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
 
 
+NewsCrimeCategory = Literal[
+    "theft",
+    "assault",
+    "harassment",
+    "vandalism",
+    "burglary",
+    "robbery",
+    "fraud",
+    "other",
+]
+"""
+`crime_reports.category` verbatim — the same eight values a user picks from when
+filing their own report, and the same eight the frontend colours markers by.
+
+Deliberately not a wider or more precise taxonomy. The model is choosing a bucket
+for a published article, and every value it can return has to be one the database
+CHECK accepts, the frontend has a colour for, and
+`app/policy/attribution.py::CATEGORY_NOUNS` has a noun for. A ninth value invented
+here would fail at insert, which is the right failure but an avoidable one.
+"""
+
+
+class NewsCrime(BaseModel):
+    """
+    One crime an article reports as having happened at a place in Dhaka. D04 / S30.
+
+    The sibling of `NewsIncident`, and the differences are the policy:
+
+    * **No `mobility_impact`.** A robbery is not a road condition. The whole reason
+      this is a separate object, a separate table and a separate policy module is
+      that the mobility vocabulary cannot describe it — see the header of
+      `migrations/versions/20261014120000__news_crime_incidents.sql`.
+    * **No free-text summary reaches the user.** `summary_en` goes to
+      `extracted_incidents` for the audit trail exactly as it does for mobility,
+      and the published sentence is built by
+      `app/policy/attribution.py::to_attributed_statement` from the category, the
+      publisher and the date. The model never writes a map pin.
+    * **No `occurred_at`.** Same reason as `NewsIncident`: free-tier models are
+      poor at turning "গতকাল সন্ধ্যায়" into an instant, and the article's own
+      publication time is a better anchor than a guessed one.
+    * **No names.** There is nowhere in this schema to put a suspect, a victim or
+      an officer, which is the cheapest possible way to guarantee none is
+      published. A crime article is full of them.
+    """
+
+    category: NewsCrimeCategory
+    location_text: str = Field(
+        description=(
+            "The most specific place name, copied from the article in its own "
+            "script, without surrounding words such as রাজধানীর or এলাকায়."
+        )
+    )
+    summary_en: str = Field(description="One short English sentence, for the audit trail.")
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
 class NewsExtraction(BaseModel):
     """
-    Everything one article reports that affects movement in Dhaka. Usually empty.
+    Everything one article reports that Meridian publishes. Usually empty.
 
     An empty list is the expected answer for most articles, and the prompt says so:
     a model told that silence is normal is far less likely to invent an incident to
     have something to return.
+
+    **Two lists, one model call**, and that is a cost decision with a correctness
+    consequence worth stating. The free tier is a few hundred requests a day and
+    `MAX_EXTRACTIONS_PER_RUN` exists because of it, so asking the same article
+    twice — once for movement, once for crime — would halve the throughput of
+    both. One call reads the article once and sorts what it finds into the two
+    vocabularies that are allowed to exist.
+
+    The lists do **not** mix downstream. `incidents` goes to `risk_flags` through
+    `policy/framing.py`; `crimes` goes to `news_crime_incidents` through
+    `policy/attribution.py`. They share a model call and nothing else: separate
+    tables, separate guards, separate decay, separate API. The coupling is where
+    the money is and nowhere else.
     """
 
     incidents: list[NewsIncident] = Field(default_factory=list, max_length=3)
+    crimes: list[NewsCrime] = Field(default_factory=list, max_length=3)
 
 
 # ---------------------------------------------------------------------------

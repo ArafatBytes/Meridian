@@ -40,12 +40,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.contracts.community import CommunityCluster
+from app.contracts.news_crime import NewsCrimeIncident
 from app.contracts.risk import RiskFlag
 from app.contracts.surface import RiskSurface
 from app.core.config import settings
 from app.core.database import get_db
 from app.scoring.clusters import DbClusterSurface
 from app.scoring.factory import get_risk_surface
+from app.scoring.news_crime import DbNewsCrimeSurface
 
 router = APIRouter()
 
@@ -80,6 +82,22 @@ class CommunityClustersResponse(BaseModel):
     as_of: datetime
     count: int = Field(ge=0)
     clusters: list[CommunityCluster]
+
+
+class NewsCrimeResponse(BaseModel):
+    """
+    Envelope for a bounding-box read of `news_crime_incidents`.
+
+    A third route rather than a third array, for the reason above applied once
+    more. These three surfaces answer three different questions — *is this road
+    passable*, *are people reporting things here*, *did a newspaper report a crime
+    here* — and they have three different reliability models. The moment they share
+    an envelope, a client starts treating them as one list.
+    """
+
+    as_of: datetime
+    count: int = Field(ge=0)
+    incidents: list[NewsCrimeIncident]
 
 
 class RiskFlagsResponse(BaseModel):
@@ -177,8 +195,8 @@ async def get_risk_flags(
     bbox: Annotated[
         str,
         Query(
-            description="west,south,east,north — e.g. 90.33,23.70,90.50,23.90",
-            examples=["90.33,23.70,90.50,23.90"],
+            description="west,south,east,north — e.g. 90.30,23.66,90.54,23.94",
+            examples=["90.30,23.66,90.54,23.94"],
         ),
     ],
     as_of: Annotated[
@@ -226,8 +244,8 @@ async def get_community_clusters(
     bbox: Annotated[
         str,
         Query(
-            description="west,south,east,north - e.g. 90.33,23.70,90.50,23.90",
-            examples=["90.33,23.70,90.50,23.90"],
+            description="west,south,east,north - e.g. 90.30,23.66,90.54,23.94",
+            examples=["90.30,23.66,90.54,23.94"],
         ),
     ],
     as_of: Annotated[
@@ -279,3 +297,71 @@ async def get_community_clusters(
     clusters = await surface.clusters_in_bbox(min_lat, min_lon, max_lat, max_lon, at)
 
     return CommunityClustersResponse(as_of=at, count=len(clusters), clusters=clusters)
+
+
+@router.get(
+    "/news-crime",
+    response_model=NewsCrimeResponse,
+    summary="Crime reported by named news publishers inside a bounding box",
+)
+async def get_news_crime(
+    bbox: Annotated[
+        str,
+        Query(
+            description="west,south,east,north - e.g. 90.30,23.66,90.54,23.94",
+            examples=["90.30,23.66,90.54,23.94"],
+        ),
+    ],
+    as_of: Annotated[
+        datetime | None,
+        Query(
+            description=(
+                "ISO 8601 instant to evaluate the incidents at; defaults to now. "
+                "Use a Z suffix rather than +00:00."
+            ),
+            examples=["2026-10-14T18:00:00Z"],
+        ),
+    ] = None,
+    db: AsyncSession = Depends(get_db),
+) -> NewsCrimeResponse:
+    """
+    Crime that a named news publisher reported at a place in Dhaka.
+
+    **Every statement here names its source**, and that is what makes this surface
+    admissible rather than a safety rating of a neighbourhood. *"Robbery reported by
+    Prothom Alo, 2 days ago"* is a checkable fact about a published article; *"there
+    was a robbery here"* is a claim this product has no standing to make, and
+    *"this area is dangerous"* is the permanent area label the concept document
+    rules out. The database enforces the first of those with a CHECK on the
+    `statement` column, and `app/policy/attribution.py` is its only writer.
+
+    `sources` carries the citations so the client can link out. A client must render
+    `statement` as given and must **not** compose its own sentence from `category` —
+    doing so drops the attribution, which is the entire basis for this surface
+    using crime vocabulary at all.
+
+    Unauthenticated, matching `/risk/flags` and `/risk/clusters`. Nothing here is
+    user data: every row is derived from a published newspaper article, and the
+    extraction schema has no field for a person's name — see
+    `app/llm/models.py :: NewsCrime`.
+
+    `as_of` behaves as it does everywhere else. These incidents decay on a five-day
+    half-life (`policy/attribution.NEWS_CRIME_HALF_LIFE_HOURS`), so dragging the
+    time control forward fades them and then drops them. That is deliberate and it
+    is the answer to the obvious objection: a crime map that never forgets becomes a
+    permanent judgement about a neighbourhood.
+
+    Returns an empty list under `RISK_SURFACE_IMPL=seeded`. There is no fixture, for
+    the same reason there is no cluster fixture — a fabricated citation would be a
+    made-up claim attributed to a real newspaper, which is worse than an empty layer.
+    """
+    min_lat, min_lon, max_lat, max_lon = _parse_bbox(bbox)
+    at = _resolve_as_of(as_of)
+
+    if settings.RISK_SURFACE_IMPL.strip().lower() != "db":
+        return NewsCrimeResponse(as_of=at, count=0, incidents=[])
+
+    surface = DbNewsCrimeSurface(db)
+    incidents = await surface.crimes_in_bbox(min_lat, min_lon, max_lat, max_lon, at)
+
+    return NewsCrimeResponse(as_of=at, count=len(incidents), incidents=incidents)

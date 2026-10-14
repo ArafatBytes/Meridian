@@ -1,6 +1,7 @@
 import apiService from './api.service';
 import type { RiskFlag, SourceRef, TimeProfile } from '../types/contracts/risk';
 import type { CommunityCluster } from '../types/contracts/community';
+import type { NewsCrimeIncident } from '../types/contracts/newsCrime';
 
 /**
  * Risk flags from the backend.
@@ -24,6 +25,12 @@ export interface RiskFlagsResult {
   /** The instant the server evaluated the surface at. */
   asOf: string;
   flags: RiskFlag[];
+}
+
+export interface NewsCrimeResult {
+  /** The instant the server evaluated the incidents at. */
+  asOf: string;
+  incidents: NewsCrimeIncident[];
 }
 
 export interface CommunityClustersResult {
@@ -186,6 +193,58 @@ function toCommunityCluster(wire: CommunityClusterWire): CommunityCluster {
     // be counted as better evidence than it is. Under-weighting community reports
     // is the safe failure.
     confidence: wire.confidence ?? 0.3,
+  };
+}
+
+/** What the news-crime wire carries. snake_case, dates as ISO strings. */
+interface NewsCrimeSourceWire {
+  source_id: string;
+  url: string;
+  published_at: string | null;
+  title: string | null;
+}
+
+interface NewsCrimeIncidentWire {
+  incident_id: string;
+  category: NewsCrimeIncident['category'];
+  status: NewsCrimeIncident['status'];
+  latitude: number;
+  longitude: number;
+  radius_m: number;
+  severity_now: number;
+  observed_at: string;
+  statement: string;
+  source_count: number;
+  sources: NewsCrimeSourceWire[];
+}
+
+interface NewsCrimeResponseWire {
+  as_of: string;
+  count: number;
+  incidents: NewsCrimeIncidentWire[];
+}
+
+function toNewsCrimeIncident(wire: NewsCrimeIncidentWire): NewsCrimeIncident {
+  return {
+    incidentId: wire.incident_id,
+    category: wire.category,
+    status: wire.status,
+    // `latitude`/`longitude` on this wire, not `lat`/`lon` as on the cluster one.
+    // The contract follows `RiskFlag`'s naming rather than `CommunityCluster`'s;
+    // mapped here so no screen has to know which.
+    lat: wire.latitude,
+    lon: wire.longitude,
+    radiusM: wire.radius_m,
+    severityNow: wire.severity_now,
+    observedAt: wire.observed_at,
+    statement: wire.statement,
+    sourceCount: wire.source_count ?? 1,
+    sources: (wire.sources ?? []).map(source => ({
+      sourceId: source.source_id,
+      url: source.url,
+      publishedAt: source.published_at ?? null,
+      title: source.title ?? null,
+    })),
   };
 }
 
@@ -357,6 +416,54 @@ class RiskService {
     return {
       asOf: payload.as_of,
       clusters: payload.clusters.map(toCommunityCluster),
+    };
+  }
+
+  /**
+   * Crime reported by named news publishers inside a map region.
+   *
+   * A third request, matching the server's third route, and issued in parallel
+   * with the other two. Three kinds of claim, three endpoints, so a screen that
+   * holds one of them always knows which it is holding.
+   *
+   * **Every incident here names its publisher**, and `sources` carries the link.
+   * That is what makes this layer a set of citations rather than a safety rating
+   * of a neighbourhood, so a screen must render `statement` as given and must not
+   * compose its own sentence from `category`.
+   *
+   * `asOf` threads the time control exactly as the other two do. These decay on a
+   * five-day half-life and drop out about eighteen days after the report, which is
+   * the answer to the obvious objection — a crime map that never forgets becomes a
+   * permanent judgement about a place.
+   *
+   * An empty list is the normal answer for most of Dhaka and must render as
+   * nothing at all, never as an error.
+   */
+  async getNewsCrimeInRegion(
+    region: MapRegion,
+    asOf?: Date,
+  ): Promise<NewsCrimeResult> {
+    const params = new URLSearchParams({
+      bbox: regionToBbox(region, RISK_FETCH_MIN_SPAN_DEGREES),
+    });
+    if (asOf) {
+      params.set('as_of', asOf.toISOString());
+    }
+
+    const body = (await apiService.get<NewsCrimeResponseWire>(
+      `/risk/news-crime?${params.toString()}`,
+    )) as unknown as NewsCrimeResponseWire | { data?: NewsCrimeResponseWire };
+
+    const payload: NewsCrimeResponseWire | undefined =
+      'incidents' in body ? body : body.data;
+
+    if (!payload || !Array.isArray(payload.incidents)) {
+      return { asOf: asOf?.toISOString() ?? new Date().toISOString(), incidents: [] };
+    }
+
+    return {
+      asOf: payload.as_of,
+      incidents: payload.incidents.map(toNewsCrimeIncident),
     };
   }
 }
