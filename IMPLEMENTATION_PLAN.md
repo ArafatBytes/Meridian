@@ -1324,6 +1324,138 @@ the demo. What remains below is the half that asks a user a question.
       real. There is none.
 - [ ] This closes the concept document's "Deferred to roadmap" list
 
+---
+
+## S30 — Source breadth & news-sourced crime
+
+**Delivered 2026-10-14, out of sequence,** from an owner R&D request about widening the
+ingestion pipeline. Two halves: more publishers, and a third publishing surface.
+
+### Half one — three publishers became nine
+
+The pipeline read **three sources, all television channels**. That was a quiet weakness
+rather than a neutral fact: `status = 'confirmed'` needs two or more *independent*
+publishers, and Dhaka TV newsrooms follow each other and run the same agency copy. A
+measured dry run showed the problem exactly — **0 relevant articles across all three** in
+one window, while the six added sources found a factory fire reported by four of them.
+
+- [x] **Prothom Alo, Jugantor, Bangla Tribune, Ittefaq, Samakal, Dhaka Tribune.**
+      Sixteen candidates surveyed against robots.txt, a machine-readable listing of
+      *recent* articles, and whether the body is in the HTML. The ten rejections are
+      recorded in `app/ingestion/sources/__init__.py` with their reasons, because the next
+      person to go looking will otherwise spend the afternoon rediscovering them.
+- [x] **English publishers, and the measurement that justified them.** Of the 1022
+      gazetteer entries, **1010 (98.8%) carry a `name_en`** against 816 (79.8%) with a
+      `name_bn` — romanised place names resolve *better* than Bangla ones. `INCIDENT_WORDS_EN`
+      and English place filler/tail lists were added alongside the Bangla ones.
+- [x] ~~An English article parsed correctly and stored nothing~~ — `bangla_paragraphs`
+      drops every paragraph with no Bangla character in it, which is right for a Bangla
+      article and deletes an English one in full. `article_body(paragraphs, language=)`.
+- [x] ~~`\b(?:...)\w*` matched *Jamuna* for `jam`~~ — a leading word boundary plus a suffix
+      wildcard hands back exactly the false positives the boundary exists to stop. Every
+      inflection is now written out and the pattern closes with `\b`. **Caught by the test
+      written for that case**, which is the only reason it was not shipped.
+- [x] ~~Desk names: `sport` and `foreign`~~ — the exclusion list had `sports` and
+      `international`, and Dhaka Tribune files at `/sport/` while Bangla Tribune files at
+      `/foreign/`. Both found on the first live run.
+- [x] **The extraction queue is round-robin, and that is a correctness fix, not fairness.**
+      Concatenating nine publishers and cutting to `MAX_EXTRACTIONS_PER_RUN` means the first
+      publisher fills the budget every run — so a *second* outlet's account of this
+      morning's fire is never extracted in the same pass, and **nothing can ever reach
+      `confirmed`** however many outlets are added. The obvious diagnosis would have been
+      "Rumour Guard is too strict", which would have been wrong. `interleave()`.
+- [x] **`_SAME_OWNER` partly filled.** Dhaka Tribune and Bangla Tribune are one house;
+      adding both while letting them corroborate each other would manufacture agreement
+      rather than find it. The rest stays empty — guessing Bangladeshi media ownership is
+      still worse than admitting the gap.
+- [x] ~~A comma-separated qualifier never resolved~~ — "Road No 1 in Lake Circus,
+      Kalabagan" was discarded although `Kalabagan` resolves on its own. Segments are now
+      candidates, tried *after* the whole phrase so a precise entry always wins.
+
+### Half two — news-sourced crime, published as attributed citations
+
+**An owner decision, recorded as one:** news-sourced crime is published, *"because they are
+coming from news which are verified."* The design that makes that honest is attribution.
+
+- [x] **`news_crime_incidents`** — a third sibling of `risk_flags` and `community_clusters`,
+      never a row in either. Not a flag, because `MobilityImpact`'s six values are all about
+      traffic flow and `framing.py` bans the vocabulary. Not a cluster, because a cluster's
+      trust comes from *several anonymous accounts agreeing* and this one's comes from
+      *attribution* — one row type whose trustworthiness is explained two ways is the thing
+      to avoid.
+- [x] **`app/policy/attribution.py`** — the only writer of the published sentence, with a
+      guard that is a different *shape* from `framing.py`'s rather than a weaker version:
+      a **positive requirement** (it rejects a statement that does not name its publisher),
+      plus bans on characterising the place and on naming any group. `framing.NAMED_GROUPS`
+      is shared verbatim — one list, two policies, never relaxed.
+- [x] **The database enforces it too.**
+      `check (statement like '% reported by %')`. Three layers for one rule, as with
+      `risk_flags_confirmed_needs_two_sources`, because this is what a judge will press on
+      and the strongest honest answer is that the database will not store the violation.
+      Verified against a throwaway PostGIS container: seven refusal cases rejected, the
+      well-formed row accepted, `expires_at` derived to 18 days.
+- [x] **One model call, two lists.** `NewsExtraction` gained `crimes`; the free tier is a
+      few hundred requests a day and asking each article twice would halve the throughput of
+      both. The lists share a model call and *nothing else* — separate tables, guards, decay
+      and API.
+- [x] **`extracted_crimes`**, a separate audit trail, because `extracted_incidents`'
+      `kind` CHECK and NOT NULL `mobility_impact` are mobility-only. Writing a robbery there
+      would mean a false `'none'` in a column meaning "traffic was not affected" — crime
+      back inside the mobility vocabulary by the back door.
+- [x] **Crime Guard** (`app/agents/crime_guard.py`) — the corroboration gate, reusing Rumour
+      Guard's embedding, similarity and distance rule. The one real difference is a **48-hour
+      window** against mobility's 6: a mugging is reported when police confirm it, picked up
+      the next morning, and run again when a suspect is arrested. Six hours would turn one
+      incident into three pins that look like a pattern.
+- [x] **Decay is the answer to the obvious objection.** Five-day half-life, so an incident
+      falls below the serve threshold about eighteen days after the report. A crime map that
+      never forgets becomes a permanent judgement about a neighbourhood, which §9 rules out.
+      Radius capped at 1 km against `risk_flags`' 20.
+- [x] **Route scoring**, at 0.35 for one publisher and 0.7 for two or more independent ones
+      — above a community cluster's 0.6 ceiling and below a confirmed flag's 1.0. A named
+      masthead is a stronger single source than an anonymous one and still weaker than
+      several sources agreeing; the ordering *is* the claim, expressed as arithmetic.
+- [x] **A fourth marker shape.** The map already spent round (flags), square (scheduled) and
+      pill (clusters), so this is a **diamond**, coloured by category rather than by severity
+      band — what was reported is a fact about an article, how bad the place is is not.
+- [x] `tests/invariants/test_news_crime_is_attributed.py` — 27 cases, including a source
+      scan proving nothing but the policy module composes the sentence. **Verified to fail**
+      by reintroducing a composed statement, then pass once removed.
+
+### What this half deliberately does NOT do
+
+- [ ] ⚠️ **No fixture, so the offline demo serves an empty layer.** A fabricated row here
+      would be a made-up crime report *attributed to a real newspaper*, which is worse on a
+      stage than an empty layer.
+- [x] ~~⚠️ **Gazetteer coverage is the limiting factor, and it is a real gap.**~~ The first
+      live dry run extracted two crimes and geocoded neither: `Satmasjid Road` was **not in
+      the gazetteer at all**, in either script, and it is a major Dhanmondi road. The feature
+      was correct — "discarded, never guessed" held — and the data was the limit.
+      **Closed by B7 below, the same day:** the harvest had never asked OpenStreetMap for a
+      `highway`, so roads were absent by construction. `Satmasjid Road` now resolves, with a
+      1,154 m radius measured from the road's own extent.
+
+### Rejected during this sprint, with reasons
+
+- [ ] ~~Google Maps Routes API for live traffic~~ — ToS §3.2.3 forbids scraping, caching and
+      "creating content from Google Maps Content" independently; polling corridors and
+      storing deltas breaches all three. A licensed provider whose terms permit storage
+      (Mapbox matches OSM, which OSRM already runs on) is the only legitimate path, and it
+      costs money. **Not built.**
+- [ ] ~~Facebook page scraping~~ — Meta ToS prohibits it; *Meta v. Bright Data* resolved only
+      the contract claim and the tortious-interference claim survived. Operationally fragile,
+      and philosophically backwards: adding a firehose of unverified panic to feed a rumour
+      filter is solving a problem you created. **Not built.**
+- [ ] ~~YouTube bulletins + Whisper~~ — off-the-shelf Whisper is ~79% WER on Common Voice
+      Bengali and 11–25% fine-tuned, and what we would extract from the transcript is *place
+      names*, the rare proper nouns ASR gets wrong and the gazetteer needs near-exactly. The
+      same bulletins are published as text on the same sites. **Not built.**
+- [ ] ~~LLM-assigned `confidence_score`~~ — confidence is derived structurally from
+      independent publisher count. `geo/agent.py` records why a model's self-reported
+      confidence is not trusted: 12.6 km off at 0.78, invented coordinates at 0.95.
+
+---
+
 ### Phase 5 exit criteria
 
 - [ ] All eight concept-document agents exist, scheduled, and observable
@@ -1332,6 +1464,150 @@ the demo. What remains below is the half that asks a user a question.
 - [ ] GD drafts pass native-speaker review
 - [ ] Guardian self-trial complete: <1 false check-in per user per week
 - [ ] Measured ৳/day for the full agent fleet
+
+---
+
+## B7 — Gazetteer density
+
+**Delivered 2026-10-14, out of sequence,** immediately after S30, because S30 ended by
+naming this the ceiling on the whole pipeline. Track B item, from DEMO_PLAN.md: *"Gazetteer
+density beyond the demo zone. Gates geographic expansion."*
+
+**1,022 entries became 6,054.** The gazetteer is the only thing that turns a place name in
+an article into coordinates — every agent calls `resolve_place(..., allow_llm=False)`, so a
+place this file does not know is an article thrown away. "Discarded, never guessed" working
+correctly and the surface being empty are the same observation, and this is the bill.
+
+### What was missing, measured rather than guessed
+
+- [x] **Roads, which were absent by construction.** The old harvest asked OpenStreetMap for
+      places, junctions, markets and terminals and *never for a `highway`*. The entry count
+      by kind had no `road` line at all — not few, none. So the single most common way a
+      Bangla crime report names a location could not resolve, which is why S30's first live
+      extraction geocoded neither of its two results. **3,241 road entries now.**
+- [x] **The box stopped inside the city.** `23.70–23.90 / 90.33–90.50` cuts off Uttarkhan,
+      Dakshinkhan and Turag in the north and Demra, Matuail and Kadamtali in the south, all
+      of which are Dhaka. Now `23.66–23.94 / 90.30–90.54`, covering both city corporations.
+      Savar, Narayanganj city and Gazipur city stay outside on purpose: they are different
+      cities, and `in_pilot_box` is also the sanity gate the LLM tier is checked against, so
+      widening it weakens that gate everywhere.
+- [x] **Eleven new layers**, each with a reason: `town` (Tongi and the urban fringe are
+      `place=town`, never requested before — which is why a fire four publishers covered
+      could not be placed), `police` (crime reporting is organised by thana), `water`,
+      `bridge`, `campus`, `hospital`, `park`, `mall`, `stop`, and more `place` values.
+- [x] **Layers deliberately refused**, recorded in `HARVESTS`: `amenity=school` and
+      `place_of_worship` (~1,100 and ~1,200 in the box, names generic — "Government Primary
+      School" identifies nothing and gives the fuzzy matcher a thousand near-identical
+      strings to score on every lookup), and `boundary=administrative` (thana polygons whose
+      names duplicate the `place` nodes while their centroids sit up to 2 km away, so every
+      one would collide with a known neighbourhood at a distance that makes both ambiguous —
+      turning "Dhanmondi" from resolving into refused).
+
+### A road is a line and this file stores points
+
+That gap is the whole difficulty and it is not solved by pretending otherwise. OSM splits one
+road into many `way`s; `out tags center` gives each one's centre, which is enough to measure
+the road's extent without fetching geometry. Those centres are chained into one entry per
+road per locality.
+
+The chain distance was chosen by measuring 1,570 major-road segments at four thresholds:
+
+| chain | entries | pinnable | refused | names split across clusters |
+|---|---|---|---|---|
+| 900 m | 550 | 399 | 141 | 47 of 472 |
+| 1,500 m | 507 | 411 | 86 | 27 |
+| 2,500 m | 491 | 418 | 62 | 15 |
+| **4,000 m** | **478** | **419** | **48** | **6** |
+
+- [x] ~~A tight chain distance protects against merging two roads that share a name~~ — it
+      does not; it shreds long ones. At 900 m, Begum Rokeya Sharani came out as six pieces,
+      Mirpur Road as five and Dhaka–Cumilla Highway as four. Those pieces then share a name
+      while sitting kilometres apart, so `resolve_collisions` refuses all of them: the right
+      answer for Mirpur Road, reached by accident, at the cost of five junk entries each and
+      of also losing shorter roads like DIT Road.
+- [x] **The radius is the measured half-extent, and a road that will not fit under the
+      ceiling is refused rather than clamped into looking precise.** One constant does both
+      jobs. Above 1,500 m a point and a radius cannot describe the road honestly — Mirpur
+      Road is ~8 km, so a midpoint pin would be 4 km from the event. This also closes the
+      opposite hazard: chaining 4 km *could* merge two different roads sharing a name, but
+      any such merge spans over 3 km and is therefore refused, so the worst a surviving merge
+      can do is put the pin within the 1,500 m its own radius claims. **155 roads refused on
+      this rule.**
+- [x] **The same clustering was then needed verbatim for water,** which is the useful
+      generalisation: *OSM fragments large features, and fragmentation looks exactly like
+      ambiguity.* Hatirjheel arrived as three objects all named হাতিরঝিল হ্রদ, so all three
+      were refused and "Hatirjheel" fell through to a 300 m *park* 2.5 km away — a wrong pin
+      produced by holding more data about things near the lake than about the lake.
+      `cluster_fragments` now serves both.
+
+### Three defects the new data revealed rather than caused
+
+- [x] ~~`_subset_hit` never enforced "numbers are identity"~~ — `_fuzzy_hit` has refused a
+      number mismatch since D03 because "Sector 11" and "Sector 10" are 0.89 similar and 2 km
+      apart. A *token subset* can mismatch far more wildly and still pass: `{sector, 11}` is a
+      subset of `{road, 11, sector, 1}`, so **`Sector 11` resolved to a road in Sector 1 and
+      reported 0.90**. Harmless with no roads in the file; a **fabrication** with 3,241 of
+      them, and the eval caught it as one.
+- [x] ~~An ambiguity refusal could be overturned by a lower tier~~ — the module docstring
+      already asserts this about the LLM tier, and it was not true *inside* the gazetteer.
+      Two entries carry the exact name "Sector 11" 10 km apart, so `_exact_hit` correctly
+      declined, and then `_subset_hit` answered anyway. Falling through treats "we know this
+      name is ambiguous" as "we have never heard of it", which are opposite facts.
+- [x] ~~Entries outside the pilot box~~ — a bbox filter on a `node` returns only nodes
+      inside it, which is why this never arose before; a bbox filter on a `way` or `relation`
+      returns everything that *intersects*, and `out center` then reports a centre that can
+      be well outside. **21 pieces**, among them `Padma Bridge Rail Link`, which is not in
+      Dhaka at all.
+
+### The matcher had to be indexed, not merely grown
+
+`resolve_place` is on a request path (`/geo/resolve`), and both scanning tiers called
+`normalise`, `tokens` and `numbers` on every name of every entry on every lookup, with
+`difflib` over all of them. **13.6 ms per query at 1,022 entries**, so roughly 80 ms at six
+thousand. Names are now precomputed once at load with a token inverted index, a number
+bucket, and an exact length band before `difflib` is touched.
+
+- [x] **Verified equivalent, not assumed:** the indexed matcher was diffed against the
+      unindexed one over **4,362 queries** — every name and alias in the file, each with a
+      token dropped and a character transposed, plus the eval set — with **0 mismatches**,
+      before any semantic change was made. 20× faster at the old size.
+
+### Results
+
+| | before | after |
+|---|---|---|
+| entries | 1,022 | **6,054** |
+| road entries | **0** | **3,241** |
+| accuracy on real places (53-case held-out set) | 93.3% | **95.6%** |
+| fabrications | 0 | **0** |
+| wrong pins | 0 | **0** |
+| coverage of 193 real Dhaka references | 71% | **84%** |
+| of those, named roads | 15% | **61%** |
+| backend tests | 559 | **601** |
+
+- [x] `scripts/probe_gazetteer_coverage.py` + `data/eval/geocoding/coverage.json` — a
+      **coverage** measure over 193 references written the way a news desk writes them
+      (roads, thanas, the outer city, and a landmark set carried as a regression check). It
+      deliberately does **not** check *where* the point is: that is
+      `data/eval/geocoding/baseline.json`, and inventing ground truth for 193 places would be
+      worse than an honest coverage count. The two are complementary.
+
+### Deliberately not done
+
+- [ ] ⚠️ **`Sector 10` went from HIT to MISS, and that is correct.** The widened box brought
+      a *second* Sector 10 into scope, so the name is genuinely ambiguous now and is refused.
+      The eval case was written when only one was in the box. Resist "fixing" it by weakening
+      the ambiguity rule.
+- [ ] ⚠️ **Coverage went 86% → 84% when the number-identity rule was added**, because 2%
+      were false matches. Accuracy rose at the same time. That trade is the point, and the
+      two numbers must be read together.
+- [ ] **21 of 193 references still resolve to nothing**, mostly minor roads and the outer
+      fringe. Aliases are the remaining lever and they are hand work; `aliases.json` now
+      documents the maintenance a re-harvest requires.
+- [ ] **`stop` is the weakest layer and the slowest to fetch** — a bus stop is named after
+      the place it serves, so `_drop_borrowed_names` strips most of them again. 418 entries
+      for three of its four tiles taking longer than every other layer put together. A future
+      harvest may reasonably drop it.
 
 ---
 

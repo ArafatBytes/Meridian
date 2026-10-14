@@ -24,6 +24,7 @@ from app.routing.explain import (
     trade_off_sentence,
 )
 from app.routing.scorer import MAX_SAFETY, apply_filters, composite, passes_filters
+from app.services.route_service import avoided_flag_counts
 from app.scoring.geometry import (
     CORRIDOR_SIMPLIFY_M,
     distance_to_segment_m,
@@ -690,3 +691,69 @@ def test_walking_is_not_given_the_traffic_correction() -> None:
         "walking the same distance should take materially longer than driving it; if these "
         "are close, one of the two corrections is not being applied"
     )
+
+
+# ---------------------------------------------------------------------------
+# What each route claims to avoid
+# ---------------------------------------------------------------------------
+#
+# `trade_off_sentence` above is well covered; the arithmetic that decides the
+# number it prints was not covered at all. It was inlined in
+# `RouteService.calculate_routes`, which no test reaches because it needs OSRM, a
+# database session and a risk surface — and it carried a `NameError` on the
+# branch that runs only when an alternative scores safer than the
+# recommendation. It is a module-level function now so that these can exist.
+
+
+def test_the_recommendation_is_compared_against_every_alternative() -> None:
+    """
+    "Avoids 2 flagged corridors" on the recommendation means two flags that some
+    alternative passes and it does not — the union of the others, not any one.
+    """
+    counts = avoided_flag_counts(
+        [{"a"}, {"a", "b"}, {"a", "c"}],
+        [90.0, 50.0, 50.0],
+    )
+    assert counts[0] == 2, "b and c are both avoided by the recommendation"
+
+
+def test_an_alternative_safer_than_the_recommendation_counts_what_it_avoids() -> None:
+    """
+    The regression test for the crash. This combination — more than one surviving
+    route, and an alternative whose safety score beats the recommendation's — is
+    the only way to reach the branch, and it raised `NameError` rather than
+    returning a number.
+    """
+    counts = avoided_flag_counts(
+        [{"a", "b", "c"}, {"a"}],
+        [60.0, 95.0],
+    )
+    assert counts[1] == 2, "the alternative avoids b and c, which the recommendation passes"
+
+
+def test_a_less_safe_alternative_claims_nothing() -> None:
+    """
+    A slower, less safe route gets the time difference and nothing else. The
+    literal count may be non-zero and printing it would sell a strictly worse
+    route on the half of the comparison that flatters it.
+    """
+    counts = avoided_flag_counts(
+        [{"a", "b", "c"}, {"d", "e", "f", "g", "h"}],
+        [80.0, 40.0],
+    )
+    assert counts[1] == 0, "it avoids three in literal terms, and it is less safe"
+
+
+def test_an_equally_safe_alternative_claims_nothing() -> None:
+    """Strictly safer, not as safe. A tie is not an improvement to advertise."""
+    counts = avoided_flag_counts([{"a"}, {"b"}], [70.0, 70.0])
+    assert counts[1] == 0
+
+
+def test_one_route_on_its_own_avoids_nothing() -> None:
+    """There is no alternative to compare it with, so there is no claim to make."""
+    assert avoided_flag_counts([{"a", "b"}], [88.0]) == [0]
+
+
+def test_no_routes_is_not_a_crash() -> None:
+    assert avoided_flag_counts([], []) == []

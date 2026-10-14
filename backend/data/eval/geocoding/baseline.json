@@ -3,20 +3,20 @@
     "summary": {
       "total": 53,
       "counts": {
-        "HIT": 42,
-        "MISS": 3,
+        "HIT": 43,
+        "MISS": 2,
         "REFUSED": 8
       },
       "by_method": {
-        "gazetteer": 42,
-        "unresolved": 11
+        "gazetteer": 43,
+        "unresolved": 10
       },
       "positives": 45,
       "negatives": 8,
-      "accuracy_on_real_places": 0.9333,
+      "accuracy_on_real_places": 0.9556,
       "refusal_rate_on_fakes": 1.0,
       "fabrications": 0,
-      "median_error_km": 0.006,
+      "median_error_km": 0.042,
       "max_error_km": 0.581
     },
     "rows": [
@@ -223,8 +223,8 @@
         "outcome": "HIT",
         "method": "gazetteer",
         "confidence": 1.0,
-        "error_km": 0.004,
-        "resolved_name": "Saydabad",
+        "error_km": 0.214,
+        "resolved_name": "Sayedabad Bus Terminal",
         "note": ""
       },
       {
@@ -232,7 +232,7 @@
         "outcome": "HIT",
         "method": "gazetteer",
         "confidence": 1.0,
-        "error_km": 0.004,
+        "error_km": 0.262,
         "resolved_name": "Saydabad",
         "note": ""
       },
@@ -382,10 +382,10 @@
       },
       {
         "query": "Sector 10",
-        "outcome": "HIT",
-        "method": "gazetteer",
-        "confidence": 1.0,
-        "error_km": 0.005,
+        "outcome": "MISS",
+        "method": "unresolved",
+        "confidence": 0.0,
+        "error_km": null,
         "resolved_name": "Sector 10",
         "note": "must not become Sector 11"
       },
@@ -400,11 +400,11 @@
       },
       {
         "query": "Hatirjheel",
-        "outcome": "MISS",
-        "method": "unresolved",
-        "confidence": 0.0,
-        "error_km": null,
-        "resolved_name": "Hatirjheel",
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.14,
+        "resolved_name": "Hatirjheel Lake",
         "note": "not harvested; LLM tier must earn it"
       },
       {
@@ -418,10 +418,10 @@
       },
       {
         "query": "Bashundhara City",
-        "outcome": "MISS",
-        "method": "unresolved",
-        "confidence": 0.0,
-        "error_km": null,
+        "outcome": "HIT",
+        "method": "gazetteer",
+        "confidence": 1.0,
+        "error_km": 0.042,
         "resolved_name": "Bashundhara City",
         "note": "shopping centre; LLM tier likely"
       },

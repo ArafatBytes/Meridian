@@ -46,6 +46,7 @@ must say so. The previous code generated two *simulated* paths, one with a sine-
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 import logging
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -53,17 +54,19 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.contracts.community import CommunityCluster
+from app.contracts.news_crime import NewsCrimeIncident
+from app.ingestion.sources import publisher_name
 from app.contracts.risk import RiskFlag
-from app.contracts.surface import ClusterSurface
+from app.contracts.surface import ClusterSurface, NewsCrimeSurface
 from app.core.config import settings
 from app.routing.alternatives import generate_detour, worst_live_flag
 from app.routing.explain import explain_route
 from app.routing.osrm import OsrmRoute, OsrmUnavailable, fetch_routes
 from app.routing.scorer import ScoredPath, apply_filters, composite, score_path
 from app.schemas.route import (
-    Location,
     RouteCluster,
     RouteFlag,
+    RouteNewsCrime,
     RouteStep,
     RouteRequest,
     RouteResponse,
@@ -71,6 +74,7 @@ from app.schemas.route import (
 )
 from app.scoring.clusters import DbClusterSurface
 from app.scoring.factory import get_risk_surface
+from app.scoring.news_crime import DbNewsCrimeSurface
 from app.scoring.geometry import haversine_m
 
 logger = logging.getLogger(__name__)
@@ -160,6 +164,55 @@ and the path caveat is shown rather than hidden in a log line.
 The real fix is a second graph built with `foot.lua`. That is a background task, not
 demo-critical, and it is written down in `app/routing/osrm.py :: WALKING_GRAPH_CAVEAT`.
 """
+
+
+def avoided_flag_counts(
+    flag_ids: Sequence[set[object]], safety_scores: Sequence[float]
+) -> list[int]:
+    """
+    How many flagged corridors each route avoids, for the trade-off sentence.
+
+    Both arguments are parallel to the ranked, filtered routes, index 0 being the
+    recommendation.
+
+    The comparison a traveller is making is against the option they would
+    otherwise take, so the two sides are not symmetrical:
+
+      * the recommendation is compared with **everything else** — "avoids 2
+        flagged corridors" means two flags that some alternative passes and it
+        does not;
+      * an alternative is compared with **the recommendation** — "4 minutes
+        longer, avoids two flagged corridors" means two the recommended route
+        passes and this one does not.
+
+    Getting that backwards produces a sentence claiming a route avoids the flags
+    it is in fact the only one to pass, which reads perfectly and is a lie.
+
+    An alternative may claim "avoids N" only if it is actually safer. Route 1 of
+    the Dhanmondi->Gulshan pair is 2 minutes slower *and* passes five flags
+    against the recommendation's three — and it still avoids two that the
+    recommendation passes, so the literal count is 2. Printing that alone would
+    be true and misleading: it sells a strictly worse route on the half of the
+    comparison that flatters it. A slower, less safe route gets the time
+    difference and nothing else.
+
+    This lives at module level because it could not be tested where it was.
+    Inlined in `calculate_routes` it was unreachable without OSRM, a database
+    session and a risk surface, so nothing covered it — and it carried a
+    `NameError` (`best_ids - ids`, with no `ids` in scope) on the branch that
+    runs only when an alternative scores safer than the recommendation. A wrong
+    number would have been caught by eye long before; a crash on an uncovered
+    branch sat there until a linter was pointed at the file.
+    """
+    if not flag_ids:
+        return []
+    recommended = flag_ids[0]
+    others = set().union(*flag_ids[1:]) if len(flag_ids) > 1 else set()
+    best_safety = safety_scores[0]
+    return [len(others - recommended)] + [
+        len(recommended - flag_ids[index]) if safety_scores[index] > best_safety else 0
+        for index in range(1, len(flag_ids))
+    ]
 
 
 class RouteService:
@@ -258,6 +311,32 @@ class RouteService:
             reporter_count=cluster.reporter_count,
         )
 
+    @staticmethod
+    def _to_route_news_crime(incident: NewsCrimeIncident) -> RouteNewsCrime:
+        """
+        A published crime report to its route-card shape. S30.
+
+        Nothing is computed here either: `statement` was framed by
+        `policy/attribution.py` when the row was written and `severity_now` was
+        decayed by the surface. The citations are flattened to names and URLs
+        because that is what a card renders, and they travel *with* the statement
+        rather than being optional — an attributed claim the reader cannot check is
+        just a claim.
+        """
+        return RouteNewsCrime(
+            incident_id=str(incident.incident_id),
+            lat=incident.latitude,
+            lon=incident.longitude,
+            radius_m=incident.radius_m,
+            category=incident.category,
+            statement=incident.statement,
+            severity_now=round(incident.severity_now, 1),
+            status=incident.status,
+            source_count=incident.source_count,
+            source_names=[publisher_name(s.source_id) for s in incident.sources],
+            source_urls=[s.url for s in incident.sources],
+        )
+
     def _straight_line(
         self, request: RouteRequest, profile: str
     ) -> OsrmRoute:
@@ -324,8 +403,13 @@ class RouteService:
         # fabricated claim. On the offline path this stays None and every route is
         # scored against news flags alone, which is the honest result in that mode.
         cluster_surface: ClusterSurface | None = None
+        # S30. Published news crime, read the same way and for the same reason:
+        # there is no seeded implementation, because a fixture row here would be a
+        # fabricated crime report attributed to a real newspaper.
+        crime_surface: NewsCrimeSurface | None = None
         if settings.RISK_SURFACE_IMPL.strip().lower() == "db":
             cluster_surface = DbClusterSurface(db)
+            crime_surface = DbNewsCrimeSurface(db)
 
         scored: list[tuple[OsrmRoute, ScoredPath]] = []
         for candidate in candidates:
@@ -333,7 +417,11 @@ class RouteService:
                 (
                     candidate,
                     await score_path(
-                        surface, path=candidate.path, at=moment, clusters=cluster_surface
+                        surface,
+                        path=candidate.path,
+                        at=moment,
+                        clusters=cluster_surface,
+                        news_crime=crime_surface,
                     ),
                 )
             )
@@ -365,6 +453,7 @@ class RouteService:
                                 path=detour.path,
                                 at=moment,
                                 clusters=cluster_surface,
+                                news_crime=crime_surface,
                             ),
                         )
                     )
@@ -426,32 +515,10 @@ class RouteService:
             return []
 
         # What each route avoids, for the trade-off sentence.
-        #
-        # The comparison a traveller is making is against the option they would otherwise
-        # take, so:
-        #   * the recommended route is compared with everything else — "avoids 2 flagged
-        #     corridors" means two flags that some alternative passes and it does not;
-        #   * an alternative is compared with the recommended route — "4 minutes longer,
-        #     avoids two flagged corridors" means two the recommended one passes and it
-        #     does not.
-        #
-        # Getting this backwards would produce a sentence claiming a route avoids the flags
-        # it is in fact the only one to pass, which reads perfectly and is a lie.
-        flag_ids = [{flag.flag_id for flag in path_score.flags} for _, path_score in surviving]
-        best_ids = flag_ids[0]
-        others_union: set[object] = set().union(*flag_ids[1:]) if len(flag_ids) > 1 else set()
-
-        # An alternative may claim "avoids N" only if it is actually safer. Route 1 of the
-        # Dhanmondi->Gulshan pair is 2 minutes slower AND passes five flags against the
-        # recommended route's three -- and it still avoids two the recommended one passes,
-        # so the literal count is 2. Printing that alone would be true and misleading: it
-        # sells a strictly worse route on the half of the comparison that flatters it.
-        # A slower, less safe route gets the time difference and nothing else.
-        best_safety = surviving[0][1].safety_score
-        avoided_counts = [len(others_union - best_ids)] + [
-            len(best_ids - ids) if path_score.safety_score > best_safety else 0
-            for _, path_score in surviving[1:]
-        ]
+        avoided_counts = avoided_flag_counts(
+            [{flag.flag_id for flag in path_score.flags} for _, path_score in surviving],
+            [path_score.safety_score for _, path_score in surviving],
+        )
 
         responses: list[RouteResponse] = []
         for index, (route, path_score) in enumerate(surviving):
@@ -471,6 +538,10 @@ class RouteService:
                     steps=self._to_route_steps(route),
                     clusters=[
                         self._to_route_cluster(cluster) for cluster in path_score.clusters
+                    ],
+                    news_crime=[
+                        self._to_route_news_crime(incident)
+                        for incident in path_score.news_crime
                     ],
                     explanation=explain_route(
                         path_score.flags,

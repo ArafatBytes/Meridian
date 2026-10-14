@@ -50,9 +50,11 @@ from datetime import datetime
 from typing import Final
 
 from app.contracts.community import CommunityCluster
+from app.contracts.news_crime import NewsCrimeIncident
 from app.contracts.risk import IncidentKind, RiskFlag
-from app.contracts.surface import ClusterSurface, RiskSurface
+from app.contracts.surface import ClusterSurface, NewsCrimeSurface, RiskSurface
 from app.core.config import settings
+from app.policy.attribution import weight_for
 from app.scoring.decay import effective_severity
 
 logger = logging.getLogger(__name__)
@@ -91,6 +93,18 @@ class ScoredPath:
     #
     # Empty when no `ClusterSurface` was passed, which is the offline path.
     clusters: list[CommunityCluster] = field(default_factory=list)
+
+    # S30. Crime reported by named publishers along the same corridor, worst first.
+    #
+    # A third list for the third kind of claim, and the same argument as above: a
+    # caller that cannot tell these apart will present them identically, and
+    # "Prothom Alo reported a robbery here" is not "three people reported
+    # incidents here" and is not "the fire service closed this road". Each needs
+    # its own phrasing in `routing/explain.py` because each is true in a different
+    # way.
+    #
+    # Empty when no `NewsCrimeSurface` was passed, which is the offline path.
+    news_crime: list[NewsCrimeIncident] = field(default_factory=list)
 
 
 def _penalty_for(flag: RiskFlag) -> float:
@@ -141,6 +155,39 @@ def _penalty_for_cluster(cluster: CommunityCluster) -> float:
     """
     return effective_severity(
         severity_now=cluster.severity_now, confidence=cluster.confidence
+    )
+
+
+def _penalty_for_news_crime(incident: NewsCrimeIncident) -> float:
+    """
+    How much one published crime report detracts from a route's safety. S30.
+
+    The same arithmetic as the other two, through the same `effective_severity`, so
+    all three are commensurable and `_combine` can rank them together. The
+    confidence is `app/policy/attribution.py::weight_for` — 0.35 for one publisher,
+    0.7 for two or more independent ones.
+
+    Where this sits in the ordering, and why it is deliberate:
+
+        a live fire, confirmed        70 x 1.0  = 70.0
+        a corroborated robbery        60 x 0.7  = 42.0
+        a corroborated user cluster   55 x 0.6  = 33.0
+        a single-publisher robbery    60 x 0.35 = 21.0
+        reported fraud                10 x 0.35 =  3.5
+
+    So a road closed by the fire service still outranks everything, two newspapers
+    agreeing on a street robbery outweighs three anonymous app users agreeing, and
+    one newspaper's account sits below that — published, weighed, not obeyed. That
+    ordering is the whole claim of this surface expressed as arithmetic: a named
+    masthead is a stronger single source than an anonymous one, and still weaker
+    than several sources agreeing.
+
+    There is deliberately no `ROUTE_NEWS_CRIME_WEIGHT` setting, for the reason
+    `_penalty_for_cluster` gives: the tier weights already live in one place, and a
+    second multiplier here would mean the published weight is not the scored weight.
+    """
+    return effective_severity(
+        severity_now=incident.severity_now, confidence=weight_for(incident.source_count)
     )
 
 
@@ -205,6 +252,7 @@ async def score_path(
     path: list[tuple[float, float]],
     at: datetime,
     clusters: ClusterSurface | None = None,
+    news_crime: NewsCrimeSurface | None = None,
 ) -> ScoredPath:
     """
     Score one path against the risk surface, and against community clusters when a
@@ -235,16 +283,25 @@ async def score_path(
             path, settings.ROUTE_CORRIDOR_RADIUS_M, at
         )
 
+    found_crime: list[NewsCrimeIncident] = []
+    if news_crime is not None:
+        found_crime = await news_crime.crimes_near_path(
+            path, settings.ROUTE_CORRIDOR_RADIUS_M, at
+        )
+
     penalties = [_penalty_for(flag) for flag in flags]
     penalties += [_penalty_for_cluster(cluster) for cluster in found_clusters]
+    penalties += [_penalty_for_news_crime(incident) for incident in found_crime]
     penalty = _combine(penalties)
     safety = max(0.0, MAX_SAFETY - penalty)
 
     logger.debug(
-        "scored path: %d point(s), %d flag(s), %d cluster(s), penalty %.1f, safety %.1f",
+        "scored path: %d point(s), %d flag(s), %d cluster(s), %d crime, "
+        "penalty %.1f, safety %.1f",
         len(path),
         len(flags),
         len(found_clusters),
+        len(found_crime),
         penalty,
         safety,
     )
@@ -254,6 +311,7 @@ async def score_path(
         flags=flags,
         risk_penalty=round(penalty, 1),
         clusters=found_clusters,
+        news_crime=found_crime,
     )
 
 

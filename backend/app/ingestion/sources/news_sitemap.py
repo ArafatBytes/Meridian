@@ -8,6 +8,16 @@ third site on the same CMS is one more line there.
 
 The sitemap gives headline and publication time for free, which is what the agent's
 relevance filter runs on before a single article page is fetched.
+
+Two parameters make this the general case rather than a one-CMS parser, and both
+were added on 2026-10-14 when Prothom Alo and Dhaka Tribune joined:
+
+* `body_selector`, because the article body is in a different div on every CMS —
+  `div.story-element-text p` on Prothom Alo, `article p` on Dhaka Tribune.
+* `language`, because it decides which paragraph rule applies **and** what goes in
+  `raw_documents.language`. Dhaka Tribune publishes in English, and the Bangla rule
+  would have filtered its entire body away on the grounds that it contains no
+  Bangla — a source that fetched correctly, parsed correctly, and stored nothing.
 """
 
 from __future__ import annotations
@@ -21,7 +31,7 @@ from app.ingestion.fetcher import Fetcher
 from app.ingestion.sources.base import (
     ArticleRef,
     Source,
-    bangla_paragraphs,
+    article_body,
     parse_time,
     sitemap_entries,
 )
@@ -36,11 +46,13 @@ class NewsSitemapSource(Source):
         name: str,
         sitemap_url: str,
         body_selector: str = "div.jw_article_body p",
+        language: str = "bn",
     ) -> None:
         self.source_id = source_id
         self.name = name
         self.sitemap_url = sitemap_url
         self.body_selector = body_selector
+        self.language = language
 
     async def list_recent(self, fetcher: Fetcher, now: datetime) -> list[ArticleRef]:
         return [
@@ -54,7 +66,8 @@ class NewsSitemapSource(Source):
 
     async def read(self, fetcher: Fetcher, ref: ArticleRef, now: datetime) -> RawDocument | None:
         soup = BeautifulSoup(await fetcher.text(ref.url), "lxml")
-        body = bangla_paragraphs([p.get_text(" ") for p in soup.select(self.body_selector)])
+        paragraphs = [p.get_text(" ") for p in soup.select(self.body_selector)]
+        body = article_body(paragraphs, language=self.language)
         if not body:
             return None
         heading = soup.find("h1")
@@ -64,7 +77,7 @@ class NewsSitemapSource(Source):
             url=ref.url,
             fetched_at=now,
             published_at=ref.published_at,
-            language="bn",
+            language=self.language,
             title=ref.title or (heading.get_text(strip=True) if heading else ""),
             body=body,
         )
