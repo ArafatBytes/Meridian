@@ -26,10 +26,15 @@ Q&A if asked."*
 
 That cut is real and it has a real consequence, so it is written down rather than
 implied: **two outlets owned by the same house, or both running the same wire
-copy, currently count as two sources.** `_SAME_OWNER` below is the seam it plugs
-into — populate it and `independent_publishers()` collapses them with no other
-change. It is empty today because guessing Bangladeshi media ownership from
-memory would be worse than admitting the gap.
+copy, count as two sources unless `_SAME_OWNER` says otherwise.**
+
+Partly closed on 2026-10-14, when `SOURCES` went from three publishers to nine.
+One pairing in that set is known and is now recorded — Dhaka Tribune and Bangla
+Tribune are one house — because adding both while letting them corroborate each
+other would have manufactured agreement rather than found it. The rest of the map
+is still empty, and still for the original reason: guessing Bangladeshi media
+ownership from memory would be worse than admitting the gap. See the comments on
+`_SAME_OWNER` itself for what is asserted and what is not.
 """
 
 from __future__ import annotations
@@ -53,13 +58,41 @@ __all__ = [
 _SAME_OWNER: Final[dict[str, str]] = {
     # publisher source_id -> owning group id.
     #
-    # EMPTY ON PURPOSE. See the module docstring: the ownership map is the Track B
-    # half of S15's independence check. A publisher absent from this map is its own
-    # owner, which is the permissive reading — so filling this in can only ever
-    # *reduce* the number of flags we are willing to confirm, never increase it.
+    # A publisher absent from this map is its own owner, which is the permissive
+    # reading — so an entry here can only ever *reduce* the number of flags we are
+    # willing to confirm, never increase it. That asymmetry is what makes it safe
+    # to record a pairing we are confident about without waiting for a complete
+    # ownership survey: the cost of a wrong entry is a confirmation we decline, and
+    # the cost of a missing one is a confirmation we should not have made.
     #
-    # When it is filled in, two entries sharing a value stop corroborating each
-    # other. Nothing else needs to change.
+    # Two entries sharing a value stop corroborating each other. Nothing else needs
+    # to change.
+    #
+    # ---- what is recorded, and on what basis -------------------------------
+    #
+    # Dhaka Tribune and Bangla Tribune are sister papers — the same house, the
+    # English and Bangla mastheads of one newsroom group, which is also why they
+    # share a brand. Recorded on 2026-10-14, when both were added to `SOURCES` in
+    # the same change: adding two outlets of one house and letting them confirm
+    # each other would have been a *worse* surface than not adding them at all,
+    # because it manufactures agreement.
+    "dhaka_tribune": "tribune_group",
+    "bangla_tribune": "tribune_group",
+    #
+    # ---- what is deliberately NOT recorded ---------------------------------
+    #
+    # The rest of the map stays empty. The other eight publishers in `SOURCES` are
+    # each owned by a business house, several of which also own outlets we do not
+    # read, and the pairings among the ones we DO read are not ones this codebase
+    # can assert from memory. The module docstring's rule still holds: guessing
+    # Bangladeshi media ownership would be worse than admitting the gap, because a
+    # wrong pairing silently suppresses real corroboration and nothing would ever
+    # point at this dictionary as the cause.
+    #
+    # The honest status is therefore: one pairing known and applied, the rest
+    # outstanding. Syndication — two unrelated outlets running identical agency
+    # copy — is a different problem and is handled elsewhere, by
+    # `raw_documents.content_hash`.
 }
 
 
@@ -72,13 +105,15 @@ def independent_publishers(source_ids: Iterable[str]) -> set[str]:
     """
     The distinct *independent* publishers among these source ids.
 
-    Today that is the set of distinct owners, and since `_SAME_OWNER` is empty it is
-    the set of distinct `source_id`s. Routing every independence question through
-    this function rather than through `set(source_ids)` at the call sites is the
-    whole reason filling in the ownership map later is a one-line change.
+    The set of distinct *owners*, which for most publishers is the publisher
+    itself. Routing every independence question through this function rather than
+    through `set(source_ids)` at the call sites is the whole reason extending the
+    ownership map is a one-line change.
 
     >>> sorted(independent_publishers(["channel24", "channel24", "ekattor_tv"]))
     ['channel24', 'ekattor_tv']
+    >>> sorted(independent_publishers(["dhaka_tribune", "bangla_tribune"]))
+    ['tribune_group']
     """
     return {owner_of(s) for s in source_ids}
 

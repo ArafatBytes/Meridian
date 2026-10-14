@@ -176,6 +176,17 @@ _BANNED_BANGLA: Final[frozenset[str]] = frozenset(
     }
 )
 
+NAMED_GROUPS: Final[frozenset[str]] = _NAMED_GROUPS
+"""
+Exported because `policy/attribution.py` reuses it verbatim.
+
+That module publishes news-sourced crime, so it deliberately does **not** inherit
+`_JUDGMENT_TERMS` — the crime nouns are the thing it is allowed to say, once the
+sentence names the publisher. The rule about never naming a party, a student wing
+or a religious or ethnic identity is not relaxed anywhere, so it lives in one place
+and both guards read it. One list, two policies.
+"""
+
 BANNED_TERMS: Final[frozenset[str]] = (
     _JUDGMENT_TERMS | _POLITICAL_EVENT_TERMS | _NAMED_GROUPS | _BANNED_BANGLA
 )

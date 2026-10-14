@@ -196,6 +196,59 @@ class RouteCluster(BaseModel):
     """
 
 
+class RouteNewsCrime(BaseModel):
+    """
+    A published, attributed crime report on this route, as the card needs it. S30.
+
+    A deliberate subset of `NewsCrimeIncident`, like `RouteCluster` is of
+    `CommunityCluster`. The card needs where it is, what was reported, who reported
+    it and how much it weighs now.
+
+    Note what **is** here that `RouteCluster` refuses to carry: a `category`. That
+    is not an inconsistency. A cluster withholds the category because its
+    trustworthiness comes from anonymous accounts agreeing, so naming the offence
+    would be the product characterising a place. This carries it because it carries
+    the attribution with it — the sentence names the masthead, and `sources` lets
+    the reader check. Take the attribution away and the category would have to go
+    too.
+    """
+
+    incident_id: str
+    lat: float
+    lon: float
+    radius_m: int
+
+    category: str
+    """
+    `crime_reports.category` verbatim, so the card can reuse the colours and labels
+    the report screens already have. Never rendered on its own — see `statement`.
+    """
+
+    statement: str
+    """
+    The published form, from `app/policy/attribution.py::to_attributed_statement`.
+    Names the publisher and the recency.
+
+    **Render as-is. Never rebuild it on the client from `category`**: a sentence
+    composed without the attribution is the product asserting a crime happened,
+    which is precisely what it has no standing to do.
+    """
+
+    severity_now: float = Field(ge=0.0, le=100.0)
+
+    status: str
+    """`published` (one publisher) or `corroborated` (two or more independent)."""
+
+    source_count: int = Field(ge=1)
+    source_names: list[str] = Field(default_factory=list)
+    source_urls: list[str] = Field(default_factory=list)
+    """
+    The citations, flattened to two parallel lists because a route card renders
+    them as links and has no use for the rest of a `SourceRef`. An attributed claim
+    the reader cannot check is just a claim, so these travel with the statement.
+    """
+
+
 class RouteResponse(BaseModel):
     route_id: str
     path: list[RouteSegment]
@@ -252,6 +305,16 @@ class RouteResponse(BaseModel):
     Empty on the offline path, which has no cluster surface. Empty is also the normal
     answer: most corridors have no clusters, because publishing one needs at least two
     independent people to have filed reports within 200 m of each other.
+    """
+
+    news_crime: list[RouteNewsCrime] = Field(default_factory=list)
+    """
+    Crime reported by named publishers along this corridor, worst first. S30.
+
+    A third list, never merged into the other two, for the reason the other two are
+    separate from each other: three claims, three reliability models. Empty on the
+    offline path, and empty is the common answer — most corridors have no published
+    crime report within the corridor radius in the last few days.
     """
 
     explanation: str

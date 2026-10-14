@@ -41,6 +41,7 @@ from datetime import datetime
 from typing import Protocol, runtime_checkable
 
 from app.contracts.community import CommunityCluster
+from app.contracts.news_crime import NewsCrimeIncident
 from app.contracts.risk import RiskFlag
 
 
@@ -146,3 +147,47 @@ class ClusterSurface(Protocol):
         max_lon: float,
         at: datetime,
     ) -> list[CommunityCluster]: ...
+
+
+@runtime_checkable
+class NewsCrimeSurface(Protocol):
+    """
+    What a source of published, attributed crime reports must answer. S30.
+
+    A third protocol for the same reason there is a second: these return
+    `NewsCrimeIncident`, which is not a `RiskFlag` and not a `CommunityCluster`.
+    The three objects have three reliability models — an edited mobility claim, a
+    count of strangers agreeing, and one named masthead's account — and the whole
+    value of keeping them apart is that `app/routing/scorer.py` can weigh each on
+    its own terms and `app/routing/explain.py` can phrase each one honestly.
+
+    One implementation today -- `app.scoring.news_crime.DbNewsCrimeSurface`. There
+    is no seeded counterpart, and here the reason is sharper than it is for
+    clusters: a fixture row would be a fabricated crime report **attributed to a
+    real newspaper**. Putting that on a stage is worse than an empty layer, so the
+    offline path serves none and every consumer accepts `NewsCrimeSurface | None`.
+
+    Every method takes an explicit instant, for the reason `RiskSurface` does:
+    nothing in a surface may read the wall clock.
+    """
+
+    async def crimes_near_path(
+        self,
+        path: Sequence[tuple[float, float]],
+        radius_m: int,
+        at: datetime,
+    ) -> list[NewsCrimeIncident]:
+        """
+        Live incidents within `radius_m` of a polyline, highest current severity
+        first. `path` is `(lat, lon)` pairs in travel order, as everywhere else.
+        """
+        ...
+
+    async def crimes_in_bbox(
+        self,
+        min_lat: float,
+        min_lon: float,
+        max_lat: float,
+        max_lon: float,
+        at: datetime,
+    ) -> list[NewsCrimeIncident]: ...

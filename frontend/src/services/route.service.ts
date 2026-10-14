@@ -57,6 +57,35 @@ export interface RouteFlag {
  * would be free to call a place dangerous, which is exactly what the framing guard
  * exists to prevent.
  */
+/**
+ * A crime reported by a named publisher along this route. S30.
+ *
+ * The third kind of thing a route card lists, and the only one whose text names
+ * an offence. That is admissible because `statement` also names the publisher —
+ * `app/policy/attribution.py` is its only writer and a database CHECK refuses any
+ * statement without a publisher in it.
+ *
+ * **Render `statement` as-is.** Composing a sentence from `category` would drop
+ * the attribution, which is the whole licence for this surface.
+ */
+export interface RouteNewsCrime {
+    incident_id: string;
+    lat: number;
+    lon: number;
+    radius_m: number;
+    /** One of the eight `CRIME_CATEGORIES`. For colour and icon only. */
+    category: string;
+    /** e.g. "Robbery reported by Prothom Alo, 2 days ago". */
+    statement: string;
+    severity_now: number;
+    /** `published` is one publisher, `corroborated` two or more independent ones. */
+    status: 'published' | 'corroborated' | string;
+    source_count: number;
+    /** Mastheads as a reader knows them, parallel to `source_urls`. */
+    source_names: string[];
+    source_urls: string[];
+}
+
 export interface RouteCluster {
     cluster_id: string;
     lat: number;
@@ -146,6 +175,15 @@ export interface RouteResponse {
      * to have filed within 200 m of each other.
      */
     clusters?: RouteCluster[];
+    /**
+     * Crime reported by named publishers along this corridor, worst first. S30.
+     *
+     * Optional on the wire so a client running against an older backend does not
+     * break; `?? []` at every use site. Empty is the common answer — most corridors
+     * have no published crime report within the corridor radius in the last few
+     * days, and the layer decays out entirely after about eighteen.
+     */
+    news_crime?: RouteNewsCrime[];
     /**
      * Turn-by-turn manoeuvres in travel order, for live navigation.
      *

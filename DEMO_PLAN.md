@@ -410,6 +410,54 @@ replaying from the document cache. D01–D03 still pass.
       and fixture flags are `unconfirmed` too, so nothing narrows it visually. `D04.md` now has a
       *Finding the news flag* section that asks the backend for the coordinates first
 
+### Addendum, 14 Oct — nine publishers, and crime that names its source
+
+D04 shipped reading **three** sources, and all three were television channels. That is not a
+neutral fact about breadth: `confirmed` requires two or more *independent* publishers, and TV
+newsrooms in Dhaka follow each other and run the same agency copy. A dry run on 14 Oct found
+**0 relevant articles across all three** in one window. Beat 2's *"three independent sources"*
+was a fixture promise the live pipeline was unlikely to keep.
+
+- [x] **Six publishers added** — Prothom Alo, Jugantor, Bangla Tribune, Ittefaq, Samakal and
+      Dhaka Tribune. The same dry run after: **2766 articles listed, 83 relevant**, and a
+      Tongi factory fire carried by four of them in one pass. That is beat 2 becoming
+      reachable from live data rather than from the fixture.
+- [x] **English is now read as well as Bangla**, which also *improves* geolocation rather than
+      straining it: at S30 that was 1010 of the 1022 gazetteer entries (98.8%) carrying a
+      `name_en` against 816 (79.8%) with a `name_bn`. **B7 widened the gap and so strengthened
+      the argument:** of 6,054 entries, **5,858 (96.8%) carry a `name_en` and only 2,535
+      (41.9%) a `name_bn`**, because OpenStreetMap tags most Dhaka roads in English alone.
+      Reading English is now the difference between finding a road and not.
+- [x] **The extraction queue is round-robin.** Concatenating nine publishers and cutting to
+      the free-tier budget meant the first filled it every run, so a second outlet's account
+      of the same event was never extracted in the same pass — and **no flag could ever reach
+      `confirmed`**. Worth knowing before demonstrating beat 2.
+- [x] **Dhaka Tribune and Bangla Tribune are one house** and are recorded in `_SAME_OWNER` so
+      they do not corroborate each other. If asked how independence is judged, that is the
+      honest answer: distinct owners where we know them, distinct publishers otherwise, and
+      the gap is written down.
+- [x] **A third surface: news-sourced crime, as attributed citations.** On the owner's
+      decision. *"Robbery reported by Prothom Alo, 2 days ago"* — never *"there was a
+      robbery"* and never *"this area is dangerous"*. `app/policy/attribution.py` is the only
+      writer and the database refuses any statement without `' reported by '` in it.
+      A fourth marker shape (diamond) so it cannot be confused with a flag, a cluster or the
+      user's own report.
+- [x] **`S30_APPLY_IN_SUPABASE.sql` has been run** — applied and verified in Supabase on
+      14 Oct. The crime half can write.
+- [x] ~~**The crime layer will probably be empty on stage.**~~ **Closed by B7, 14 Oct.** The
+      reason this row gave was that the first live run extracted two crimes and geocoded
+      neither, because `Satmasjid Road` was not in the gazetteer in either script. **It is
+      now** — the harvest had never asked OpenStreetMap for a single road, and B7 added 3,241
+      of them, `Satmasjid Road` among them at a measured 1,154 m radius. The ingestion beat
+      runs `live_risk` every 15 minutes, so the layer accumulates on its own.
+- [ ] ⚠️ **It can still be thin, for a smaller and different reason.** The gazetteer now sets
+      a far higher ceiling than it did, but what is *published* still depends on what the nine
+      publishers actually report in the window before the demo. Check the layer on the day
+      rather than assuming it. *"We discard a location we cannot resolve rather than guess
+      it"* remains the right thing to say about the ones that are still refused — and B7 made
+      that answer sharper, not weaker: a long arterial like `Mirpur Road` is **deliberately**
+      refused because a pin at the midpoint of 8 km of road would be wrong by kilometres.
+
 ---
 
 ## D05 — Verification you can see
@@ -1105,14 +1153,20 @@ pass. **This was the last sprint that ships a feature.**
       nobody mistakes the fixture for a news archive - so `isGeneratedPlaceholder` leaves them off.
       **274 cards to 31.** The 22 hand-written sample headlines stay, labelled, because they do read
       like reporting
-- [ ] 🔴 **Raised, not fixed: live news ingestion is producing almost nothing, and it is older than
-      D09.** Recent `live_risk` runs read `in=0 out=0`: of ~390 articles listed per run the
+- [ ] 🔴 **Raised; the gazetteer half fixed by B7 on 14 Oct, the relevance-filter half still open.
+      Live news ingestion was producing almost nothing, and it is older than D09.** Recent `live_risk` runs read `in=0 out=0`: of ~390 articles listed per run the
       relevance filter passes about **1%**, and those few are already stored, so the queue is empty.
       Of 24 documents ever read, the model found 4 incidents and the gazetteer rejected 3. **Beats 1
       and 2 therefore run on the seeded surface, not on live news.** That is defensible on stage -
       `RISK_SURFACE_IMPL` is the switch and the agent is real - but it should be a decision rather
       than a discovery. Widening the sources is **B11a**; loosening the filter and growing the
-      gazetteer are **D04** and **B7**. **Outside D09's scope; needs a call**
+      gazetteer are **D04** and **B7**. ~~**Outside D09's scope; needs a call**~~
+      **The call was made and both halves are done, 14 Oct.** S30 widened nine publishers from
+      three and added the news-crime surface; **B7** then took the gazetteer from 1,022 entries
+      to **6,054**, which is the half this row blamed — *"the gazetteer rejected 3 of 4"* was
+      the symptom of a file holding **zero roads**. Held-out accuracy went 93.3% → **95.6%**
+      with 0 fabrications, and coverage of 193 real Dhaka references 71% → **84%**. What
+      remains open is the relevance filter's ~1% pass rate, which is **D04**, not B7.
 
 > **The news page we are *still* not building — the discard pile.** The headline list above
 > ships. This is the other one. `extracted_incidents` carries
@@ -1174,7 +1228,7 @@ inconvenience.
 | S07 | Frontend defects | Defect 3 → **D01**. Defect 11 → **D06**. Evidence photos → **D07**. **Defect 14 → D09**. Defect 16, `HomeScreen` cleanup, shake threshold → **B5** |
 | S08 | Frontend refactor | **B6** |
 | S09 | Ingestion framework | Framework, politeness, `raw_documents`, three Bangla **newspaper** sources → **D04**. **Social media, official feeds and the rest of the concept document's live source categories → B11a** — these were never built, and until 2026-10-08 this row claimed D04 covered S09 in full, which was the kind of error §5 exists to catch |
-| S10 | Bangla gazetteer | **D03** (one zone). National density → **B7** |
+| S10 | Bangla gazetteer | **D03** (one zone). Density across both Dhaka city corporations → **B7, done 14 Oct** (1,022 → 6,054 entries, 3,241 roads). National density beyond Dhaka is still **B7**'s open remainder |
 | S11 | Geolocation Agent | **D03** |
 | S12 | Risk-aware routing | **D06** |
 | S13 | Explanations & risk map | Overlay → **D01**, detail sheet → **D02**, explanations → **D06** |
@@ -1229,7 +1283,7 @@ has been lifted out of it.
 | **B6** | Frontend refactor — feature directories under `src/features/`, `src/components/` reduced to shared primitives | S08 | The demo track adds screens fast. This is the sprint that pays for that. |
 | **B6a** | 🟡 **BUILT, NOT YET VERIFIED ON A DEVICE — geofencing.** `docs/walkthroughs/GUARDIAN.md` Part 1. The permission flow and the status block were exercised on a phone; the crossing itself was not, because every risk flag is in Dhaka and testing happened from Jashore, 142 km away, while the app fetches flags within ~19 km. `backend/scripts/seed_flag_here.py` seeds a flag at any coordinates so Part 1 can run from anywhere. **The row said "push notifications"; what was wanted was S17.** Background GPS with OS-level geofencing (`startGeofencingAsync`), a headless task that posts a **local** notification as the user approaches a flagged road, each zone watched at its radius + 250 m so the warning arrives while there is still a junction to turn at, a six-hour per-zone debounce, and a user-visible crossing log that records suppressed crossings too. **No Expo project, no Firebase, no FCM key** — detection is on the phone, so the phone posts the notification. Chronic flags are never geofenced (a 2 km historical average that never expires would fire every time its owner left the house). ⚠️ Still open: route-based prediction ("a road that will take you to a zone") is approximated by the 250 m ring; the real version needs the routing engine and a destination. The **server-side push dispatcher** from the first reading of this row is also built, tested and left in place with `PUSH_ENABLED=false` — real, but not the feature asked for. | S16, S17, S15 |
 | **B6b** | **Ingestion provenance page — what we read, and what we discarded.** One endpoint over `raw_documents` + `extracted_incidents`, plus the contract and its TypeScript mirror. Three articles about one procession collapsing into a single flag; an incident we could not place and refused to guess at, with `discarded_reason` saying which. | S09, S14 | **Deferred from D09 on 10 Oct**, and only for capacity — the idea is stronger than the plain headline page that shipped instead. The columns are already written and already populated, so nothing decays while this waits. Needs backend work on a day that had none left; sits beside B6a rather than renumbering ten rows. |
-| **B7** | Gazetteer density beyond the demo zone | S10 | Gates geographic expansion. Manual work that does not compress — start it as background early. |
+| **B7** | 🟢 **DONE and VERIFIED ON A DEVICE, 14 Oct — gazetteer density.** Delivered out of sequence, immediately after S30, because S30 ended by naming the gazetteer the ceiling on the whole pipeline: every agent calls `resolve_place(allow_llm=False)`, so a place the file does not hold is an article thrown away. **1,022 entries became 6,054, and 0 roads became 3,241** — the old harvest asked OpenStreetMap for `place`, `junction`, `marketplace`, `bus_station` and `railway=station` and **never once for a `highway`**, so a correctly-extracted "সাতমসজিদ রোড" was a guaranteed discard. The pilot box was widened to `90.30,23.66,90.54,23.94`, covering both city corporations. A road is a line but the gazetteer stores a point plus a radius, so segments are chained and the radius is the **measured** half-extent; a road too long to pin honestly is **refused rather than clamped into looking precise** (`Mirpur Road`, 8 km, draws no pin by design). Held-out accuracy 93.3% → **95.6%** with **0 fabrications and 0 wrong pins**; coverage of 193 real Dhaka references 71% → **84%**, named roads 15% → **61%**; backend tests 559 → **601**. Verified by the owner on an Android handset through the map search box — that is `PlaceSearch`, which hits `/geo/resolve`; route mode's own inputs go to the Nominatim proxy and demonstrate none of this. ⚠️ **Still open: national density beyond Dhaka**, and ~21 of 193 references still resolve to nothing — mostly minor roads and spelling variants like `Begum Rokeya Sarani` vs OSM's "Sharani", which is `aliases.json` hand work no fuzzy match reaches. | S10 | Gates geographic expansion. Manual work that does not compress — started as background early, paid off in one sprint. |
 | **B8** | 🟢 **DONE and VERIFIED ON A DEVICE, 11 Oct — shout-to-SOS and shake-to-SOS.** Vivo V2344 / Android 14, `docs/walkthroughs/GUARDIAN.md`. Both triggers run end to end from any screen: countdown, camera, location, email to contacts, hands never touching the phone. ⚠️ **Video capture fails on that handset** — CameraX never delivers a frame to `VideoCapture` (defect 53), so the SOS sends location only and says so; a camera failure used to kill the whole alert (defect 52). `sos_hot_words` is read at last: phrases are matched **on the device**, and a match only counts if the **peak loudness in the preceding 2.5 s** cleared a user-calibrated threshold — so SOS fires on a shout, not on somebody saying the phrase. Both triggers then run the real SOS automatically: video, location, email to emergency contacts, no tap, with a 5-second cancel window that can be switched off. `voice_activated` is finally written to `sos_incidents`. The privacy bar is a **refusal**, not a downgrade — `requiresOnDeviceRecognition` is silently ignored on a device that cannot honour it, so the app checks `supportsOnDeviceRecognition()` and declines to listen rather than streaming the microphone to a server. `/voice/analyze`, `speech.service.ts` and `useVoiceRecorder.ts` are deleted: **zero audio upload paths remain**. ⚠️ **Voice and shake need the app open** — Android has restricted background microphone and sensor access since Android 9, and holding the mic with the app closed needs a native foreground service no Expo module provides. Zone alerts are the one that works from a pocket. ⚠️ **Still open: the trips model**, which is the half B10 depends on — `app/trips/`, the migration, `features/journey/`. **Live progress and ETA landed separately on 13 Oct** (`features/navigation/`, see the D06 addendum): the route trims as you walk it, with turn-by-turn road names, an ETA from measured GPS speed and automatic re-routing. That is the *client* half only — it is foreground-only, holds no state across launches, and **persists nothing**, so there is still no trip to detect an anomaly against. The trips model is what B10 needs and it is still unbuilt. | S18 |
 | **B9** | Admin observability — fleet health at a glance | S21 | Once eight agents run on schedules, you cannot operate them without this. |
 | **B10** | **Journey Guardian** — anomaly detection, then graded escalation | S22, S23 | Deferred by the concept document itself. **Its two-week self-trial should start as a background activity as soon as B8's TRIPS half lands** — no sprint can contain it. ⚠️ B8 is only half done as of 10 Oct: hot words shipped, the trips model did not, and the trips model is the part this depends on. Do not read B8's 🟡 as a green light — and do not read 13 Oct's live navigation as one either. It gives the *display* of a journey in progress (position on the route, distance left, ETA) and stores none of it, so there is no history for an anomaly detector to call anomalous. |
