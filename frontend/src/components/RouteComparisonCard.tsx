@@ -173,7 +173,14 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
       contentStyle={styles.body}
       radius={radius.card}
       padding={space.lg}
-      intensity={26}
+      // `blur={false}`, and this one hits all three of the reasons in `Glass.tsx`
+      // at once: it is large, it scrolls, and it is composited over a map. The
+      // third is the one that matters, because on `MapScreen` -- which has no
+      // `Aurora` and so no backdrop of its own -- a blurred surface resolves the
+      // screen-wide `ClaimBlurTarget` as its target, becomes a descendant of the
+      // view it blurs, and overflows the render thread's stack. The process dies
+      // with no redbox. See `BlurTarget.tsx`.
+      blur={false}
       elevated
     >
       {/* Ranked tabs. The recommended route is index 0 by composite score, and saying so
