@@ -164,6 +164,16 @@ describe('automatic re-routing', () => {
     expect(mapScreen).toContain('recalculateFrom(follow.position)');
   });
 
+  it('clears the flag when the attempt settles, not only when it succeeds', () => {
+    // `rerouting` is sticky, and the arrival of a new path used to be the only
+    // thing that cleared it. So a recalculation that came back with nothing -- no
+    // signal, the router down, no route found -- left the banner reading "Finding
+    // a new route..." for the rest of the walk, with the manual button disabled
+    // because that flag disables it. The user could not retry by hand at the one
+    // moment they most needed to.
+    expect(hook).toMatch(/\.finally\(\(\) => setState\(current => \(\{ \.\.\.current, rerouting: false \}\)\)\)/);
+  });
+
   it('treats the arrival of a new path as the completed re-route', () => {
     const reset = hook.split('if (!active) return;')[1] ?? '';
     expect(reset).toContain('rerouting: false');
@@ -339,7 +349,11 @@ describe('the map screen wiring', () => {
     // sliced handler: an earlier version of this test cut the slice at `};`, which
     // lands in the middle of the `dest` object literal, so `setDestination` fell
     // outside it and the assertion compared against -1.
-    const start = mapScreen.indexOf('const handleMapPress');
+    // Anchored on `selectDestination`, which is where the guard and the write
+    // both live now: `handleMapPress` and `handlePoiPress` are two one-line
+    // callers of it, because a labelled place on the map arrives as `onPoiClick`
+    // and never as `onPress`.
+    const start = mapScreen.indexOf('const selectDestination');
     expect(start).toBeGreaterThan(-1);
     const guard = mapScreen.indexOf('follow.active', start);
     const setDestination = mapScreen.indexOf('setDestination(dest)', start);

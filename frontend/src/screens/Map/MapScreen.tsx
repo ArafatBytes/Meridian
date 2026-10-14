@@ -797,7 +797,12 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  const handleMapPress = async (e: any) => {
+  /**
+   * Route to a point the user tapped on the map.
+   *
+   * Reached from two events, not one. See `handlePoiPress`.
+   */
+  const selectDestination = (coord: Location, label: string) => {
     if (!routeMode || !currentLocation) return;
 
     // While following, a tap on the map means "let me look around" and nothing
@@ -809,12 +814,36 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       return;
     }
 
-    const coord = e.nativeEvent.coordinate;
     const dest = { latitude: coord.latitude, longitude: coord.longitude };
     setDestination(dest);
-    setDestQuery("Selected Location"); // Placeholder text
+    setDestQuery(label);
     calculateRouteTo(sourceLocation || currentLocation, dest);
   };
+
+  /** A tap on open ground. The coordinate is all there is to say about it. */
+  const handleMapPress = (e: any) =>
+    selectDestination(e.nativeEvent.coordinate, 'Selected Location');
+
+  /**
+   * A tap on one of Google's own labelled places -- a restaurant, a mosque, a
+   * school.
+   *
+   * This is a **separate event**, and that is the whole bug it fixes: the Maps
+   * SDK dispatches `onPoiClick` for a labelled place and `onPress` only for
+   * empty ground, so with `onPress` alone every named place on the map was
+   * untappable while the blank pavement beside it worked. Reported as "it only
+   * selects if I miss the label", which is exactly what was happening.
+   *
+   * The event carries the place's `name`, so this is also better than what it
+   * fixes: the destination field reads "Star Kabab" rather than "Selected
+   * Location". `name` is still defended against, because the payload is the
+   * SDK's and an unnamed POI is possible.
+   */
+  const handlePoiPress = (e: any) =>
+    selectDestination(
+      e.nativeEvent.coordinate,
+      e.nativeEvent.name || 'Selected Location',
+    );
 
   useEffect(() => {
     requestLocation();
@@ -990,6 +1019,8 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         showsMyLocationButton={false}
         showsCompass={false}
         onPress={handleMapPress}
+        // Labelled places come through here instead of `onPress`, never both.
+        onPoiClick={handlePoiPress}
       >
         {/* Source Marker */}
         {sourceLocation && (
@@ -1237,8 +1268,19 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       )}
 
-      {/* Route Search Interface (Google Maps Style) */}
-      {routeMode && (
+      {/* Route Search Interface (Google Maps Style).
+
+          Hidden once following starts. The route comparison card below already
+          had `!follow.active`; this one did not, so pressing Start left the
+          planner sitting over the map with the navigation banner underneath it
+          -- two cards, and the source and destination fields are not something
+          anyone edits mid-walk.
+
+          It also removes the only way to reach the close button below while
+          walking, which is the second half of the same report: that button exits
+          route mode completely. The exit while following is the banner's own,
+          which stops following and brings this back. */}
+      {routeMode && !follow.active && (
         <View style={[styles.searchContainer, { top: searchTop }]}>
           {/* `padding` on the prop, never in `searchBox` -- see that style.
 
@@ -1254,14 +1296,28 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
               Nothing is lost visually either way: Dimezis blurs the target's own
               canvas, a Google map draws on a surface that canvas never sees, so the
               blur of a map is the blur of nothing -- which comes out black, not
-              transparent. See the note in `Aurora.tsx`. */}
-          <Glass style={styles.searchBox} padding={space.md} radius={radius.card} blur={false} elevated>
+              transparent. See the note in `Aurora.tsx`.
+
+              `opaque` because with the blur gone the fill is all that separates
+              this card's text from the map's. See `Glass.tsx`. */}
+          <Glass
+            style={styles.searchBox}
+            padding={space.md}
+            radius={radius.card}
+            blur={false}
+            opaque
+            elevated
+          >
             {/* Source input, with the way out of route mode on the same row.
                 A "Plan a route" title used to sit above this in a header of its
                 own, which spent a whole row saying what two labelled fields and a
-                Driving/Walking pair already say. The close control stays -- route
-                mode has no other exit, and a reload was once the only escape --
-                it just no longer needs a row to itself. */}
+                Driving/Walking pair already say. The close control stays -- it is
+                how you leave route mode, and a reload was once the only escape --
+                it just no longer needs a row to itself.
+
+                It leaves route mode outright, which is why this whole card is
+                hidden while following: there, "close" has to mean stop walking,
+                and that button is on the navigation banner. */}
             <View style={styles.inputRow}>
               <View style={[styles.inputDot, styles.sourceDot]} />
               <TextInput
@@ -1351,9 +1407,18 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           {/* Suggestions List.
 
               `blur={false}` for the reason on the card above: over a map, on a
-              screen with no backdrop of its own, the blur is a crash. */}
+              screen with no backdrop of its own, the blur is a crash -- and
+              `opaque` for the other half of it, because a list of place names
+              over a map full of place names is unreadable at 62%. */}
           {suggestions.length > 0 && (
-            <Glass style={styles.suggestionsContainer} padding={0} radius={radius.md} blur={false} elevated>
+            <Glass
+              style={styles.suggestionsContainer}
+              padding={0}
+              radius={radius.md}
+              blur={false}
+              opaque
+              elevated
+            >
               <ScrollView keyboardShouldPersistTaps="always">
                 {suggestions.map((item, index) => (
                   <TouchableOpacity
