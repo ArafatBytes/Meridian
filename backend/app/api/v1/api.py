@@ -23,6 +23,7 @@ from app.api.v1.endpoints import (
     crimes,
     geo,
     ingestion,
+    journeys,
     notifications,
     risk,
     routes,
@@ -48,3 +49,4 @@ api_router.include_router(
 api_router.include_router(sos.router, prefix="/sos", tags=["SOS Emergency"])
 api_router.include_router(ai.router, prefix="/ai", tags=["AI & Machine Learning"])
 api_router.include_router(casework.router, prefix="/casework", tags=["Casework — General Diary"])
+api_router.include_router(journeys.router, prefix="/journeys", tags=["Journey Guardian"])

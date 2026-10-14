@@ -43,6 +43,7 @@ import { geoService } from '../../services/geo.service';
 import RiskFlagSheet, { riskBand } from '../../components/RiskFlagSheet';
 import { RiskFlagMarker, isConfirmedFlag } from '../../components/RiskFlagMarker';
 import RouteComparisonCard, { safetyColour } from '../../components/RouteComparisonCard';
+import Dialog from '../../components/Dialog';
 import { TAB_BAR_CLEARANCE } from '../../navigation/metrics';
 import PlaceSearch from '../../components/PlaceSearch';
 import { AS_OF_PRESETS, asOfSummary } from '../../features/risk/scheduled';
@@ -52,6 +53,8 @@ import { CommunityClusterMarker } from '../../components/CommunityClusterMarker'
 import { useNavigation as useRouteFollow } from '../../features/navigation/useNavigation';
 import { NavigationBanner } from '../../features/navigation/NavigationBanner';
 import { FollowMarker } from '../../features/navigation/FollowMarker';
+import { useJourney } from '../../features/journey/useJourney';
+import { goesTo, startedAtLabel } from '../../features/journey/resume';
 
 /**
  * A report as this screen draws it -- and every one of these belongs to the signed-in
@@ -174,6 +177,7 @@ const FAB_GAP = 14;
  * first frame only, and close enough that nothing visibly jumps.
  */
 const SEARCH_CARD_FALLBACK = 46;
+
 
 /**
  * An "hours from now" offset as the instant to ask the surface about.
@@ -393,6 +397,22 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     // button makes. One path, two triggers.
     onReroute: recalculateFrom,
   });
+
+  /**
+   * The journey the server is holding. JG1.
+   *
+   * It is read on mount, so a force-stop mid-walk is recoverable: the row
+   * outlived the process, and the card below offers it back. Nothing watches it
+   * -- there is no deadline and no check-in until JG2.
+   */
+  const journey = useJourney();
+
+  /**
+   * Measured height of the resume card, so the FAB column below it moves down
+   * instead of being covered. Zero when the card is not showing, which is the
+   * usual case. Same idiom and same reason as `searchHeight`.
+   */
+  const [resumeHeight, setResumeHeight] = useState(0);
 
   // Search State
   const [sourceLocation, setSourceLocation] = useState<Location | null>(null);
@@ -785,6 +805,12 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     if (routeMode) {
       // Exit route mode
       follow.stop();
+      // Leaving route mode ends the journey, because it throws away the route and
+      // the destination that the journey is about. A no-op when there is no open
+      // journey, which is the usual case. `cancelled` rather than `arrived` is the
+      // truth about it: the one thing JG2 and JG3 must be able to tell apart is
+      // "got there" from "stopped telling us", so the two states never merge.
+      void journey.cancel();
       setFollowCamera(true);
       setRouteMode(false);
       setDestination(null);
@@ -795,6 +821,51 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     } else {
       setRouteMode(true);
     }
+  };
+
+  /**
+   * Put a journey the server was holding back on the screen. JG1.
+   *
+   * It restores route mode, the destination and the profile, then routes again
+   * **from where the person is now**. The route is not stored and deliberately
+   * so: a polyline from twenty minutes ago starts at an origin they have left, so
+   * following it would snap them to a point far behind and narrate a turn they
+   * already took. The journey is the destination and the clock, not the line.
+   *
+   * It stops at the route card rather than starting to follow by itself. Two
+   * reasons, and the second is the honest one. A fresh route is a fresh set of
+   * candidates, and which one to take is a question the user should see the
+   * answer to. And `follow.start` closes over the path in the current render, so
+   * calling it in the same tick as the route arriving would be following the path
+   * from *before* -- a stale-closure bug that would look like Resume silently
+   * doing nothing. Pressing `Start` on the card is one tap and no such hazard,
+   * and it does not create a second journey: `goesTo` recognises this one.
+   */
+  const resumeJourney = async () => {
+    const open = journey.journey;
+    if (!open) return;
+
+    const dest = {
+      latitude: open.destination_latitude,
+      longitude: open.destination_longitude,
+    };
+    const profile: 'driving' | 'foot' = open.route_profile === 'foot' ? 'foot' : 'driving';
+
+    setRouteMode(true);
+    setRouteProfile(profile);
+    setDestination(dest);
+    setDestQuery(open.destination_label);
+
+    const here = currentLocation ?? (await getCurrentLocation());
+    if (!here) {
+      Alert.alert('Location unavailable', 'Could not work out where you are.');
+      return;
+    }
+    setSourceLocation(here);
+    setSourceQuery('My Location');
+    // The override is passed explicitly: `setRouteProfile` above has not reached
+    // state yet, and routing a walk as a drive would quietly treble the ETA.
+    await calculateRouteTo(here, dest, profile);
   };
 
   /**
@@ -902,6 +973,42 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     Alert.alert('Cannot follow this route', follow.error);
   }, [follow.error]);
 
+  /**
+   * You arrived, so the journey is closed. JG1.
+   *
+   * The navigator decides this -- `hasArrived`, within 40 m of the final point --
+   * and it is the only thing in JG1 that ends a journey without the user pressing
+   * anything. From JG2 onward it is also what stops the clock, which is why it
+   * goes through `arrive` and not `cancel`: a journey that ended by arriving and
+   * one that ended by being abandoned are the two cases the whole feature exists
+   * to tell apart.
+   *
+   * Safe to fire more than once. `useJourney` clears its own state first, so a
+   * second call has no journey to close.
+   */
+  useEffect(() => {
+    if (follow.phase !== 'arrived') return;
+    void journey.arrive();
+    // `journey.arrive` is stable (`useCallback`), and listing `journey` itself
+    // would re-run this on every journey state change -- including the one this
+    // effect causes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [follow.phase]);
+
+  /**
+   * The journey could not be recorded, and the person is about to walk off.
+   *
+   * Said out loud rather than swallowed, because the consequence is specific and
+   * invisible: the directions work, and nothing will remember this trip if the
+   * app restarts. A silent failure here is the feature pretending to be on.
+   *
+   * Filled in by the Start handler from what `journey.start` returned, not by an
+   * effect watching the hook -- see `JourneyWrite`. Cleared when the dialog is
+   * dismissed, so it is a record of what has not been read yet rather than of
+   * what is wrong.
+   */
+  const [journeyNotice, setJourneyNotice] = useState<string | null>(null);
+
   // Leaving route mode stops the GPS. Without this, backing out of routing would
   // leave a high-accuracy subscription running behind the browse map.
   useEffect(() => {
@@ -942,7 +1049,17 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   // Laid out as a stack rather than as independent guesses — see the geometry note
   // at the top of this file.
   const searchTop = insets.top + space.xs;
-  const fabColumnTop = searchTop + searchHeight + space.sm;
+  // The resume card sits between the search card and the buttons, so the buttons
+  // move down by its height when it is there.
+  //
+  // `showResume` and not `resumeHeight > 0` alone: `onLayout` does not fire on
+  // unmount, so the measured height survives the card disappearing, and the
+  // buttons would stay pushed down over a gap. Deriving the offset from whether
+  // the card is rendered makes it correct in both directions.
+  const resumeTop = searchTop + searchHeight + space.sm;
+  const showResume = !routeMode && !journey.loading && !!journey.journey;
+  const fabColumnTop =
+    resumeTop + (showResume && resumeHeight > 0 ? resumeHeight + space.sm : 0);
   // Every bottom overlay measures from here rather than from `insets.bottom`.
   // The tab bar now floats *over* this screen instead of sitting below it, so
   // the safe floor moved up by its height — and because the geometry note above
@@ -1268,6 +1385,73 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       )}
 
+      {/* A journey the server was still holding. JG1, and the whole visible
+          output of that phase.
+
+          Shown only outside route mode, which is exactly the state a cold start
+          lands in -- so force-stopping the app mid-walk and reopening it finds
+          this instead of an empty map. `loading` keeps it off the screen until
+          the launch read has answered, so it does not flash in and out.
+
+          `opaque` for the reason the search card above gives: with the blur off,
+          the fill is all that separates this card's text from the map's. */}
+      {showResume && journey.journey && (
+        <View
+          style={[styles.searchContainer, { top: resumeTop }]}
+          onLayout={event => setResumeHeight(event.nativeEvent.layout.height)}
+        >
+          <Glass
+            style={styles.searchBox}
+            padding={space.md}
+            radius={radius.card}
+            blur={false}
+            opaque
+            elevated
+          >
+            <View style={styles.resumeRow}>
+              <Ionicons
+                name={journey.journey.route_profile === 'foot' ? 'walk' : 'navigate'}
+                size={18}
+                color={t.brand}
+              />
+              <View style={styles.resumeText}>
+                <Text style={styles.resumeTitle} numberOfLines={1}>
+                  Journey in progress
+                </Text>
+                {/* The route's own estimate and the time it was taken, not a
+                    countdown. There is no clock in JG1 -- a "7 min left" here
+                    would be a number nothing is maintaining, and the phase that
+                    builds the clock is JG2. */}
+                <Text style={styles.resumeDetail} numberOfLines={1}>
+                  {`${Math.round(journey.journey.duration_minutes)} min to ${journey.journey.destination_label}`}
+                  {startedAtLabel(journey.journey.started_at)
+                    ? ` · started ${startedAtLabel(journey.journey.started_at)}`
+                    : ''}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.resumeActions}>
+              <TouchableOpacity
+                onPress={() => void journey.cancel()}
+                style={styles.resumeEnd}
+                accessibilityRole="button"
+                accessibilityLabel="End this journey"
+              >
+                <Text style={styles.resumeEndText}>End</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => void resumeJourney()}
+                style={styles.resumeGo}
+                accessibilityRole="button"
+                accessibilityLabel="Resume this journey"
+              >
+                <Text style={styles.resumeGoText}>Resume</Text>
+              </TouchableOpacity>
+            </View>
+          </Glass>
+        </View>
+      )}
+
       {/* Route Search Interface (Google Maps Style).
 
           Hidden once following starts. The route comparison card below already
@@ -1512,9 +1696,52 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           // high-accuracy fixes every two seconds because a route happens to be
           // drawn would flatten a battery for someone who was only comparing
           // options.
+          // JG1. The journey is written *before* following starts, because that
+          // ordering is what makes it survive -- the row has to exist before the
+          // thing that could be killed begins.
+          //
+          // It does not block following. A phone with no signal at the moment
+          // someone presses Start is a phone whose owner still needs directions,
+          // and refusing to navigate because we could not record the journey
+          // would be the safety feature making the person less safe. `start`
+          // resolves to null instead of throwing, and the effect above says so.
           onStart={() => {
             setFollowCamera(true);
-            void follow.start();
+            const open = journey.journey;
+            const route = calculatedRoutes[selectedRouteIndex];
+            const from = sourceLocation ?? follow.position ?? currentLocation;
+
+            // Already recorded: this is the journey being resumed, reached
+            // through the same button. Recording a second one would move
+            // `started_at` to now, and from JG2 onward that is the instant the
+            // deadline is measured from.
+            const alreadyOpen = !!open && !!destination && goesTo(open, destination);
+
+            void (async () => {
+              if (!alreadyOpen && destination && from && route) {
+                const written = await journey.start({
+                  origin_latitude: from.latitude,
+                  origin_longitude: from.longitude,
+                  destination_latitude: destination.latitude,
+                  destination_longitude: destination.longitude,
+                  // Falls back rather than sending an empty string, which the
+                  // server rejects: a map tap on open ground leaves `destQuery`
+                  // as 'Selected Location', but a cleared field leaves it blank.
+                  destination_label: destQuery.trim() || 'Selected Location',
+                  route_id: route.route_id ?? null,
+                  route_profile: routeProfile,
+                  distance_km: route.distance_km,
+                  duration_minutes: route.duration_minutes,
+                  safety_score: route.safety_score ?? null,
+                });
+                // Here, and not in an effect watching the hook: a failure message
+                // held in state is the same string every time, so the second
+                // failed Start would change nothing for an effect to notice and
+                // the screen would sit silent through it. See `JourneyWrite`.
+                if (written.error) setJourneyNotice(written.error);
+              }
+              void follow.start();
+            })();
           }}
         />
       )}
@@ -1533,6 +1760,12 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           onRecalculate={() => recalculateFrom(follow.position)}
           onStop={() => {
             follow.stop();
+            // Stopping the navigator ends the journey. The banner's cross is the
+            // user saying they are done walking this route, which is the same
+            // statement as closing the journey -- and leaving an active row
+            // behind would make the next launch offer to resume a journey that
+            // was deliberately abandoned.
+            void journey.cancel();
             setFollowCamera(true);
           }}
         />
@@ -1832,6 +2065,17 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
             )}
           </View>
       </Sheet>
+
+      {/* JG1. The journey could not be written; the route still works. */}
+      <Dialog
+        visible={!!journeyNotice}
+        tone="warn"
+        icon="cloud-offline"
+        title="Journey not recorded"
+        message={`${journeyNotice ?? ''}\n\nDirections will still work, but this journey will not be here if the app restarts.`}
+        actions={[{ label: 'Continue anyway', primary: true }]}
+        onClose={() => setJourneyNotice(null)}
+      />
     </View>
   );
 };
@@ -1877,6 +2121,43 @@ StyleSheet.create({
       boxShadow: [{ offsetX: 0, offsetY: 4, blurRadius: 12, color: t.shadow }],
     },
     recentreText: { ...type.caption, color: t.brand },
+    // JG1's resume card. Two rows inside the same `Glass` shell the search box
+    // uses, so the card reads as the same family of surface rather than a new one.
+    resumeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space.sm,
+    },
+    // `flex: 1` so the two labels ellipsize inside the row instead of pushing the
+    // icon off the card. A destination label is whatever the user typed, and some
+    // of them are a full address.
+    resumeText: { flex: 1 },
+    resumeTitle: { ...type.label, color: t.text },
+    resumeDetail: { ...type.caption, color: t.textSoft },
+    resumeActions: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      alignItems: 'center',
+      gap: space.sm,
+      marginTop: space.sm,
+    },
+    // End is the quieter of the two. Resuming is the expected action; ending a
+    // journey the app had to ask about should take a deliberate press.
+    resumeEnd: {
+      paddingHorizontal: space.lg,
+      paddingVertical: space.sm,
+      borderRadius: radius.pill,
+      borderWidth: StyleSheet.hairlineWidth * 2,
+      borderColor: t.glassBorder,
+    },
+    resumeEndText: { ...type.caption, color: t.textSoft },
+    resumeGo: {
+      paddingHorizontal: space.lg,
+      paddingVertical: space.sm,
+      borderRadius: radius.pill,
+      backgroundColor: t.brand,
+    },
+    resumeGoText: { ...type.caption, color: t.onBrand },
     riskBadge: {
       position: 'absolute',
       left: space.xl,
@@ -2152,6 +2433,27 @@ StyleSheet.create({
       ...type.body,
       flex: 1,
       color: t.text,
+
+      // ---- why the next three lines exist ---------------------------------
+      // Android's EditText arrives with its own vertical padding -- roughly
+      // 4-8dp top and bottom, from the platform's text field background -- on
+      // top of the 22pt line box. That measured the input at a little over
+      // 40dp inside a row fixed at 36, and an Android ViewGroup clips what
+      // overflows it. The ascenders had headroom to lose; the descenders did
+      // not, so "Mirpur Bangla School and College" came out with the tails
+      // sliced off both g's and "My Location" lost the tail of its y.
+      //
+      // It is invisible on iOS, where the padding is not there, which is why
+      // this looked like one person's device.
+      //
+      // `paddingVertical: 0` removes the platform's padding, `alignSelf:
+      // 'stretch'` makes the input exactly the row's 36 -- so it can no longer
+      // overflow whatever the row's height becomes -- and `textAlignVertical`
+      // (Android-only; iOS centres a single-line input already) keeps the text
+      // on the row's centre line rather than against its top.
+      paddingVertical: 0,
+      alignSelf: 'stretch',
+      textAlignVertical: 'center',
     },
     suggestionsContainer: {
       marginTop: space.sm,
