@@ -1240,8 +1240,22 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       {/* Route Search Interface (Google Maps Style) */}
       {routeMode && (
         <View style={[styles.searchContainer, { top: searchTop }]}>
-          {/* `padding` on the prop, never in `searchBox` -- see that style. */}
-          <Glass style={styles.searchBox} padding={space.md} radius={radius.card} intensity={30} elevated>
+          {/* `padding` on the prop, never in `searchBox` -- see that style.
+
+              `blur={false}` is NOT a performance trade here -- it is the fix for a
+              crash that killed the process. This screen has no `Aurora`, so its
+              `Glass` panels resolved the only blur target in scope: the
+              `ClaimBlurTarget` that `MainNavigator` wraps around the whole screen.
+              That makes the `BlurView` a descendant of the view it blurs, the
+              transform chain never bottoms out, and the render thread overflows its
+              stack -- `SIGSEGV`, no redbox, nothing in Metro. `BlurTarget.tsx` has
+              the full account; `Sheet.tsx` turns it off for the same reason.
+
+              Nothing is lost visually either way: Dimezis blurs the target's own
+              canvas, a Google map draws on a surface that canvas never sees, so the
+              blur of a map is the blur of nothing -- which comes out black, not
+              transparent. See the note in `Aurora.tsx`. */}
+          <Glass style={styles.searchBox} padding={space.md} radius={radius.card} blur={false} elevated>
             {/* Source input, with the way out of route mode on the same row.
                 A "Plan a route" title used to sit above this in a header of its
                 own, which spent a whole row saying what two labelled fields and a
@@ -1334,9 +1348,12 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
             </View>
           </Glass>
 
-          {/* Suggestions List */}
+          {/* Suggestions List.
+
+              `blur={false}` for the reason on the card above: over a map, on a
+              screen with no backdrop of its own, the blur is a crash. */}
           {suggestions.length > 0 && (
-            <Glass style={styles.suggestionsContainer} padding={0} radius={radius.md} elevated>
+            <Glass style={styles.suggestionsContainer} padding={0} radius={radius.md} blur={false} elevated>
               <ScrollView keyboardShouldPersistTaps="always">
                 {suggestions.map((item, index) => (
                   <TouchableOpacity

@@ -94,7 +94,13 @@ export const NavigationBanner: React.FC<NavigationBannerProps> = ({
       style={[styles.card, { bottom: bottomInset + space.lg }]}
       padding={space.lg}
       radius={radius.card}
-      intensity={30}
+      // No blur: this sits over the map, on a screen with no backdrop of its own,
+      // and a blurred surface there resolves the screen-wide `ClaimBlurTarget` as
+      // its blur target -- which makes the `BlurView` a descendant of the view it
+      // blurs and overflows Android's render thread. See `BlurTarget.tsx`. It is
+      // also the one surface on screen while the user is walking, so the per-frame
+      // GPU cost would be the least affordable here of anywhere in the app.
+      blur={false}
       elevated
     >
       {phase === 'locating' && (
