@@ -1,14 +1,16 @@
 /**
- * Journey Guardian, phase 1 — the journey that survives.
+ * Journey Guardian — the journey that survives (JG1), and its clock (JG2).
  *
- * Four calls, one idea: pressing `Start` writes a row on the server before the
- * app starts following, and the app asks for that row on launch. Force-stop the
- * app mid-journey and the journey is still there, because it was never in the
- * screen.
+ * Pressing `Start` writes a row on the server before the app starts following,
+ * and the app asks for that row on launch. Force-stop the app mid-journey and
+ * the journey is still there, because it was never in the screen.
  *
- * **Nothing here watches anything.** No deadline, no check-in, no escalation --
- * those are JG2 and JG3. A journey that nobody is watching is still the thing
- * JG2 needs to exist.
+ * JG2 adds two calls and one idea: the server holds a deadline, and asks once
+ * when it passes. `heartbeat` is the only thing that moves that deadline without
+ * a person pressing anything, and `checkIn` is the answer.
+ *
+ * **Nothing here tells anybody else anything.** No guardian, no contact, no
+ * message leaving the account -- that is JG3.
  *
  * Through the backend rather than straight to Supabase, like `casework`: the
  * state machine lives there, the `journeys` table has RLS on with no policies,
@@ -20,6 +22,14 @@ import apiService from './api.service';
 import { messageOf } from './casework.service';
 
 export type JourneyState = 'active' | 'arrived' | 'cancelled';
+
+/**
+ * How worried the server is. JG2 has two; JG3 adds the rest of the chain.
+ *
+ * A second axis, not more values on `JourneyState`: a journey being asked a
+ * question is still `active`.
+ */
+export type EscalationState = 'normal' | 'check_in_sent';
 
 /** What `Start` sends. Everything comes from state the map screen already has. */
 export interface JourneyStart {
@@ -34,6 +44,16 @@ export interface JourneyStart {
   distance_km: number;
   duration_minutes: number;
   safety_score?: number | null;
+
+  /**
+   * Minutes from now. Omitted means "the route's own ETA plus the grace
+   * period", which is what the default chip on the planner sends.
+   *
+   * The server clamps this and computes the instant from its own clock -- what
+   * the person chooses is how long they are giving themselves, not where that
+   * lands.
+   */
+  deadline_minutes?: number | null;
 }
 
 export interface Journey {
@@ -58,6 +78,27 @@ export interface Journey {
    */
   eta_at: string;
   ended_at: string | null;
+
+  // ---- JG2 -------------------------------------------------------------
+
+  /** When the server expects you. Moved only by a heartbeat or an answer. */
+  deadline_at: string;
+
+  escalation_state: EscalationState;
+
+  /**
+   * When the current question was asked, when it was answered, and when the
+   * sweep observed it go unanswered.
+   *
+   * `answered_at` is history, not state: it survives the return to `normal`, so
+   * a journey asked twice carries an answer that is about the first question.
+   * Compare it against `check_in_sent_at` rather than reading it alone.
+   */
+  check_in_sent_at: string | null;
+  answered_at: string | null;
+  unanswered_at: string | null;
+
+  last_heartbeat_at: string | null;
 }
 
 class JourneyService {
@@ -119,6 +160,49 @@ class JourneyService {
       return response as unknown as Journey;
     } catch (error: any) {
       throw new Error(messageOf(error, 'Could not end this journey.'));
+    }
+  }
+
+  /**
+   * "Still going, about this long left." JG2.
+   *
+   * Returns null instead of throwing, and the caller ignores the result. This
+   * fires on a timer while somebody is walking, on a phone that is by definition
+   * moving between cells -- a failed heartbeat is the ordinary case, not an
+   * error, and the correct response to one is to send the next one a minute
+   * later. Surfacing it would put a dialog in front of someone mid-journey to
+   * tell them about a request they never made.
+   *
+   * The consequence of a dropped heartbeat is exactly the designed one: the
+   * deadline does not move. Silence never buys an extension, and a phone that
+   * cannot reach the server is indistinguishable from one that is not trying.
+   */
+  async heartbeat(journeyId: string, remainingSeconds: number): Promise<Journey | null> {
+    try {
+      const response = await apiService.post<any>(`/journeys/${journeyId}/heartbeat`, {
+        remaining_seconds: Math.max(0, Math.round(remainingSeconds)),
+      });
+      return response as unknown as Journey;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * "I'm fine." The one tap. JG2.
+   *
+   * Throws, unlike `heartbeat`: this one is a person pressing a button and
+   * expecting something to happen, and a silent failure would leave them
+   * believing they had answered a question that is still outstanding. The
+   * caller decides whether there is a screen to say so on -- the lock-screen
+   * handler has none and logs instead.
+   */
+  async checkIn(journeyId: string): Promise<Journey> {
+    try {
+      const response = await apiService.post<any>(`/journeys/${journeyId}/check-in`);
+      return response as unknown as Journey;
+    } catch (error: any) {
+      throw new Error(messageOf(error, 'Could not send your check-in.'));
     }
   }
 }

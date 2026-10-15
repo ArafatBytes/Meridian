@@ -193,6 +193,15 @@ frontend/ios/Runner/GoogleService-Info.plist
 backend/firebase-credentials.json
 firebase-debug.log
 .firebase/
+# FCM service-account private keys. Firebase names its downloads
+# <project>-firebase-adminsdk-<hash>-<hash>.json and the browser drops them in
+# whatever directory you were last in, which on 15 Oct 2026 was the repo root --
+# untracked, unignored, and one `git add .` from the incident in
+# docs/SECURITY-INCIDENT-2026-10-07.md. These belong outside the repo entirely
+# (C:\Users\<you>\.secrets\meridian\ on this machine); the pattern is the
+# backstop, not the plan.
+*firebase-adminsdk*.json
+*-service-account*.json
 
 # Sensitive data
 *.key

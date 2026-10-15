@@ -63,6 +63,34 @@ export interface UseJourney {
   arrive: () => Promise<void>;
   /** You stopped. */
   cancel: () => Promise<void>;
+
+  // ---- JG2 -------------------------------------------------------------
+
+  /**
+   * "Still going, about this long left." Never throws, never surfaces a
+   * failure, and intentionally does not update the journey on screen.
+   *
+   * The deadline is the server's to hold. Rendering the value a heartbeat
+   * happened to return would make the card flicker between two sources of truth
+   * once a minute, and a heartbeat that failed would silently leave the old one
+   * showing -- so the card reads the journey it was given and nothing else.
+   */
+  heartbeat: (remainingSeconds: number) => Promise<void>;
+
+  /** "I'm fine." Returns false when there was nothing to answer. */
+  checkIn: () => Promise<boolean>;
+
+  /**
+   * Re-read the open journey from the server.
+   *
+   * JG2 needs it because the escalation state changes *on the server* -- the
+   * sweep sets `check_in_sent` with no request from this app -- so the only way
+   * the card learns a question was asked is to look. There is still no polling
+   * loop: this is called when the app comes back to the foreground and when a
+   * check-in notification arrives, both of which are moments something has
+   * plausibly changed.
+   */
+  refresh: () => Promise<void>;
 }
 
 export function useJourney(): UseJourney {
@@ -146,5 +174,56 @@ export function useJourney(): UseJourney {
     [end],
   );
 
-  return { journey, loading, start, arrive, cancel };
+  const heartbeat = useCallback(async (remainingSeconds: number) => {
+    const open = current.current;
+    if (!open) return;
+    // The result is discarded on purpose -- see the interface note. `heartbeat`
+    // in the service already swallows its own errors.
+    await journeyService.heartbeat(open.journey_id, remainingSeconds);
+  }, []);
+
+  const refresh = useCallback(async () => {
+    const open = await journeyService.active();
+    // `active()` returns null both for "no journey" and for "could not ask",
+    // and those differ here in a way they do not at launch: a refresh that
+    // failed must not wipe a journey that is on screen and running. So a null
+    // is only believed when there was nothing open to begin with.
+    if (open === null && current.current !== null) return;
+    remember(open);
+  }, [remember]);
+
+  const checkIn = useCallback(async () => {
+    const open = current.current;
+    if (!open) return false;
+    try {
+      remember(await journeyService.checkIn(open.journey_id));
+      return true;
+    } catch (e: any) {
+      // Not surfaced here. The two callers differ: the card shows its own
+      // message, and the lock-screen handler has no screen to show one on.
+      console.warn('Could not check in on', open.journey_id, e?.message);
+
+      // A failure here is not the same as an unanswered question, and on a
+      // device the difference is the common case rather than the edge one.
+      // There are two ways to answer and they race: tapping the notification
+      // wakes the app, `answerFromNotification` posts the answer, and the card
+      // renders from state that predates that round trip -- so it is still
+      // offering the button for a question the server has already closed.
+      // Pressing it is then a second answer, which the endpoint correctly
+      // refuses with a 409 because `escalation_state` is no longer
+      // `check_in_sent`.
+      //
+      // The honest test is not "did my request succeed" but "is the question
+      // still outstanding", and only the server knows. So ask it. A 409 that
+      // comes back with the question closed means somebody answered, which is
+      // the whole point, and reporting a failure there told the person their
+      // safety check-in had not been recorded when it had -- the worst
+      // available way to be wrong in this feature.
+      await refresh();
+      const after = current.current;
+      return !(after && after.escalation_state === 'check_in_sent');
+    }
+  }, [remember, refresh]);
+
+  return { journey, loading, start, arrive, cancel, heartbeat, checkIn, refresh };
 }

@@ -34,6 +34,13 @@
  * - `system`     — delivery tests and housekeeping. Low importance, because
  *                  somebody turning off test notifications after a walkthrough
  *                  must not be turning off real warnings at the same time.
+ * - `journey_check_in` — JG2. "Are you there yet?" on a journey whose deadline
+ *                  passed. Its own channel for the same reason the others are
+ *                  split: somebody who silences road alerts after a noisy week
+ *                  must not discover they have also silenced the question that
+ *                  asks whether they got home. HIGH, not MAX — it is a question,
+ *                  not an emergency, and borrowing the SOS channel would train
+ *                  people to ignore that one.
  *
  * ## What was removed, and why
  *
@@ -64,6 +71,7 @@ export const ALERT_CHANNELS = {
   RISK: 'risk_alert',
   SOS: 'sos_alert',
   SYSTEM: 'system',
+  JOURNEY: 'journey_check_in',
 } as const;
 
 export type AlertChannelId = (typeof ALERT_CHANNELS)[keyof typeof ALERT_CHANNELS];
@@ -120,6 +128,21 @@ const CHANNELS: readonly ChannelSpec[] = [
     importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 250, 250, 250],
     // No `sound`: that selects Android's default notification sound. See ChannelSpec.
+  },
+  {
+    id: ALERT_CHANNELS.JOURNEY,
+    name: 'Journey check-ins',
+    description:
+      'Asks whether you arrived, when a journey you started passes the time you ' +
+      'gave it. One tap answers it.',
+    importance: Notifications.AndroidImportance.HIGH,
+    // Longer than the risk pattern and distinctly two-part, because this one is
+    // meant to be recognisable in a pocket without looking: the whole feature is
+    // "you feel it, you tap it, you carry on". Not MAX importance -- see the
+    // channel notes above.
+    vibrationPattern: [0, 400, 200, 400],
+    // No `sound`: Android's default notification sound. See ChannelSpec for why
+    // there is no string that means "default".
   },
   {
     id: ALERT_CHANNELS.SOS,

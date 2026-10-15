@@ -1,28 +1,30 @@
 /**
  * Profile. The settings hub, and the home of the full theme control.
  *
- * ## The Alerts row is gone too
+ * ## The Alerts row came back
  *
- * It opened `AlertPreferencesScreen`, which configures **server-pushed** alerts:
- * per-category switches, an hourly cap, quiet hours, and a "send a test alert"
- * button. None of it can deliver anything, because that channel is off at both
- * ends:
+ * It was removed, and this note used to explain why: `AlertPreferencesScreen`
+ * configures **server-pushed** alerts, and that channel was off at both ends —
+ * no `extra.eas.projectId` in the app, so `getExpoPushTokenAsync` was never
+ * called and the server had no token to send to, and `PUSH_ENABLED=false` on the
+ * backend. A settings screen for a switched-off pipeline, with a test button
+ * that fails. The screen was kept and only the route to it removed, with the
+ * note that it "becomes a one-line change once there is an EAS project".
  *
- * * the app has no `extra.eas.projectId`, so `getExpoPushTokenAsync` is never
- *   called and the server has no token to send to — the log says so on every
- *   launch ("No EAS projectId — remote push is disabled");
- * * the backend has `PUSH_ENABLED=false`.
+ * JG2 is that change. There is an EAS project, FCM credentials are uploaded to
+ * it, `PUSH_ENABLED=true`, and a check-in has been delivered to a real phone and
+ * answered. `Send me a test alert` works.
  *
- * So it was a settings screen for a switched-off pipeline, with a test button
- * that fails. The alerts that *do* work — approaching a risk zone — are **local**
- * notifications raised by the OS geofence handler, and their switch is on the
- * Guardian screen where the rest of the automatic behaviour lives.
+ * It is back for a second reason that did not exist before: that screen holds
+ * the delivery diagnosis, which is the only place in the app that reports the
+ * nine ways push can fail — **three of them silently**, including the one JG2
+ * found last, where Android freezes the app and a notification waits for the
+ * phone to be woken. That is a question a user will have, and it had nowhere to
+ * be asked.
  *
- * The screen and the whole server-side dispatcher are kept, not deleted: the
- * policy, the rate cap and the composer are real and tested, and this becomes a
- * one-line change once there is an EAS project. It is the *route to it* that was
- * removed, by the same rule as the four rows below — a control that cannot
- * affect anything costs more than it gives.
+ * The alerts that work without any of this — approaching a risk zone — are still
+ * **local** notifications raised by the OS geofence handler, and their switch is
+ * still on the Guardian screen with the rest of the automatic behaviour.
  *
  * ## The four dead rows are gone
  *
@@ -150,6 +152,21 @@ const ProfileScreen: React.FC<Props> = ({ navigation }) => {
       title: 'SOS history',
       hint: 'Every alert you have sent',
       onPress: () => navigation.navigate('SOSHistory'),
+    },
+    {
+      // Back, after JG2. It was removed because the pipeline behind it was off
+      // at both ends -- see the note at the top of this file -- and both ends
+      // are now on: `extra.eas.projectId` is set, FCM credentials are uploaded,
+      // and the backend runs with `PUSH_ENABLED=true`. `Send me a test alert`
+      // works, and the delivery diagnosis is the only place that reports the
+      // nine ways push can fail, three of which fail silently.
+      //
+      // Last in the section on purpose. It is a diagnostic rather than a
+      // protection, and the rows above it are things to arm.
+      icon: 'notifications-outline',
+      title: 'Alerts',
+      hint: 'What to be told about, and whether it is working',
+      onPress: () => navigation.navigate('AlertPreferences'),
     },
   ];
 

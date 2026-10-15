@@ -8,6 +8,9 @@
  * the safe one.
  */
 
+import fs from 'fs';
+import path from 'path';
+
 import { ALERT_CHANNELS, ALL_CHANNEL_IDS, channelForType } from './channels';
 
 describe('ALERT_CHANNELS', () => {
@@ -25,6 +28,9 @@ describe('ALERT_CHANNELS', () => {
       RISK: 'risk_alert',
       SOS: 'sos_alert',
       SYSTEM: 'system',
+      // JG2. Its own channel so that silencing road alerts after a noisy week
+      // does not also silence the question asking whether you got home.
+      JOURNEY: 'journey_check_in',
     });
   });
 
@@ -70,4 +76,51 @@ describe('channelForType', () => {
       expect(channelForType(type as string | undefined)).toBe(ALERT_CHANNELS.SYSTEM);
     },
   );
+});
+
+/**
+ * Background delivery. JG2, found on the fifth device run.
+ *
+ * Android freezes a backgrounded app's process, and `expo-notifications` builds
+ * the notification inside it -- so a check-in arrives at the device and then
+ * waits for the phone to be woken. These assertions pin the two things that
+ * make the exemption askable at all, both of which live outside TypeScript and
+ * neither of which fails loudly: the manifest permission, and the dependency
+ * that opens the dialog.
+ */
+describe('the app can ask to keep running in the background', () => {
+  const appJson = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '..', '..', '..', 'app.json'), 'utf8'),
+  );
+  const packageJson = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf8'),
+  );
+
+  it('declares the permission the request dialog needs', () => {
+    // Without it `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` throws and the user
+    // lands in the settings list instead of a one-tap dialog. The failure is a
+    // worse experience rather than an error, so nothing would report it.
+    expect(appJson.expo.android.permissions).toContain(
+      'REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
+    );
+  });
+
+  it('keeps the two modules the check and the request need', () => {
+    // `expo-battery` reads whether Android may freeze us; `expo-intent-launcher`
+    // opens the dialog. Both are native, so losing either is a runtime failure
+    // on a phone and nothing at all in CI.
+    expect(packageJson.dependencies['expo-battery']).toBeDefined();
+    expect(packageJson.dependencies['expo-intent-launcher']).toBeDefined();
+  });
+
+  it('reaches the diagnosis from the Profile screen', () => {
+    // The battery problem is reported on AlertPreferences, and that screen was
+    // unreachable for most of this project's life -- the row was removed when
+    // push was off at both ends. A diagnosis nobody can open diagnoses nothing.
+    const profile = fs.readFileSync(
+      path.join(__dirname, '..', '..', 'screens', 'Profile', 'ProfileScreen.tsx'),
+      'utf8',
+    );
+    expect(profile).toContain("navigation.navigate('AlertPreferences')");
+  });
 });

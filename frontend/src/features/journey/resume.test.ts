@@ -110,11 +110,14 @@ describe('MapScreen wires the journey in the order JG1 requires', () => {
     expect(mapScreen.slice(stop, stop + 600)).toContain('journey.cancel()');
   });
 
-  it('keeps the resume card out of route mode and off the first frame', () => {
+  it('keeps the resume card off the first frame, and out of route mode unless asked', () => {
     // `loading` is what stops it flashing in and out while the launch read is in
-    // flight.
+    // flight. `|| awaitingAnswer` is JG2: the deadline usually passes while
+    // somebody is still walking, which is route mode, which is exactly when this
+    // card used to be hidden -- leaving the notification as the only way to
+    // answer.
     expect(mapScreen).toContain(
-      'const showResume = !routeMode && !journey.loading && !!journey.journey;',
+      'const showResume = (!routeMode || awaitingAnswer) && !journey.loading && !!journey.journey;',
     );
   });
 
@@ -130,11 +133,27 @@ describe('MapScreen wires the journey in the order JG1 requires', () => {
     // accent, and on some Android skins a white panel over a dark map. The one
     // moment the app most needs to look deliberate is the moment it is telling
     // you something failed.
-    const notice = mapScreen.indexOf('Journey not recorded');
-    expect(notice).toBeGreaterThan(-1);
-    const dialog = mapScreen.lastIndexOf('<Dialog', notice);
+    //
+    // The title used to sit in the JSX, so this walked back from it to the
+    // `<Dialog` tag. JG2 moved it into the notice itself -- one dialog serves two
+    // unrelated failures and a single hardcoded title is how the wrong copy got
+    // shown -- so the check is now the two halves: the message exists, and the
+    // dialog that renders it is ours.
+    expect(mapScreen).toContain("title: 'Journey not recorded'");
+    const dialog = mapScreen.indexOf('<Dialog');
     expect(dialog).toBeGreaterThan(-1);
-    expect(mapScreen.slice(dialog, notice)).not.toContain('Alert.alert');
+    expect(mapScreen.slice(dialog, mapScreen.indexOf('/>', dialog))).toContain(
+      'journeyNotice?.title',
+    );
+    // Scoped to the two journey-failure paths, not the whole screen: this file
+    // has half a dozen legitimate `Alert.alert` calls for routing and location
+    // errors, and whether those should also be Dialogs is a separate question
+    // this test has no business answering.
+    for (const raise of ["title: 'Journey not recorded'", "title: 'Check-in not sent'"]) {
+      const at = mapScreen.indexOf(raise);
+      expect(at).toBeGreaterThan(-1);
+      expect(mapScreen.slice(at - 400, at)).not.toContain('Alert.alert');
+    }
   });
 
   it('raises that notice from the result of the write, not from hook state', () => {
@@ -142,7 +161,9 @@ describe('MapScreen wires the journey in the order JG1 requires', () => {
     // nothing watching it can tell "failed again" from "still failed" -- and the
     // second press of Start is exactly the one someone makes when the first
     // looked like it did nothing.
-    expect(mapScreen).toContain('if (written.error) setJourneyNotice(written.error);');
+    expect(mapScreen).toContain('if (written.error)');
+    const raise = mapScreen.indexOf('if (written.error)');
+    expect(mapScreen.slice(raise, raise + 300)).toContain('setJourneyNotice({');
     expect(mapScreen).not.toContain('journey.error');
   });
 });

@@ -203,24 +203,53 @@ Worth testing before we promise it.
 
 # Part 2 — the phases
 
+> ## Scope decision, 15 Oct 2026: this stops at JG3
+>
+> **JG1–JG3 ship. JG4–JG7 are not being built before the finale on 24 Oct.** The
+> freeze is 23 Oct, which is eight days, and JG2 alone took five runs on a real
+> phone. That is the whole reason, and two of the four dropped phases would not
+> have fitted anyway:
+>
+> * **JG5 is blocked.** It needs continuous background location, which is S17 and
+>   does not exist — `expo-location` is installed but only geofencing is wired
+>   (`features/geofence/task.ts`); `startLocationUpdatesAsync` appears nowhere in
+>   the codebase. Building that first is its own phase.
+> * **JG7 needs an opt-in surface and a privacy review**, and it is the phase that
+>   looks worst half-done: a witness request is a message to strangers.
+> * **JG4 is genuinely cheap** — one pure function in `app/journeys/deadline.py`,
+>   which JG2 already isolated for exactly this. It is the first thing to pick up
+>   if JG3 lands early.
+> * **JG6 is the most impressive thing in this document** and is worth more than
+>   JG4 to a judge, but it is useless without JG3's escalation chain and the plan
+>   already says it needs teaching rather than a toggle to be real.
+>
+> What JG1–JG3 adds up to is a complete story rather than a truncated one: the
+> journey survives the app being killed, the server notices you are late and asks,
+> and a second person is told when you do not answer. That is the premise of the
+> feature, start to finish. Stopping here costs refinements; stopping at JG2 would
+> have cost the point.
+>
+> Nothing below is deleted. JG4–JG7 keep their sections, marked, because the
+> argument for each is still good and the order still holds.
+
 **These are not fixed.** Each phase is a day or two of work that ends in something you can show on a
 phone, and the shape of a later phase will change once an earlier one is on a device. Where a phase
 turns out to be two, split it; where two collapse into one, merge them. What should not move is the
 **order**, because each phase depends on the one before it, and the **rule that every phase ends with
 a walkthrough that was actually run on a phone**.
 
-| Phase | What it makes showable | Depends on |
-|---|---|---|
-| **JG1** | A journey that survives the app being killed | — |
-| **JG2** | A deadline that pings you, and one tap to answer | JG1 |
-| **JG3** | Someone else knows you got home | JG2 |
-| **JG4** | The leash tightens at night and near flagged roads | JG3 |
-| **JG5** | Being put in a car is noticed; a jam is not | JG3 |
-| **JG6** | Answering safely while being watched | JG3 |
-| **JG7** | Witnesses nearby, and one tap to 999 | JG3 |
+| Phase | What it makes showable | Depends on | Status |
+|---|---|---|---|
+| **JG1** | A journey that survives the app being killed | — | Built. Walkthrough never run on a device |
+| **JG2** | A deadline that pings you, and one tap to answer | JG1 | Built. Steps 1–10 pass on a phone; the lock-screen tap does not — see its **Done when** |
+| **JG3** | Someone else knows you got home | JG2 | **Next, and the last one** |
+| **JG4** | The leash tightens at night and near flagged roads | JG3 | Not before the finale. First stretch goal |
+| **JG5** | Being put in a car is noticed; a jam is not | JG3 | Not before the finale. Blocked on S17 |
+| **JG6** | Answering safely while being watched | JG3 | Not before the finale. Second stretch goal |
+| **JG7** | Witnesses nearby, and one tap to 999 | JG3 | Not before the finale |
 
 **JG1–JG3 are the feature.** JG4–JG7 are independent of each other and can be built in any order, or
-dropped, without breaking what came before.
+dropped, without breaking what came before — which is what has now happened.
 
 ---
 
@@ -263,6 +292,27 @@ with no feature behind it yet.
 **Done when:** you start a journey, set the deadline two minutes out, put the phone down, get a buzz,
 tap once from the lock screen, and the trip goes quiet again.
 
+> **Partly failed, 15 Oct 2026.** Everything up to the buzz works on a real phone, and the trip does
+> go quiet again. **The tap from the lock screen does not.** Android draws the notification itself
+> when it arrives from FCM with a title and body, and its own renderer knows nothing about Expo
+> notification categories — so the `I'm fine` button is simply absent. Proven on the device: an
+> `expo-notifications`-drawn record carries `actions=1`, an FCM-drawn one (`tag=FCM-Notification:…`)
+> carries none, and which of the two draws it is not ours to choose from the server.
+>
+> The fix is to send **data-only** — no `title` or `body`, everything in `data` — so FCM has nothing
+> to render and `expo-notifications` is forced to handle it, at which point the app posts the
+> notification itself with the category attached. That stays on Expo's relay and needs no new
+> credential; it is a change to `compose_check_in` plus a handler in the app. It was not taken before
+> the finale because the risk runs the wrong way: a data-only message to a *killed* app may display
+> nothing at all, and trading a notification that reliably arrives without a button for one that may
+> not arrive is the worse failure. To be attempted after JG3, with the journey card unchanged as the
+> guaranteed path.
+>
+> The answer is given on the journey card instead, which goes through the same endpoint and is
+> measured: asked `12:00:04`, answered `12:00:34`. Recorded here rather than quietly reworded,
+> because `JOURNEY_GUARDIAN.md` §5 builds the duress response on a notification button, and JG6 now
+> has to know that ground is not solid.
+
 **Walkthrough:** `docs/walkthroughs/JG2.md`
 
 **What might change:** the grace period, which is a guess until JG4 and the trial. Start generous — a
@@ -284,6 +334,8 @@ feature that cries wolf in week one never gets a week two.
 **Done when:** a second phone receives "started", then "arrived" — and in a second run where you
 ignore the check-ins, receives the escalation instead, with a location.
 
+**Detailed plan:** `JG3_PLAN.md` — written 15 Oct 2026, before any code.
+
 **Walkthrough:** `docs/walkthroughs/JG3.md`
 
 **What might change:** the channel. Email is what the SOS pipeline already uses and is the cheapest
@@ -291,6 +343,8 @@ thing that works; SMS is what a guardian will actually read at 10pm. Email first
 complaint.
 
 ## JG4 — the risk-weighted leash
+
+> **Not before the finale — first stretch goal.** The cheapest phase here: the derivation already has a home in `app/journeys/deadline.py`, which JG2 built as pure functions over offsets for exactly this. Pick this up if JG3 lands early.
 
 **Goal:** the same deviation gets a different reaction at 2pm and at 11pm.
 
@@ -309,6 +363,8 @@ lengths before asking.
 after the trial, and the pure function is what makes that cheap.
 
 ## JG5 — signals better than off-route
+
+> **Not before the finale — blocked.** Every signal here needs continuous background location, which is S17 and is not built: only geofencing is wired (`features/geofence/task.ts`), and `startLocationUpdatesAsync` appears nowhere in the codebase. The background-location work is its own phase and has to come first.
 
 **Goal:** notice the things that are actually unusual, and stay quiet about the things that are not.
 
@@ -329,6 +385,10 @@ failure.
 
 ## JG6 — answering safely
 
+> **Not before the finale — second stretch goal, and the one worth most.** The duress response is the most striking thing in this document, and JG2 already reserves the ground for it: `checkin.py::CHECK_IN_ACTION_OK` documents why there is one button today and not two. It needs JG3's escalation chain to escalate into, and it needs teaching rather than a settings toggle, which is a design problem and not an afternoon.
+>
+> One caution from JG2's device runs: a lock-screen button cannot be relied on with this push stack at all (see `docs/walkthroughs/JG2.md`). A duress *button on a notification* may therefore not be deliverable, and this phase would have to put both responses on the journey card.
+
 **Goal:** a check-in that can be answered honestly while somebody is watching you answer it.
 
 **What lands:**
@@ -348,6 +408,8 @@ decoration, and the honest answer may be that this needs a one-time walkthrough 
 than a settings toggle.
 
 ## JG7 — the outer ring
+
+> **Not before the finale.** The largest of the four, and the one that looks worst half-finished: a witness request is an unsolicited message to strangers about an emergency. It needs an opt-in surface that does not exist and a privacy review, and the radius and wording are explicitly judgement calls to be made with the notification on a real phone.
 
 **Goal:** reach the people who are actually nearest, without summoning a crowd.
 

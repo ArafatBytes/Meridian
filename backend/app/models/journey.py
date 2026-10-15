@@ -65,7 +65,51 @@ TRANSITIONS: dict[str, tuple[str, ...]] = {
 PROFILES = ("driving", "foot")
 
 
+# ---------------------------------------------------------------------------
+# How worried we are about it. JG2.
+# ---------------------------------------------------------------------------
+# A second axis, not more values on `state`.
+#
+# A journey being asked a question is still active -- it has not arrived and it
+# has not been cancelled. Folding the two together would mean every query that
+# asks "is this journey running" has to know the escalation vocabulary, and
+# would make the escalation chain JG3 builds into a set of extra ways for a
+# journey to be over. `state` is where the journey is; `escalation_state` is how
+# worried we are about it.
+
+ESCALATION_NORMAL = "normal"
+ESCALATION_CHECK_IN_SENT = "check_in_sent"
+
+#: Every escalation state. Mirrors `journeys_escalation_check`.
+#:
+#: JG3 adds `contacts_notified` and `full_sos` here and in that CHECK, and the
+#: concept document's rule applies to each: no step may be skipped, and every
+#: step past the first requires a recorded non-response with a timestamp --
+#: which is `journeys.unanswered_at`.
+ESCALATION_STATES = (ESCALATION_NORMAL, ESCALATION_CHECK_IN_SENT)
+
+#: The only escalation edges in JG2. It is a cycle on purpose: answering returns
+#: the journey to `normal`, and a journey that runs long enough is asked again.
+#: A terminal `check_in_sent` would mean the question could only ever be asked
+#: once per journey, which is not what "the trip goes quiet again" means.
+ESCALATION_TRANSITIONS: dict[str, tuple[str, ...]] = {
+    ESCALATION_NORMAL: (ESCALATION_CHECK_IN_SENT,),
+    ESCALATION_CHECK_IN_SENT: (ESCALATION_NORMAL,),
+}
+
+
 def may_transition(current: str, target: str) -> bool:
     """Whether `current -> target` is an edge. Unknown states have no edges."""
     return target in TRANSITIONS.get(current, ())
+
+
+def may_escalate(current: str, target: str) -> bool:
+    """
+    Whether `current -> target` is an escalation edge. Unknown states have none.
+
+    Deliberately the same shape as `may_transition` rather than one function
+    taking a machine, because the two machines are read by different code and
+    JG3 changes only one of them.
+    """
+    return target in ESCALATION_TRANSITIONS.get(current, ())
 

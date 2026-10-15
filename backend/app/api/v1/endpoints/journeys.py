@@ -1,16 +1,22 @@
 """
-JG1 — the journey that survives.
+JG1 — the journey that survives. JG2 — the deadline, and one tap to answer.
 
-    POST /journeys                 start one
-    GET  /journeys/active          the caller's open journey, or null
-    POST /journeys/{id}/arrive     active -> arrived
-    POST /journeys/{id}/cancel     active -> cancelled
+    POST /journeys                  start one, with a deadline
+    GET  /journeys/active           the caller's open journey, or null
+    POST /journeys/{id}/arrive      active -> arrived
+    POST /journeys/{id}/cancel      active -> cancelled
+    POST /journeys/{id}/heartbeat   still going, about N seconds left   (JG2)
+    POST /journeys/{id}/check-in    "I'm fine"                          (JG2)
 
-Four routes and no fifth. **Nothing here watches anything.** There is no
-deadline, no check-in, no escalation and no background job reading this table.
-The claim of this phase is survival and only survival: the row outlives the
-process, so force-stopping the app mid-journey and reopening it finds the journey
-still there. JG2 is what gives it a clock; JG3 is what gives it an audience.
+**Nothing here tells anybody else anything.** The check-in goes to the person's
+own phone and the answer comes back to this table; there is no guardian, no
+contact and no message leaving the account. That is JG3. What JG2 adds is a
+clock, one question, and a record of whether it was answered.
+
+The two JG2 routes are both idempotent and both no-ops on a journey that is not
+active, for the same reason the JG1 terminals are: each is reachable from a
+background timer or a lock-screen tap that cannot know what the journey did since
+the screen was drawn.
 
 `GET /journeys/active` is the whole point of the phase from the app's side. It is
 the call the map screen makes on launch, and the one sentence it produces --
@@ -39,8 +45,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.journeys.deadline import (
+    ANSWER_EXTENSION,
+    MAX_DEADLINE,
+    heartbeat_offset,
+    leash,
+    start_offset,
+)
 from app.models.journey import STATE_ARRIVED, STATE_CANCELLED, may_transition
-from app.schemas.journey import JourneyResponse, JourneyStart
+from app.schemas.journey import JourneyHeartbeat, JourneyResponse, JourneyStart
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +67,8 @@ _COLUMNS: Final = """
     journey_id, state, destination_label, route_id, route_profile,
     distance_km, duration_minutes, safety_score,
     started_at, eta_at, ended_at,
+    deadline_at, escalation_state,
+    check_in_sent_at, answered_at, unanswered_at, last_heartbeat_at,
     extensions.ST_Y(origin::extensions.geometry)      as origin_lat,
     extensions.ST_X(origin::extensions.geometry)      as origin_lon,
     extensions.ST_Y(destination::extensions.geometry) as dest_lat,
@@ -66,7 +81,7 @@ _INSERT: Final = text(
     insert into public.journeys (
         user_id, origin, destination, destination_label,
         route_id, route_profile, distance_km, duration_minutes, safety_score,
-        started_at, eta_at
+        started_at, eta_at, deadline_at, leash_seconds
     ) values (
         :user_id,
         extensions.ST_SetSRID(extensions.ST_MakePoint(:origin_lon, :origin_lat), 4326)::extensions.geography,
@@ -74,10 +89,22 @@ _INSERT: Final = text(
         :destination_label,
         :route_id, :route_profile, :distance_km, :duration_minutes, :safety_score,
         now(),
-        -- Derived here, from the server's own clock, and never taken from the
-        -- request. From JG2 onward this instant is the deadline, and a deadline
-        -- the client sets is a deadline the client can move.
-        now() + make_interval(secs => :duration_seconds)
+        -- Derived from the server's own clock and never taken from the request.
+        -- This is the route's promise, frozen: it is NOT the deadline, and JG2's
+        -- migration corrected the JG1 comment here that said it would become one.
+        now() + make_interval(secs => :duration_seconds),
+
+        -- The deadline. Same clock, and the offset comes from
+        -- `journeys/deadline.py::start_offset`, which is where the grace period
+        -- and the clamp live. A clock the client sets is a deadline the client
+        -- can move, so what the request carries is a number of minutes and the
+        -- instant is computed here.
+        now() + make_interval(secs => :deadline_seconds),
+
+        -- NULL when the route's own ETA was accepted. See `deadline.leash`:
+        -- this is what stops a heartbeat handing somebody ten minutes they did
+        -- not ask for.
+        :leash_seconds
     )
     returning {_COLUMNS}
     """
@@ -137,6 +164,85 @@ _CANCEL_ACTIVE: Final = text(
 )
 
 
+# ---------------------------------------------------------------------------
+# JG2
+# ---------------------------------------------------------------------------
+
+_HEARTBEAT: Final = text(
+    f"""
+    update public.journeys
+       set last_heartbeat_at = now(),
+           deadline_at = case
+               -- Only while nothing has been asked. Once a check-in is out, a
+               -- phone whose GPS is still ticking in a bag must not be able to
+               -- talk its way out of a question a person has to answer.
+               when escalation_state = 'normal' then least(
+                   -- Forward only. Evaluated here, against the row, rather than
+                   -- in Python against a value read a moment ago: two heartbeats
+                   -- racing would otherwise let the older proposal land last and
+                   -- pull the deadline backwards.
+                   greatest(
+                       deadline_at,
+                       now() + make_interval(secs => least(
+                           :slide_seconds,
+                           -- The leash the person chose, when they chose one.
+                           -- Without this cap a two-minute leash became twelve
+                           -- the first time this ran on a phone: the proposal
+                           -- carries a full grace period on top of the route's
+                           -- remainder, and `greatest` took it because it was
+                           -- later. `coalesce` rather than a second branch, so
+                           -- the default -- no leash -- is the proposal itself.
+                           coalesce(leash_seconds, :slide_seconds)
+                       ))
+                   ),
+                   -- The ceiling. Without it a steady "about twenty minutes
+                   -- left" from a stationary phone extends the deadline forever,
+                   -- one minute at a time, and the journey is never due.
+                   started_at + make_interval(secs => :ceiling_seconds)
+               )
+               else deadline_at
+           end
+     where journey_id = :journey_id
+       and user_id = :user_id
+       and state = 'active'
+    returning {_COLUMNS}
+    """
+)
+
+
+_CHECK_IN: Final = text(
+    f"""
+    update public.journeys
+       set escalation_state = 'normal',
+           answered_at = now(),
+           unanswered_at = null,
+           -- Capped by the leash, for the same reason the heartbeat is. Answering
+           -- buys ANSWER_EXTENSION, but somebody who said "two minutes" must not
+           -- be handed fifteen for tapping the button -- that is the heartbeat
+           -- bug of 20261015140000__journey_leash.sql wearing a different hat,
+           -- and it was found on the same row, one path over. `coalesce` leaves
+           -- the default chip (no leash) at the full extension, which is the
+           -- common case and unchanged.
+           deadline_at = least(
+               now() + make_interval(secs => least(
+                   :extension_seconds,
+                   coalesce(leash_seconds, :extension_seconds)
+               )),
+               started_at + make_interval(secs => :ceiling_seconds)
+           )
+     where journey_id = :journey_id
+       and user_id = :user_id
+       and state = 'active'
+       -- There has to be a question to answer. `journeys_answered_after_asked`
+       -- says the same thing at the table level; this is what turns it into a
+       -- 409 instead of an IntegrityError, and what stops an answer sent out of
+       -- nowhere from buying an extension.
+       and escalation_state = 'check_in_sent'
+    returning {_COLUMNS}
+    """
+)
+
+
 def _response(row: Any) -> JourneyResponse:
     return JourneyResponse(
         journey_id=str(row.journey_id),
@@ -154,6 +260,12 @@ def _response(row: Any) -> JourneyResponse:
         started_at=row.started_at,
         eta_at=row.eta_at,
         ended_at=row.ended_at,
+        deadline_at=row.deadline_at,
+        escalation_state=row.escalation_state,
+        check_in_sent_at=row.check_in_sent_at,
+        answered_at=row.answered_at,
+        unanswered_at=row.unanswered_at,
+        last_heartbeat_at=row.last_heartbeat_at,
     )
 
 
@@ -204,6 +316,15 @@ async def start_journey(
                 "duration_minutes": body.duration_minutes,
                 "safety_score": body.safety_score,
                 "duration_seconds": body.duration_minutes * 60.0,
+                "deadline_seconds": start_offset(
+                    duration_minutes=body.duration_minutes,
+                    chosen_minutes=body.deadline_minutes,
+                ).total_seconds(),
+                "leash_seconds": (
+                    None
+                    if (chosen := leash(chosen_minutes=body.deadline_minutes)) is None
+                    else chosen.total_seconds()
+                ),
             },
         )
     ).one()
@@ -297,3 +418,128 @@ async def cancel(
     "got home" from "stopped telling us".
     """
     return await _end(journey_id, STATE_CANCELLED, db, current_user["user_id"])
+
+
+# ---------------------------------------------------------------------------
+# JG2 — the clock
+# ---------------------------------------------------------------------------
+
+
+async def _not_active(journey_id: str, db: AsyncSession, user_id: str) -> HTTPException:
+    """
+    Why the UPDATE matched nothing, as the exception to raise.
+
+    Shared by both JG2 routes because both are reached from places that cannot
+    know the journey's current state -- a background timer and a notification
+    action -- so "it already ended" has to be an ordinary answer rather than a
+    500 or a lie.
+    """
+    existing = (
+        await db.execute(_SELECT_ONE, {"journey_id": journey_id, "user_id": user_id})
+    ).one_or_none()
+    # 404 rather than 403 on someone else's journey, as in `_end`: whether a
+    # given journey id exists is not this caller's business either.
+    if existing is None:
+        return HTTPException(status.HTTP_404_NOT_FOUND, "No such journey")
+    return HTTPException(
+        status.HTTP_409_CONFLICT,
+        f"This journey is {existing.state} and is no longer running",
+    )
+
+
+@router.post("/{journey_id}/heartbeat", response_model=JourneyResponse)
+async def heartbeat(
+    journey_id: str,
+    body: JourneyHeartbeat,
+    db: AsyncSession = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+) -> JourneyResponse:
+    """
+    The phone saying it is still going, and roughly how much is left.
+
+    This is the only thing in the system that extends a deadline without a person
+    pressing anything, and the asymmetry it creates is the whole design:
+
+        a phone in a jam talks       -> the clock follows it
+        a phone in a ditch does not  -> the clock runs out
+
+    Silence never buys an extension, and not because anything checks for silence.
+    There is simply no code path that moves a deadline on its own. Deleting this
+    route would make every journey due exactly when it said it would be.
+
+    Carries no position. JG2 has no reader for one -- the check-in goes to this
+    person's own phone -- and the only message that needs a last known location
+    is the escalation JG3 sends to somebody else.
+    """
+    row = (
+        await db.execute(
+            _HEARTBEAT,
+            {
+                "journey_id": journey_id,
+                "user_id": current_user["user_id"],
+                "slide_seconds": heartbeat_offset(
+                    remaining_seconds=body.remaining_seconds
+                ).total_seconds(),
+                "ceiling_seconds": MAX_DEADLINE.total_seconds(),
+            },
+        )
+    ).one_or_none()
+
+    if row is None:
+        raise await _not_active(journey_id, db, current_user["user_id"])
+    return _response(row)
+
+
+@router.post("/{journey_id}/check-in", response_model=JourneyResponse)
+async def check_in(
+    journey_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+) -> JourneyResponse:
+    """
+    "I'm fine." The one tap this phase exists to make possible.
+
+    Takes no body on purpose. There is exactly one answer in JG2 and it is
+    affirmative, so a field saying which answer it was would have one legal
+    value. JG6 is the phase that adds a second button -- the one that looks like
+    this one and silently escalates instead -- and when it does, the difference
+    has to be invisible on the wire as well as on the screen, which means a new
+    route rather than a flag on this one.
+
+    Answering returns the journey to `normal` and buys `ANSWER_EXTENSION` from
+    now. It does not clear `check_in_sent_at`: that is the history of what
+    happened on this trip, and JG3's escalation reads it. It does clear
+    `unanswered_at`, because that record belongs to the question just answered.
+
+    409 when there is no question outstanding. An answer accepted out of nowhere
+    would be a way to extend a deadline by replaying a notification action, which
+    is the one thing a lock-screen button must not be.
+    """
+    row = (
+        await db.execute(
+            _CHECK_IN,
+            {
+                "journey_id": journey_id,
+                "user_id": current_user["user_id"],
+                "extension_seconds": ANSWER_EXTENSION.total_seconds(),
+                "ceiling_seconds": MAX_DEADLINE.total_seconds(),
+            },
+        )
+    ).one_or_none()
+
+    if row is not None:
+        return _response(row)
+
+    existing = (
+        await db.execute(
+            _SELECT_ONE, {"journey_id": journey_id, "user_id": current_user["user_id"]}
+        )
+    ).one_or_none()
+    if existing is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such journey")
+    if existing.state != "active":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"This journey is {existing.state} and is no longer running",
+        )
+    raise HTTPException(status.HTTP_409_CONFLICT, "Nothing to answer on this journey")
