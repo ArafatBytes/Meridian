@@ -44,6 +44,13 @@ logger = logging.getLogger(__name__)
 # Supabase issues access tokens with this audience.
 _EXPECTED_AUDIENCE = "authenticated"
 
+# Asymmetric only, deliberately. ADR 0002: a symmetric algorithm means the
+# verifier holds a key that can also *mint*, and this project's `.env` — which
+# carries `JWT_SECRET_KEY` — is committed on purpose. ES256 is what Supabase
+# issues here; RS256 is kept because it is the other asymmetric algorithm a
+# Supabase project can be configured for, and it has the same property.
+_ALLOWED_ALGORITHMS = frozenset({"ES256", "RS256"})
+
 # Clock skew tolerance between this host and Supabase, in seconds.
 _LEEWAY = 10
 
@@ -119,7 +126,20 @@ async def verify_supabase_token(token: str) -> dict[str, Any]:
     Verify a Supabase access token and return its claims.
 
     Raises `JWTError` on anything invalid — expired, wrong audience, unknown
-    key, bad signature. Callers turn that into a 401.
+    key, bad signature, or a missing `aud`. Callers turn that into a 401.
+
+    **Asymmetric only.** See ADR 0002's finding of 2026-10-15: the HS256 branch
+    that used to be here was a legacy accommodation this project never needed,
+    and it was what made a forged token verify. `endpoints/auth.py` minted
+    `{"sub": "user_id"}` tokens with `JWT_SECRET_KEY` for anyone who asked, and
+    this function accepted them. The endpoint is gone, the minting helpers are
+    gone, and so is the branch that trusted a shared secret — three faults, any
+    one of which was sufficient, so all three were removed rather than the
+    cheapest one.
+
+    If a Supabase project on a genuinely legacy symmetric secret ever has to be
+    supported, that is a deliberate change here with a test alongside it, not a
+    fallback that happens to be reachable.
     """
     try:
         header = jwt.get_unverified_header(token)
@@ -130,22 +150,30 @@ async def verify_supabase_token(token: str) -> dict[str, Any]:
     if not algorithm:
         raise JWTError("Token header has no 'alg'")
 
+    if algorithm not in _ALLOWED_ALGORITHMS:
+        raise JWTError(
+            f"Unsupported token algorithm: {algorithm}. This project's tokens are "
+            "ES256; symmetric algorithms are refused (ADR 0002)."
+        )
+
+    kid = header.get("kid")
+    if not kid:
+        raise JWTError(f"{algorithm} token has no 'kid', cannot select a key")
+    key: Any = await _cache.get(kid)
+
+    # `require` is the part that matters, and it is not implied by `verify_aud`.
+    # A token carrying no `aud` claim at all was *accepted* under
+    # `{"verify_aud": True}` alone — measured, and the single fault that would
+    # have blocked the bypass on its own. Every genuine Supabase access token
+    # carries `aud: "authenticated"`, so requiring it rejects nothing real.
+    #
     # `leeway` tolerates small clock differences between this host and Supabase;
     # without it a correctly-issued token can be rejected as not-yet-valid.
-    options = {"verify_aud": True, "leeway": _LEEWAY}
-
-    if algorithm == "HS256":
-        # Legacy symmetric configuration.
-        if not settings.JWT_SECRET_KEY:
-            raise JWTError("Token is HS256 but JWT_SECRET_KEY is not configured")
-        key: Any = settings.JWT_SECRET_KEY
-    elif algorithm in ("ES256", "RS256"):
-        kid = header.get("kid")
-        if not kid:
-            raise JWTError(f"{algorithm} token has no 'kid', cannot select a key")
-        key = await _cache.get(kid)
-    else:
-        raise JWTError(f"Unsupported token algorithm: {algorithm}")
+    options = {
+        "verify_aud": True,
+        "leeway": _LEEWAY,
+        "require": ["exp", "aud", "sub"],
+    }
 
     return jwt.decode(
         token,

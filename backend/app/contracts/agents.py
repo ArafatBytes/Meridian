@@ -79,3 +79,61 @@ class BaseAgent(ABC):
 
     @abstractmethod
     async def run(self, ctx: AgentContext) -> AgentResult: ...
+
+
+# ============================================================================
+# B9 — fleet status, as a signed-in user is shown it
+# ============================================================================
+
+AgentHealthState = Literal["working", "late", "problem", "never_run", "unknown"]
+"""
+Mirrors `app/agents/health.py :: HealthState`. Declared again here rather than
+imported because this is the **wire** vocabulary: the client has a matching union
+and `tests/invariants/test_contracts_do_not_drift.py` compares the two, so this
+is the definition that is contractually frozen. `health.py` is free to add an
+internal distinction (it separates a stuck run from a failed one) without that
+becoming a new value a client must learn.
+"""
+
+
+class AgentHealthReport(BaseModel):
+    """
+    One agent's health, narrowed to what a user may see.
+
+    **What is deliberately not here, and why.** `errors` is a Python exception
+    repr — noise to a user and a small amount of help to anybody probing the
+    deployment. `items_in`/`items_out` do not mean the same thing across agents,
+    so one column of them invites a comparison that is not valid. `failures_24h`
+    reads as alarming without being actionable: a user cannot retry an agent.
+    All four stay in `python -m app.agents status`, where the reader can act.
+
+    What is here is a state, a measured age and the cadence it is measured
+    against — enough for a user to answer "is what I am looking at current", and
+    not enough to mislead them about anything else.
+    """
+
+    agent: str
+    state: AgentHealthState
+    last_run_at: datetime | None
+    seconds_since_last_run: int | None
+    cadence_seconds: int | None
+    runs_last_24h: int
+
+
+class FleetStatus(BaseModel):
+    """
+    `mode` is `live` (agents on schedules, reading the database) or `replay`
+    (`RISK_SURFACE_IMPL=seeded`, offline, nothing scheduled and nothing to
+    report). Same two values and the same reason as `IngestionStatus`: the demo
+    runs offline, and a status screen that errored in replay mode would be a
+    broken screen on stage rather than an honest one.
+
+    `checked_at` is the server's instant, and the client ages everything from it
+    rather than from the handset clock — a phone whose clock is twenty minutes
+    out would otherwise render "updated 20 minutes ago" for a run that just
+    finished, or worse, a negative age.
+    """
+
+    mode: Literal["live", "replay"]
+    checked_at: datetime
+    agents: list[AgentHealthReport]

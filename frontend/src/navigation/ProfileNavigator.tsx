@@ -8,6 +8,7 @@ import SOSHotWordsScreen from '../screens/Profile/SOSHotWordsScreen';
 import SOSHistoryScreen from '../screens/Profile/SOSHistoryScreen';
 import AlertPreferencesScreen from '../features/alerts/AlertPreferencesScreen';
 import GuardianScreen from '../features/guardian/GuardianScreen';
+import SystemStatusScreen from '../features/status/SystemStatusScreen';
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
 
@@ -28,6 +29,7 @@ const ProfileNavigator: React.FC = () => {
       <Stack.Screen name="SOSHistory" component={SOSHistoryScreen} />
       <Stack.Screen name="AlertPreferences" component={AlertPreferencesScreen} />
       <Stack.Screen name="Guardian" component={GuardianScreen} />
+      <Stack.Screen name="SystemStatus" component={SystemStatusScreen} />
     </Stack.Navigator>
   );
 };

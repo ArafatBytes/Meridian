@@ -355,3 +355,97 @@ def test_the_candidate_window_matches_the_policy() -> None:
     source = _agent_source()
     assert "ctx.now - CLUSTER_WINDOW" in source
     assert CLUSTER_WINDOW == timedelta(days=14)
+
+
+# ===========================================================================
+# Defect 57 — the agent that had never once succeeded
+# ===========================================================================
+
+
+class _RecordingSession:
+    """
+    Enough `AsyncSession` to drive `run()` with no database.
+
+    Every `execute` is recorded and answers empty, so the publish loop never
+    runs and the agent completes its bookkeeping. The point is not the result;
+    it is the parameters that reached the driver.
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict[str, object] | None]] = []
+
+    async def execute(self, statement: object, params: dict[str, object] | None = None) -> object:
+        self.calls.append((str(statement), params))
+
+        class _Empty:
+            def all(self) -> list[object]:
+                return []
+
+            def first(self) -> None:
+                return None
+
+            def scalar_one_or_none(self) -> None:
+                return None
+
+        return _Empty()
+
+    async def commit(self) -> None:
+        return None
+
+    async def rollback(self) -> None:
+        return None
+
+
+async def test_the_window_is_bound_naive_because_the_column_is_naive() -> None:
+    """
+    Defect 57, found by B9's fleet status on 15 Oct: **38 runs, 0 successes.**
+    This agent had never worked, `community_clusters` held zero rows, and three
+    documents described B13 as landed.
+
+    `crime_reports.incident_date_time` is `timestamp without time zone`, and
+    asyncpg refuses to encode an aware datetime into one — it raises while
+    binding, before the statement is sent, so the run died on its first query
+    every hour. Nothing noticed because a failed run writes an `agent_runs` row
+    and no alert, and nothing read `agent_runs` back.
+
+    The agent already read the naive column correctly on the way *out*
+    (`_rows_to_candidates` applies UTC). Only the bound parameter was missed, so
+    this asserts the direction that was wrong rather than the one that was right.
+
+    Checked through `run()` rather than by reading the source, because the bug
+    was not visible in the SQL — `where r.incident_date_time >= :since` is
+    correct — it was in the value handed to it.
+    """
+    from app.agents.report_corroboration import AGENT
+    from app.contracts.agents import AgentContext
+
+    session = _RecordingSession()
+    # `model_construct`, not `AgentContext(...)`: `db` is isinstance-validated
+    # against `AsyncSession`, and the alternative — a `MagicMock(spec=...)` whose
+    # faked `__class__` slips past that check — would be a test that depends on
+    # mock internals to lie about a type. Skipping validation says what is
+    # happening out loud.
+    result = await AGENT.run(
+        AgentContext.model_construct(
+            run_id=uuid4(),
+            now=datetime(2026, 10, 15, 12, 0, tzinfo=UTC),
+            dry_run=False,
+            db=session,  # type: ignore[arg-type]
+        )
+    )
+
+    assert result.status != "failed", f"the run failed: {result.errors}"
+
+    bound = [params for _, params in session.calls if params and "since" in params]
+    assert bound, "no statement bound a `since` parameter; has the window query moved?"
+    for params in bound:
+        since = params["since"]
+        assert isinstance(since, datetime)
+        assert since.tzinfo is None, (
+            "`since` is timezone-aware again. `crime_reports.incident_date_time` "
+            "is `timestamp without time zone`, and asyncpg raises while binding "
+            "an aware datetime to it — which is defect 57, 38 consecutive failed "
+            "runs that produced no alert and no empty-output warning. If the "
+            "column is ever migrated to `timestamptz`, change it here and delete "
+            "this test in the same commit."
+        )

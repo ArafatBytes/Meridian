@@ -360,9 +360,18 @@ async def list_thanas():
     """
     Every station name, for the review screen's picker.
 
-    Names only. `police_stations.csv` also has an email and a phone column
-    holding one placeholder value repeated across all 606 rows; nothing in this
-    feature reads them (DEMO_PLAN 7.2).
+    **Dhaka city only, 49 names** — defect 17. The CSV covers all 607 stations
+    in Bangladesh; `thana.py` loads the 51 `district == "Dhaka"` rows (exactly
+    the DMP thanas) and drops two exact duplicates. Five of them can be named
+    here but are never ranked by `nearest_thana`, because the file marks their
+    coordinates `legacy — unverified` and they land kilometres inside another
+    thana's area.
+
+    Both spellings of `Gandaria`/`Gendaria` and `Bhatara`/`Vatara` are present
+    on purpose: this list is searched by the name the user knows.
+
+    Names only. The CSV's email and phone columns hold one value repeated across
+    every row and nothing in this feature reads them (DEMO_PLAN 7.2).
     """
     return list(all_thana_names())
 

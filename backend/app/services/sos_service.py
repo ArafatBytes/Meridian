@@ -3,12 +3,12 @@ import os
 import tempfile
 import csv
 import json
-import math
 from typing import List, Optional, Dict
 from geoalchemy2 import WKTElement
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import UploadFile
+from app.casework.thana import DHAKA_CITY_DISTRICT, MAX_PLAUSIBLE_KM, nearest_thana
 from app.models.emergency_contact import EmergencyContact
 from app.models.sos import SOSIncident
 from app.services.email_service import email_service
@@ -24,6 +24,13 @@ class SOSService:
         
         # Load police stations into memory
         self.police_stations: List[Dict] = []
+        # Dhaka city station name -> email, for routing an SOS to the thana that
+        # owns the caller's location. Built by _load_police_stations.
+        self._dhaka_station_emails: dict[str, str] = {}
+        # Defect 17. Whether the CSV's contact columns are per-station data or
+        # one value repeated. This is logged, not enforced: see
+        # _check_contacts_are_per_station.
+        self._contacts_are_per_station: bool = False
         self._load_police_stations()
 
     def _load_police_stations(self):
@@ -45,57 +52,156 @@ class SOSService:
                         except (ValueError, TypeError):
                             continue
                 logger.info(f"✅ Loaded {len(self.police_stations)} police stations")
-                # One distinct email across hundreds of stations means the
-                # contact column is placeholder data, not real routing.
-                distinct = {s.get("email", "") for s in self.police_stations if s.get("email")}
-                if len(self.police_stations) > 10 and len(distinct) <= 1:
-                    logger.warning(
-                        "⚠️  All %d police stations share %d distinct email address(es) - "
-                        "this is placeholder data. Keep POLICE_ROUTING_ENABLED=false "
-                        "until it is replaced (defect 17).",
-                        len(self.police_stations),
-                        len(distinct),
-                    )
+                self._contacts_are_per_station = self._check_contacts_are_per_station()
+                self._dhaka_station_emails = self._build_dhaka_email_map()
             else:
                 logger.warning(f"⚠️ Police stations file not found at {csv_path}")
         except Exception as e:
             logger.error(f"Failed to load police stations: {e}")
 
-    def _haversine_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-        """Calculate distance between two points in km"""
-        R = 6371  # Earth radius in km
-        dlat = math.radians(lat2 - lat1)
-        dlon = math.radians(lon2 - lon1)
-        a = math.sin(dlat/2) * math.sin(dlat/2) + \
-            math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * \
-            math.sin(dlon/2) * math.sin(dlon/2)
-        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-        return R * c
+    def _check_contacts_are_per_station(self) -> bool:
+        """
+        Does the CSV hold a contact *per station*, or one value repeated? Defect 17.
 
-    def _get_nearby_police_emails(self, lat: float, lon: float, radius_km: float = 5.0) -> List[str]:
-        """Get emails of police stations within radius."""
-        # Off by default. police_stations.csv currently has one placeholder
-        # address repeated across all 606 rows, so with this enabled an SOS
-        # from anywhere in Dhaka emails a stranger. Enable once the CSV holds
-        # real contacts (defect 17, S05).
+        **This reports; it does not refuse.** It used to refuse, which was wrong:
+        the owner had deliberately put their own address in every row *in order to
+        test police routing end to end*, and a gate that cannot be opened by the
+        person who owns the data is not a safety feature, it is a bug. The gate is
+        `POLICE_ROUTING_ENABLED`, which is one explicit setting, owned by whoever
+        runs the deployment.
+
+        What this still buys is that the log says which situation you are in. The
+        failure worth naming is defect 31's: routing was once unconditionally on
+        while every row held `noorlabib@iut-dhaka.edu`, so every SOS test emailed
+        an uninvolved third party. One shared address plus routing on is exactly
+        that shape -- so when it happens, `_nearest_police_station` logs the
+        address it is about to use and says it is a test value. Loud is the right
+        answer there; silent refusal was not.
+        """
+        with_email = [s for s in self.police_stations if (s.get("email") or "").strip()]
+        if len(with_email) <= 1:
+            return False
+
+        distinct = {(s.get("email") or "").strip().lower() for s in with_email}
+        if len(distinct) > 1:
+            logger.info(
+                "Police contacts look per-station: %d distinct address(es) across "
+                "%d rows.",
+                len(distinct),
+                len(with_email),
+            )
+            return True
+
+        logger.warning(
+            "⚠️  All %d police station rows share ONE email address (%s). Police "
+            "routing will still work if POLICE_ROUTING_ENABLED is on -- every SOS "
+            "in Dhaka reaches that one inbox, whichever thana is nearest. Fine for "
+            "testing with your own address; replace it with real per-thana "
+            "contacts before anyone else depends on it (defect 17).",
+            len(with_email),
+            next(iter(distinct)),
+        )
+        return False
+
+    def _build_dhaka_email_map(self) -> dict[str, str]:
+        """
+        Dhaka city station name -> email.
+
+        **Dhaka rows only, and that is correctness rather than scoping taste.**
+        Station names repeat across districts -- the CSV has a `Kotwali Police
+        Station` in Dhaka, another in Chattogram and another in Rajshahi -- while
+        `nearest_thana` only ever returns a Dhaka city name. A map built from all
+        607 rows would hand back whichever Kotwali `csv.DictReader` reached last,
+        and the bug would be invisible because the name would look right.
+        """
+        emails: dict[str, str] = {}
+        for station in self.police_stations:
+            if (station.get("district") or "").strip() != DHAKA_CITY_DISTRICT:
+                continue
+            name = (station.get("name") or "").strip()
+            email = (station.get("email") or "").strip()
+            if name and email and name not in emails:
+                emails[name] = email
+        logger.info("Police routing: %d Dhaka city stations have an email", len(emails))
+        return emails
+
+    # `_haversine_distance` lived here and is gone. It was the second copy of the
+    # same formula in this repo -- `casework/thana.py` has the other -- and the
+    # one place that called it now asks `thana.nearest_thana` instead, so the
+    # station emailed and the station printed on the GD cannot disagree.
+
+    def _nearest_police_station(self, lat: float, lon: float) -> dict | None:
+        """
+        The one thana an SOS from this location should reach, or None.
+
+        Returns `{"name", "email", "distance_km"}`. Gated on
+        `POLICE_ROUTING_ENABLED` and nothing else.
+
+        **One station, not every station within a radius.** The old version
+        collected every email inside 5 km, which in central Dhaka is six or seven
+        thanas: an incident has exactly one officer-in-charge with jurisdiction,
+        and six thanas each assuming another is responding is a worse outcome than
+        one being told. "Nearest" is also what the owner asked for.
+
+        **The station is chosen by `casework.thana.nearest_thana`, deliberately.**
+        That function already carries the three refusals this needs -- outside
+        Bangladesh, outside Dhaka city by more than `MAX_PLAUSIBLE_KM`, and the
+        five rows whose coordinates the CSV itself marks `legacy -- unverified`
+        (`Turag`'s sits 1.7 km from Rampura) -- and duplicating distance logic here
+        is how the GD's printed thana and the emailed thana drift apart. Sharing it
+        means they are the same station by construction, which is the property that
+        matters: the alert reaches the thana the victim will later walk into.
+
+        What this does *not* do is claim the police will act on it. DEMO_PLAN 7.2
+        still stands on the substance -- there is no police API, and a cognizable
+        offence needs the applicant at the thana in person. An email to a thana
+        inbox is a notification, not a filing, and §7.2's point was about filing.
+        """
         if not settings.POLICE_ROUTING_ENABLED:
             logger.info(
                 "Police routing disabled (POLICE_ROUTING_ENABLED=false); "
                 "alerting emergency contacts only"
             )
-            return []
+            return None
 
-        emails = []
-        for station in self.police_stations:
-            s_lat = station['latitude']
-            s_lon = station['longitude']
-            s_email = station.get('email')
-            
-            if s_lat and s_lon and s_email:
-                dist = self._haversine_distance(lat, lon, s_lat, s_lon)
-                if dist <= radius_km:
-                    emails.append(s_email)
-        return emails
+        thana = nearest_thana(lat, lon)
+        if thana is None:
+            logger.info(
+                "No Dhaka city thana within %.0f km of (%s, %s) -- SOS goes to "
+                "emergency contacts only. The station list is Dhaka city, so an "
+                "SOS from elsewhere in Bangladesh has no thana to route to.",
+                MAX_PLAUSIBLE_KM,
+                lat,
+                lon,
+            )
+            return None
+
+        email = self._dhaka_station_emails.get(thana.name)
+        if not email:
+            logger.warning(
+                "Nearest thana is %s (%.1f km) but it has no email in "
+                "police_stations.csv -- SOS goes to emergency contacts only.",
+                thana.name,
+                thana.distance_km,
+            )
+            return None
+
+        if not self._contacts_are_per_station:
+            logger.warning(
+                "⚠️  Police routing is ON and every CSV row shares one address, so "
+                "this SOS for %s goes to %s. That is a test address, not the "
+                "thana's (defect 17). Real per-thana contacts are a data change.",
+                thana.name,
+                email,
+            )
+
+        logger.info(
+            "SOS police routing: nearest thana is %s, %.1f km away -- alerting %s",
+            thana.name,
+            thana.distance_km,
+            email,
+        )
+        return {"name": thana.name, "email": email, "distance_km": thana.distance_km}
 
     async def trigger_sos_alert(
         self,
@@ -120,18 +226,24 @@ class SOSService:
             # Extract email addresses from contacts
             recipient_emails = [c.email for c in contacts if c.email]
             
-            # 2. Get nearby police station emails
+            # 2. Route to the thana whose jurisdiction this location falls in.
+            #
+            # Defect 17. One station, from the caller's live coordinates -- the
+            # same station `casework/thana.py` prints on their General Diary.
             lat = float(location.get('latitude', 0))
             lon = float(location.get('longitude', 0))
-            
-            police_emails = self._get_nearby_police_emails(lat, lon, radius_km=5.0)
+
+            station = self._nearest_police_station(lat, lon)
+            police_emails = [station["email"]] if station else []
             if police_emails:
-                logger.info(f"Found {len(police_emails)} police stations within 5km")
                 recipient_emails.extend(police_emails)
-            
-            # Remove duplicates
+
+            # Remove duplicates. Worth keeping even with one station: while the
+            # CSV's contact column is the owner's own test address, the station
+            # and one of the emergency contacts can be the same inbox, and
+            # sending the same alert twice reads as a bug to whoever receives it.
             recipient_emails = list(set(recipient_emails))
-            
+
             if not recipient_emails:
                 logger.warning(f"No recipients found (contacts or police) for user {user_id}")
                 return {
@@ -196,6 +308,10 @@ class SOSService:
                 "contacts_notified": len(recipient_emails) if success else 0,
                 "video_attached": video_path is not None,
                 "police_stations_found": len(police_emails),
+                # The thana's name, so the app can say *which* station was told
+                # rather than only how many. A count of 1 is not reassuring; a
+                # name is. None when no station was notified.
+                "police_station": station["name"] if station else None,
                 "incident_id": incident_id,
             }
 

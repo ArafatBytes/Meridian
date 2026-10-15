@@ -28,7 +28,9 @@ class GdDraft(Base):
 
     id = Column(UUIDStr, primary_key=True, default=lambda: str(uuid.uuid4()))
     report_id = Column(UUIDStr, ForeignKey("crime_reports.id"), nullable=False, unique=True)
-    user_id = Column(UUIDStr, ForeignKey("users.id"), nullable=False)
+    # Defect 9: no ForeignKey. The real constraint is in SCHEMA.sql and targets
+    # `auth.users(id)`, a schema this metadata does not map. See `models/crime.py`.
+    user_id = Column(UUIDStr, nullable=False)
 
     state = Column(String, nullable=False, default=STATE_DRAFT)
     narrative_bn = Column(Text, nullable=False)

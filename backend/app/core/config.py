@@ -69,11 +69,31 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
     
-    # JWT
+    # ⚠️ Not a JWT setting any more, despite the name. ADR 0002.
+    #
+    # Nothing in this project verifies or signs a token with it: tokens are
+    # Supabase's, ES256, checked against the published JWKS. Its **only**
+    # remaining reader is `app/agents/report_corroboration.py`, which uses it as
+    # the HMAC key behind `reporter_ref` — B13's reporter pseudonyms.
+    #
+    # Two consequences of that, both worth knowing before touching it:
+    #
+    # * **Rotating it silently re-pseudonymises every reporter.** Existing
+    #   `reporter_ref` values stop matching new ones, so a person who reported
+    #   twice looks like two people and corroboration counts change. It is not a
+    #   credential that can be rotated freely; it is closer to a schema constant.
+    # * The name invites someone to treat it as an auth secret and reintroduce
+    #   symmetric verification. A rename belongs with the next migration that
+    #   touches `community_clusters`, not on its own.
+    #
+    # `JWT_ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES` and
+    # `REFRESH_TOKEN_EXPIRE_DAYS` were removed on 15 Oct. They were read only by
+    # the token-minting helpers that ADR 0002 deleted, and `JWT_ALGORITHM`
+    # defaulted to `"HS256"` — which is what signed the forged tokens. Leaving
+    # them declared would describe a backend that issues sessions, and this one
+    # cannot. `extra = "ignore"` means a stale line in `.env` is dropped
+    # silently rather than failing a boot.
     JWT_SECRET_KEY: str
-    JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # CORS
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]
@@ -100,16 +120,13 @@ class Settings(BaseSettings):
     # Google Maps
     GOOGLE_MAPS_API_KEY: str = ""
     
-    # Google Cloud AI Services
-    GOOGLE_CLOUD_PROJECT_ID: str = ""
-    GOOGLE_CLOUD_CREDENTIALS_PATH: str = "./google-cloud-credentials.json"
-    GOOGLE_CLOUD_REGION: str = "us-central1"
-    
-    # Speech-to-Text Settings
-    SPEECH_RECOGNITION_LANGUAGE: str = "en-US"
-    SPEECH_MAX_DURATION_SECONDS: int = 30
-    SPEECH_SAMPLE_RATE: int = 16000
-    
+    # Google Cloud AI Services and Speech-to-Text settings were removed on
+    # 2026-10-15 with defect 2. `google.cloud` was imported in exactly one place,
+    # the deleted `speech_service.py`, and these seven settings were read by that
+    # file alone -- a credentials path pointing at a file nobody ships, and three
+    # audio parameters for an endpoint no client called. Dictation is on-device
+    # (B8). Nothing in `app/` imports `google.cloud` now.
+
     # Which RiskSurface GET /api/v1/risk/flags reads from: "db" or "seeded".
     #
     # "db" reads the risk_flags table. "seeded" reads
@@ -294,16 +311,31 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     FROM_EMAIL: str = ""
 
-    # Whether SOS also emails nearby police stations.
+    # Whether an SOS also emails the police station whose jurisdiction the
+    # caller is standing in. **Turned on by the owner, 15 Oct** -- see
+    # `.env`. Code default stays False so that a deployment without an
+    # explicit setting never emails an address it was not told to.
     #
-    # Default OFF, and that matters: every one of the 606 rows in
-    # police_stations.csv carries the same placeholder address
-    # (noorlabib@iut-dhaka.edu). With this on and no real data, an SOS from
-    # anywhere in Dhaka emails a stranger -- once per test.
+    # What it does when on: `sos_service._nearest_police_station` asks
+    # `casework.thana.nearest_thana` for the single closest Dhaka city station
+    # to the live SOS coordinates and adds that one address to the alert. One
+    # station, not a radius -- one incident has one officer-in-charge.
     #
-    # This flag was documented in .env.example and docs/ from S01b but never
-    # declared here and never checked by sos_service, so it did nothing. Both
-    # are fixed now. Turn it on when the CSV has real contacts (defect 17, S05).
+    # DEMO_PLAN 7.2 / ADR 0007 said the flag stays off permanently, and the
+    # substance of that still holds: there is no police *API*, and a cognizable
+    # offence cannot be closed online -- the applicant must appear at the thana
+    # with a printed copy, which is why `thana.py` names the station on the GD.
+    # But 7.2 was about *filing a case*, and it over-reached into forbidding a
+    # *notification*. Emailing a thana inbox during an emergency is not a
+    # filing. Nothing stops a station being told, and the owner asked for it.
+    #
+    # The one real hazard is defect 31's, and it is historical: routing was once
+    # unconditionally on while every CSV row held `noorlabib@iut-dhaka.edu`, so
+    # every SOS test emailed an uninvolved third party. That is why this exists
+    # as a flag at all. The column now holds the owner's own test address, which
+    # `_check_contacts_are_per_station` detects and logs on every send. **Before
+    # anyone outside the team relies on this, put real per-thana addresses in
+    # police_stations.csv** -- the code needs no change for that.
     POLICE_ROUTING_ENABLED: bool = False
 
     # --- Alerting (B6a / S16) ---------------------------------------------

@@ -173,8 +173,10 @@ class _SeededFlag:
             time_profile=self.time_profile,
             confirmed_at=self.confirmed_at,
             # Same derivation as `DbRiskSurface`. `tests/invariants/test_surfaces_agree`
-            # is what keeps the two from drifting apart on this.
-            confidence=confidence(self.status),
+            # is what keeps the two from drifting apart on this — including on B11a's
+            # authoritative-publisher weighting, which is why the sources are passed
+            # here too even though no fixture entry currently cites `dmp_news`.
+            confidence=confidence(self.status, [s.source_id for s in self.sources]),
         )
 
 

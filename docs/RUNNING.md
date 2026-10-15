@@ -214,15 +214,42 @@ SMTP.
 
 > **401 while everything else works** → token verification. Supabase signs
 > access tokens with **ES256**, and the backend originally only tried a shared
-> HS256 secret. `app/core/jwks.py` now fetches the project's JWKS and handles
-> both (defect 33, fixed). If this still fails, check that `SUPABASE_URL` is set
-> in `backend/.env` **and declared in `config.py`** — `extra = "ignore"` means
-> an undeclared variable is dropped in silence.
+> HS256 secret. `app/core/jwks.py` fetches the project's JWKS (defect 33,
+> fixed). If this still fails, check that `SUPABASE_URL` is set in
+> `backend/.env` **and declared in `config.py`** — `extra = "ignore"` means an
+> undeclared variable is dropped in silence.
 >
-> **"No email recipients found"** → the contact has no email address.
-> `POLICE_ROUTING_ENABLED` is off by default and intentionally so: every row in
-> `police_stations.csv` carries the same placeholder address, so turning it on
-> emails an uninvolved stranger on every SOS.
+> ⚠️ **HS256 is no longer accepted at all** (defect 56 / ADR 0002, 15 Oct). It
+> used to be, as a legacy fallback, and that fallback was what let a forged
+> token verify: `/auth/login` minted one for any email with no password check.
+> A token signed with `JWT_SECRET_KEY` now fails with *"Unsupported token
+> algorithm: HS256"*, and `exp`, `aud` and `sub` must all be present. **There
+> is no `/api/v1/auth/*` any more** — registration, login and refresh are
+> client-to-Supabase, which is what the app already did.
+>
+> `JWT_SECRET_KEY` stays in `.env`, but it is **not** an auth secret now: its
+> only reader is B13's reporter-pseudonym HMAC. Rotating it silently
+> re-pseudonymises every reporter, so treat it as a schema constant.
+>
+> **"No email recipients found"** → the contact has no email address, and no
+> police station was in range either.
+>
+> **An SOS emails emergency contacts plus one police station**:
+> `POLICE_ROUTING_ENABLED=true` since 15 Oct, and `sos_service` adds the single
+> nearest **Dhaka city** thana to the caller's live coordinates, picked by the
+> same `thana.nearest_thana` that names the station on the General Diary.
+>
+> **No station was emailed? Check the API log, which says which case it is:**
+> `Police routing disabled` (the flag is false — note the code default is
+> `false`, and `docker compose restart` does **not** re-read `.env`; use
+> `docker compose up -d api worker`), `No Dhaka city thana within 25 km` (the
+> station list is Dhaka city only, so an SOS from Jashore or Chattogram emails
+> no station — by design), or `has no email in police_stations.csv`.
+>
+> ⚠️ Every row of `police_stations.csv` shares **one** email address — the
+> owner's own test address — so with routing on, every SOS in Dhaka reaches that
+> one inbox whichever thana is nearest. The log warns on every send. Real
+> per-thana addresses are a data change, not a code change.
 >
 > **Reports success but no email arrives** → `SMTP_*` is unset or wrong. For
 > Gmail you need an App Password, not your account password. Check
@@ -371,3 +398,114 @@ costs you working hot reload.
 Backend code changes reload automatically — `backend/app` is bind-mounted and
 uvicorn watches it. Frontend changes hot-reload through Metro. Only dependency
 or Dockerfile changes need `-Rebuild`.
+
+> ⚠️ **`.env` changes are the exception** — `docker compose restart` does not
+> re-read the env file. Use `docker compose up -d api worker`. A flag that reads
+> `false` after you set it to `true` is almost always this.
+
+> ⚠️ **Agent code changes are the other exception, and this one is sneakier.**
+> `uvicorn` watches `backend/app` and reloads, so the **API** picks up a fix
+> immediately — but the **Celery worker holds the imported module in memory and
+> never re-imports.** So a fixed agent runs correctly through
+> `python -m app.agents run <agent>` and through the API's "fetch now" button,
+> while **the scheduled run keeps failing with the bug you just fixed.**
+>
+> Worse, `docker compose up -d api worker` will **not** restart the worker when
+> nothing about its service definition changed — it reports only `api` and leaves
+> the stale process running. Use:
+>
+> ```powershell
+> docker compose restart worker
+> ```
+>
+> **And do not verify by grepping the file inside the container.** The file on
+> disk is the fixed one; the running process is not. This cost an hour on 15 Oct:
+> defect 57 was fixed, a manual run returned `ok`, `docker compose exec worker
+> grep` showed the corrected line — and the next hourly beat failed with the
+> original error. The only honest check is to run it **through the worker**:
+>
+> ```powershell
+> docker exec meridian-api python -c "from app.core.celery_app import celery_app; print(celery_app.send_task('agents.run', args=['report_corroboration']).id)"
+> docker exec meridian-api python -m app.agents status
+> ```
+
+### Is the agent fleet healthy? (B9)
+
+```powershell
+docker exec meridian-api python -m app.agents status
+```
+
+```
+AGENT                  STATE  LAST RUN  CADENCE STATUS       IN    OUT   24H  FAIL
+--------------------------------------------------------------------------------------------
+alert_dispatch         ok          47s       1m ok            1      0  1370     0
+expiry_sweep           ok           3m      30m ok            0      0    47     0
+live_risk              ok           3m      15m partial       6      0    61     1
+report_corroboration   ok           1m   1h 00m ok            2      0    23    22
+scheduled_risk         ok          43m   1h 00m ok            0      0    15     1
+```
+
+**Run this before a rehearsal.** One command answers whether the five scheduled
+agents are actually running, and it exits **1** if any is late or broken, so it
+also works inside a script. `never_run` and `unknown` exit 0 — the first is the
+normal state of a fresh database, the second is the tool declining to guess at a
+cron shape it cannot parse.
+
+Reading the columns:
+
+| Column | Means |
+|---|---|
+| `STATE` | `ok` / `LATE` / `FAIL` / `----` (never run) / `?` (cadence unparsed) |
+| `LAST RUN` | How long ago the latest non-dry run **started** |
+| `CADENCE` | How often its cron fires. `LATE` means two whole cadences plus a minute have passed |
+| `STATUS` | The run's own result. **`partial` is normal** — three news sources and one is down still produces flags |
+| `24H` / `FAIL` | Runs and failures in the last 24 hours. A high `FAIL` beside a healthy `STATE` is a flapping agent |
+
+Anything wrong is also written out in words underneath the table, with the next
+thing to check. Three worth knowing by sight:
+
+* **`FAIL` with error text** — the run raised. The text is the exception from the
+  last run, verbatim.
+* **`LATE` with a healthy last status** — the agent is not failing, it is **not
+  being asked**. Check the `worker` and beat containers; a beat that is not
+  running produces exactly this, with no errors anywhere.
+* **`STUCK`** — a row has sat at `running` past the 20-minute stale window.
+  Nothing will finish it or retry it. This is what a container restart mid-run
+  leaves behind, and the overlap guard has already stopped honouring that row, so
+  later runs went ahead while it stayed open.
+
+> A high `FAIL` count that is **older than the last successful run** is history,
+> not a live problem — `report_corroboration` above shows `23` runs and `22`
+> failures because it was broken until defect 57 was fixed that afternoon. The
+> tally is a 24-hour window, so it takes a day to clear.
+
+Users see a narrower version of the same measurement under **Profile → Safety →
+System status**: plain-language cards, "last ran 4 minutes ago", and no error
+text or item counts. Both halves call `app/agents/health.py :: fleet_health`, so
+they cannot disagree about whether something is healthy.
+
+### Running the tests
+
+```powershell
+docker exec meridian-api python -m pytest tests/ -q -rs
+```
+
+**Read the skip summary, not just the exit code** — a test that skips itself
+exits 0, which is why `-rs` is not optional here.
+
+Two tests span both codebases and need the client files, which
+`docker-compose.yml` mounts read-only under `/frontend/src`:
+
+| test | what it would otherwise miss |
+|---|---|
+| `test_alert_channels_match_the_client.py` | the backend sending an Android `channelId` the app never created — the notification arrives silently, with default importance |
+| `test_contracts_do_not_drift.py` | a renamed server field. `tsc` still exits 0 and the request still succeeds; the screen renders a blank where a number belongs |
+
+If either reports that it cannot find the frontend, those mounts are what to
+check — both fail loudly rather than skipping, on purpose.
+
+> ⚠️ **CI does not run the pytest suite.** The `invariants` and `backend` jobs
+> install tooling only, so they cannot import `app.*` — see the note in
+> `.github/workflows/ci.yml`. The container is where the 684 tests run. CI's
+> `contract-drift` job (3b) is the exception and does genuinely run, because its
+> one test file imports nothing but pydantic.

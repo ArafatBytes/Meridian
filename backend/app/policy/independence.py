@@ -43,6 +43,7 @@ from collections.abc import Iterable
 from typing import Final
 
 __all__ = [
+    "AUTHORITATIVE_PUBLISHERS",
     "UNCONFIRMED_WEIGHT",
     "confidence",
     "independent_publishers",
@@ -94,6 +95,52 @@ _SAME_OWNER: Final[dict[str, str]] = {
     # copy — is a different problem and is handled elsewhere, by
     # `raw_documents.content_hash`.
 }
+
+
+# ---------------------------------------------------------------------------
+# Authority — B11a, 2026-10-15
+# ---------------------------------------------------------------------------
+
+AUTHORITATIVE_PUBLISHERS: Final[frozenset[str]] = frozenset({"dmp_news"})
+"""
+Publishers that are the **primary record** of what they report, not a claim about it.
+
+DMP News is the Dhaka Metropolitan Police's own outlet. When it says two muggers
+were arrested in Uttara, that is the police's own account of their own action --
+and a newspaper repeating it adds no independent verification, because the paper
+got it from the release. Corroboration between a press release and its reprints is
+agreement manufactured by syndication, which is the same hazard `_SAME_OWNER`
+guards against wearing different clothes.
+
+**What this grants, and what it deliberately does not.**
+
+It grants *weight*: `confidence()` returns 1.0 instead of `UNCONFIRMED_WEIGHT`, so
+an official report is not discounted as though it were an unverified rumour.
+
+It does **not** grant `status = 'confirmed'`. That was the owner's first choice on
+15 Oct and it cannot be done honestly: `confirmed` is enforced in the database by
+
+    risk_flags_confirmed_needs_two_sources
+    CHECK ((status <> 'confirmed') OR (source_count >= 2))
+
+so a single-source confirmed flag is rejected on insert. The two ways round it are
+both worse than the thing they buy -- a migration weakening the CHECK, while
+`tests/invariants/test_single_source_never_confirmed.py` asserts it by reading the
+*original* migration's text and would keep passing over the hole; or writing
+`source_count = 2` for one source, which `risk_flags_sources_match_count` would
+permit and which is simply false data. The owner chose weight on 15 Oct once the
+constraint was shown.
+
+So `confirmed` keeps meaning exactly one thing, at every layer: **two independent
+publishers agreed.**
+
+**This set is dangerous in the direction `_SAME_OWNER` is not.** An entry in the
+ownership map can only ever *reduce* the flags we are willing to trust; an entry
+here *increases* the weight of a single source. There is no permissive default to
+fall back on. So it holds one member, it is asserted to hold one member by
+`tests/invariants/test_single_source_never_confirmed.py`, and adding a second is a
+policy decision about a specific institution -- not a configuration change.
+"""
 
 
 def owner_of(source_id: str) -> str:
@@ -152,18 +199,34 @@ turn out to be right 90% of the time, 0.6 is too harsh.
 """
 
 
-def confidence(status: str) -> float:
+def confidence(status: str, source_ids: Iterable[str] = ()) -> float:
     """
     How much of a flag's severity should count in a decision, 0-1.
 
     * `confirmed`   → 1.0. Two independent publishers agree.
-    * `unconfirmed` → `UNCONFIRMED_WEIGHT`. Published, and discounted.
+    * `unconfirmed` → `UNCONFIRMED_WEIGHT`, unless an authoritative publisher is
+      among its sources, in which case 1.0. See `AUTHORITATIVE_PUBLISHERS`.
     * anything else → 0.0. `expired` and `rejected` are not served at all; if one
       ever reaches a decision path, it should contribute nothing rather than
       quietly contributing fully.
+
+    `source_ids` is optional and defaults to empty, which reproduces the original
+    behaviour exactly. That default is deliberate: community clusters pass no
+    publishers because they have none -- a cluster is user reports, and nothing
+    about an official police release should change what a resident's report is
+    worth.
+
+    >>> confidence("unconfirmed")
+    0.6
+    >>> confidence("unconfirmed", ["dmp_news"])
+    1.0
+    >>> confidence("expired", ["dmp_news"])
+    0.0
     """
     if status == "confirmed":
         return 1.0
     if status == "unconfirmed":
+        if any(source_id in AUTHORITATIVE_PUBLISHERS for source_id in source_ids):
+            return 1.0
         return UNCONFIRMED_WEIGHT
     return 0.0

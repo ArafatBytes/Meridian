@@ -154,7 +154,13 @@ def _row_to_flag(row: Any, at: datetime) -> RiskFlag:
         # D05. Derived here rather than stored, for the same reason `severity_now` is:
         # the weight an unconfirmed flag carries is a policy decision, and a surface is
         # the only place allowed to turn policy into a field.
-        confidence=confidence(row.status),
+        #
+        # B11a passes the publishers too, because an unconfirmed flag sourced from an
+        # authoritative institution is not worth the same as an unconfirmed flag from
+        # one newspaper. `status` is unchanged either way -- see
+        # `policy.independence.AUTHORITATIVE_PUBLISHERS` for why the authority is
+        # expressed as weight and not as `confirmed`.
+        confidence=confidence(row.status, [s.get("source_id", "") for s in raw_sources]),
     )
 
 

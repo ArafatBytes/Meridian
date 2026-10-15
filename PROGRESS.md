@@ -69,15 +69,31 @@ Full write-up, indicators of compromise and the remediation checklist:
 
 ## 📍 CURRENT STATE
 
-*Last updated: 2026-10-14 · by: Arafat · after: **B7 — gazetteer density***
+*Last updated: 2026-10-15 · by: Arafat · after: **B9 (fleet status — and defects 57 & 58), B20/B3/B6 skipped by the owner, B1 (four ADRs — and defect 56, an auth bypass), B2, B6b declined, police routing on, B6a closed***
+
+> ⚠️ **One test is red, deliberately. Do not "fix" it in code.**
+> `test_retention_is_declared.py::test_every_table_in_the_database_is_classified` reports
+> `public.users` unclassified, because **the table is back in the shared database** — recreated
+> by another checkout that still holds `app/models/user.py`. 0 rows, no dependents, no trigger.
+> See the B2 handoff entry for how that was established.
+>
+> **The owner chose on 15 Oct to leave it red as a reminder**, rather than drop the table or
+> classify it away. It is a standing signal that a machine on the shared database has not pulled
+> defect 9. It clears when `drop table public.users;` runs **and** that checkout pulls — dropping
+> alone just repeats the cycle on their next API boot. Classifying it in `retention.py` would
+> make the suite green and the problem invisible, which is the one thing the tripwire exists to
+> prevent.
+>
+> So: **799 of 800 passing is the expected state right now.** A second red test is news; this
+> one is not.
 
 | | |
 |---|---|
-| **Last sprint completed** | **B7 — delivered out of sequence, 14 Oct**, immediately after S30 because S30 ended by naming the gazetteer the ceiling on the whole pipeline. Before it: S30 same day; D09 ✅ CLOSED, D01–D09 all closed on a device; B13 and live navigation 13 Oct |
-| **NEXT SPRINT** | **Commit S30 + B7 — nothing from either is committed.** The S30 Supabase migration is already applied and verified. Then **verify zone alerts in Dhaka** (GUARDIAN.md Part 1) and **try video on a second Android phone**. Then D10 (Oct 23) |
+| **Last sprint completed** | **B14 + B11a + D04 + Track B defect sweep, 15 Oct.** B14: `app/privacy/retention.py` classifies **all 21 tables** (6 windows, 15 `KEEP` with reasons) and a tripwire test fails on any unclassified table — which is how **`journeys`** was found holding movement history with no rule. **4 of 6 windows are PROPOSED and the purge refuses them without `--force`; nothing has been purged and it is not scheduled.** B11a: the **tenth source and first non-newspaper** — DMP's own outlet, via RSS with the body in the feed. Three of four institutional bodies publish nothing machine-readable, which is the finding. DMP is **authoritative by weight, not by `confirmed`** — the database CHECK forbids the latter. D04: the relevance filter measured against 417 hand-labelled headlines — **precision 0.31 → 0.43, recall 0.47 → 0.68** — including a Unicode bug that had been silently losing real Dhaka road deaths. Defects 2, 16 and 55 closed; **four more (6, 8, 29+5, 30) and all of B5 found already fixed with their boxes never ticked**; a **`journeys` table found in the live database with no committed migration and no code in any branch** — the trips model B10 is supposedly blocked on. It gained Journey Guardian escalation columns and 7 rows *during* this session, so it is **a teammate's uncommitted work against the shared database**, not an orphan: do not build on its shape and do not drop it. Before it: **B7** 14 Oct, out of sequence after S30 named the gazetteer the pipeline ceiling; S30 same day; D09 ✅ CLOSED, D01–D09 all closed on a device; B13 and live navigation 13 Oct |
+| **NEXT SPRINT** | 🎉 **THE DEFECT LIST IS EMPTY.** All 55 are closed or consciously superseded. Closed 15 Oct: **9** (the SOS email said `mdarafat1661`, now says `Arafat Ullah`; `public.users` dropped, ledger marked, retention entry retired), **53** (video works on a second phone — it was the Unisoc SoC, not our code), **17** (closed by noticing §7.2 had cancelled its deliverable five days earlier; the thana lookup is now Dhaka-city-scoped and refuses rather than guessing), **2 / 16 / 55**, plus **6 / 8 / 29+5 / 30** found already fixed with their boxes never ticked, and **B0** by the owner. ✅ **B6a closed 15 Oct too:** zone alerts — the last unexercised Guardian claim and the only headline feature that works from a pocket — are **verified on a device** against a seeded flag, GUARDIAN.md Part 1 steps 1–5. Step 6 (the outdoor walk) stays optional, so the +250 m ring and the battery figure are still unmeasured; both are measurements, not code. ⏳ **Still needs the owner, not a sprint:** **sign off the 4 PROPOSED retention windows**, since nothing has been purged, and fill in GUARDIAN.md's blank handset and threshold fields. Then it is backlog rows only, consent asked per item, then D10 (Oct 23).<br><br>**🏁 THE BACKLOG SWEEP IS COMPLETE, 15 Oct — every row offered one at a time as accept or skip.** ✅ **B9 built** — `python -m app.agents status` plus a System Status screen under Profile → Safety. **It found two defects on its first run.** ⏭️ **Thirteen rows skipped and left untouched** (B3, B6, B10, B11, B11a's remainder, B12, B15, B16, B17, B18, B19, B20, B21, B22), **each annotated with what reading it found** so the next person starts from measurements, not from the row's original guess — see the sweep's handoff entry for the table. 🔴 **The defect list is no longer empty: 57 (fixed) and 58 (open, needs an owner decision).** 🛑 **One finding is a hard blocker on ever publishing and should not be lost: the Android `applicationId` is `com.Meridian.app` with a capital M, and it cannot be changed after the first Play release.** Deliberately not fixed before D10 — it needs a prebuild regeneration that would make the handset build a separate install. **Next up is D10 (Oct 23), not another sprint.** |
 | **Baton holder** | **free** |
-| **Trunk** | `news-ingestion-pipeline` — the Android blur crash fix (`6b3e2f8`), dynamic routing (`945683b`) and B13 (`d5e4371`) are committed. **S30 and B7 are both UNCOMMITTED.** `android/` was regenerated by `expo prebuild --clean`, which relocated the Java package from `com/nirapodpoint/` to `com/meridian/` and bumped the Gradle wrapper to 9.3.1 |
-| **Build status** | 🟢 **GREEN. 601 pytest** (was 559: +29 harvest, +7 gazetteer coverage, +6 route comparison), **427 jest**, `tsc` clean, `eslint` 1 error — pre-existing (`MapScreen.tsx`, `react-hooks/purity`, `Date.now` in render). Backend suite runs only in Docker: `docker exec meridian-api python -m pytest tests/`. **Two `NameError`s were found this session by `ruff check --select F`, on branches no test reaches** — one of them in committed code. A green suite is not the same as a clean one; point the linter at what you touch |
+| **Trunk** | **`backlogs-fix`** — branched for the Track B defect sweep. **S30 and B7 are committed** (`9024718`, merged from `news-ingestion-pipeline` in PR #19, `a16e3b1`), as are the Android blur crash fix (`6b3e2f8`), dynamic routing (`945683b`) and B13 (`d5e4371`). The defect sweep itself is uncommitted — **the owner commits their own work; do not commit for them.** `android/` was regenerated by `expo prebuild --clean`, which relocated the Java package from `com/nirapodpoint/` to `com/meridian/` and bumped the Gradle wrapper to 9.3.1 |
+| **Build status** | 🟢 **800 pytest collected — 799 passing, 1 deliberately red** (the `public.users` tripwire above). **454 jest**, `tsc` clean, ruff clean on every touched file, mypy unchanged at its pre-existing 7. B9 added **+63 backend** and **+27 jest**. Earlier in the day: 737 → 800. The historical note below is kept because its warnings about reading the suite are still the ones that matter.<br><br>Previously: **680 pytest, 0 skipped** (643 + 16 for defect 9's `test_sos_alert_names_the_person.py`, + 20 for defect 17's `test_thana_lookup_is_dhaka_city.py`, + 1 that had been **silently skipping itself**: `test_single_source_never_confirmed.py:376`, the live-database corroboration invariant, was failing to connect because the module-level async engine was pinned to a dead event loop and a broad `except` reported that as "database unreachable". The B14 handoff's "643 exit 0" was really 643 passed **and 1 skipped** — read the skip line, not just the exit code.) Earlier steps: (601 → 600 when defect 2 deleted the dead speech test, → 603 with defect 55's `mark` tests, → 609 with D04's filter tests, → 631 with B11a's institutional-source and authority tests, → 643 with B14's retention registry; 559 before B7), **427 jest**, `tsc` clean, `eslint` 1 error — pre-existing (`MapScreen.tsx`, `react-hooks/purity`, `Date.now` in render). Backend suite runs only in Docker: `docker exec meridian-api python -m pytest tests/`. ⚠️ **Do not read the test count off `\| tail`** — progress dots wrap at 72 per line and `addopts = "-q"` means the `N passed` line does not survive the pipe, so the last line shows a remainder. Count the dots, or run with `-rs` and read the summary — **`exit=0` is not enough**, because a test that skips itself exits 0 and that is exactly how the corroboration invariant above went unnoticed. **Two `NameError`s were found by `ruff check --select F` on 14 Oct, on branches no test reaches** — one in committed code. A green suite is not a clean one; point the linter at what you touch |
 | **Gazetteer** | **6,054 entries** (was 1,022), **3,241 of them roads** (was 0). Held-out accuracy **95.6%** (was 93.3%), **0 fabrications, 0 wrong pins**. Coverage of 193 real Dhaka references **84%** (was 71%); named roads **61%** (was 15%). Box now covers both city corporations, `90.30,23.66,90.54,23.94` |
 | **Slack** | D09 was scheduled Oct 22 and built Oct 10 — **twelve days ahead**, which is what paid for Guardian, B13, navigation, S30 and B7 |
 | **Phase** | 2 → **Track B.** D10 is still hardening-only and still scheduled Oct 23 |
@@ -173,16 +189,27 @@ triggers in a pocket or refuses to trigger when shouted at. GUARDIAN.md steps 8 
 Vivo V2344, Android 14, development build. Both triggers run end to end from any screen:
 countdown → camera → location → email to emergency contacts, hands never touching the phone.
 
-### 🟡 Zone alerts: code complete, UNVERIFIED on a device
+### ✅ Zone alerts: VERIFIED on a device, 15 Oct — against a seeded flag
 
 Every risk flag in this project is in Dhaka; the testing happened from **Jashore, 142 km
 away**, and the app only fetches flags within ~19 km. So the zone count was correctly 0 and
-Part 1 of the walkthrough could not run.
+Part 1 of the walkthrough could not run **as written**.
 
-`backend/scripts/seed_flag_here.py` writes one live flag at any coordinates for testing from
-anywhere. The real test is still a pocket and a walk toward a flagged road in Dhaka.
+`backend/scripts/seed_flag_here.py` writes one live flag at any coordinates, and that is what
+closed this: the owner ran GUARDIAN.md Part 1 **steps 1–5** against a seeded flag and all five
+passed — the *"all the time"* permission, the zone watch registering, the crossing waking the
+headless task, the notification carrying the server-framed mobility statement, the six-hour
+debounce suppressing the repeat, and the history log showing both the alert and the suppression.
 
-### 🔴 Video capture fails on this handset — and the SOS degrades rather than dying
+**A seeded flag is not a lesser geofence.** `startGeofencingAsync` hands circles to Android's
+`GeofencingClient` and the OS does the detection; it has no idea whether the row came from the
+agent pipeline or from a script, so every line of code in this path ran for real. The one thing
+the seeded test cannot reach is **step 6**, the outdoor pocket walk, which the walkthrough has
+always marked optional — so the **+250 m early-warning ring is still unmeasured at walking
+pace**, and the **battery figure over a day of real use is still unmeasured** (S17's other open
+box). Both are measurements, not code.
+
+### ✅ Video capture fails on *this* handset only — resolved 15 Oct on a second phone
 
 On the Vivo V2344 (Unisoc `ums9230`), **CameraX never delivers a video frame to its
 `VideoCapture` surface** at any quality. Measured from `adb shell logcat`: the recording runs
@@ -196,6 +223,24 @@ simply never used that path.
 **Try a second Android phone.** Video is expected to work on most, and that would confirm this
 is one device rather than the code. Until then the honest claim is *location to emergency
 contacts in seconds, plus a video clip where the hardware supports it.*
+
+> **Closed 2026-10-15 (defect 53). The owner ran SOS on a second Android phone and video
+> captured, uploaded and arrived attached to the alert email.** That was the one step this
+> section asked for, and the answer came back on the side of the code: the Vivo's starvation is
+> **Unisoc `ums9230` driver behaviour**, upstream of this repo.
+>
+> **Nothing above is retracted** — the logcat measurement was correct and still describes that
+> handset exactly. What was wrong was only the *scope* I could claim from it. One device cannot
+> separate "our capture code is broken" from "this SoC's CameraX is broken"; it took the second
+> device to tell those apart, which is why "try a second phone" was the right next step rather
+> than another round of code changes.
+>
+> **No code change, and the `TEXTURE_VIEW` native patch is now explicitly not worth doing** —
+> patching expo-camera to work around one SoC buys one handset. **Defect 52 is the permanent
+> answer instead:** location-only degradation is a tested product behaviour, not a stopgap for an
+> open defect. ⚠️ **The conditional claim stays** — *"location in seconds, plus video where the
+> hardware supports it"* — because the fleet still contains one phone that cannot record. Demo on
+> the one that can.
 
 ### 🔴 Fixed after the first device run: B8 crashed the app at boot in Expo Go
 
@@ -365,12 +410,34 @@ Measured 10 Oct, and it is **older than D09**:
 | extracted incidents | 4 |
 | of those, published as a flag | **1**, and it has expired |
 | of those, rejected by the gazetteer | 3 |
-| recent `live_risk` runs | `in=0 out=0` — ~390 articles listed, ~1% pass the filter, and those are already stored |
+| recent `live_risk` runs | `in=0 out=0` — ~390 articles listed, ~1% pass the filter, and those are already stored. **Both numbers superseded by D04's measurement on 15 Oct: 2,622 listed, 167 passed (6.4%), precision 0.43, recall 0.68.** Kept here as the reading that prompted the work |
 
 **So beats 1 and 2 run on the seeded surface, not on live news.** Defensible on stage —
 `RISK_SURFACE_IMPL` is the switch and the agent is real — and now a decision rather than a
 discovery. **Owner's call, 10 Oct: more sources and fixes come in the next phase; do not dabble
 now.** The news page was built partly so that work is visible when it lands.
+
+#### 📈 Re-measured 15 Oct, after nine sources and B7's gazetteer — and the shape of the problem changed
+
+| | |
+|---|---|
+| `live_risk` runs, last 24 h | **59** |
+| documents read per run | avg **4.34**, max 12 (the `MAX_EXTRACTIONS_PER_RUN` cap) |
+| flags published per run | avg **0.19** |
+| flags published, last 24 h | **11** |
+| `raw_documents` total / `extracted_incidents` total | **452 / 63** |
+| documents per source, last 7 days | `ittefaq` 98, `jugantor` 74, `channel24` 72, `samakal` 62, `bangla_tribune` 57, `prothom_alo` 54, `ekattor_tv` 15, `dhaka_tribune` 14, `independent_tv` 12, **`dmp_news` 2** |
+
+**It is no longer producing "almost nothing" — it is producing 11 flags a day — and the
+bottleneck has moved.** It is now **conversion, not supply**: about **4%** of what the agent
+already reads becomes a warning, lost to the relevance filter (precision 0.43), the gazetteer's
+84% Dhaka coverage, and extraction correctly rejecting non-incidents.
+
+**This is why B11a's remaining two thirds were skipped on 15 Oct.** Adding sources raises
+documents fetched — cost, and competition for the same 12 extraction slots — without moving the
+4%. And `dmp_news`, the institutional source B11a *delivered*, contributed **2 documents in a
+week**, which is the best available estimate of what an eleventh feed of that kind adds. The
+lever is conversion: D04's filter and B7's gazetteer, both already named.
 
 ### 🧵 The news page is the ingestion dashboard
 
@@ -402,7 +469,7 @@ is the truth.
 | Agents live | `live_risk`, `scheduled_risk`, `expiry_sweep`, and **`alert_dispatch` (B6a), cron `* * * * *`** — auto-discovered, so nothing central was edited |
 | Migrations applied | through `20261010180000__push_devices_and_alerts.sql` (**B6a**). ⚠️ See the ledger note below |
 | Contracts | **`/sos/trigger` gained `voice_activated` (B8)**, a `Form` field defaulting false, so every existing caller is unchanged. Three new tables and seven `/notifications/*` routes (B6a). `RiskFlag` untouched |
-| Feature flags off | `POLICE_ROUTING_ENABLED` (permanently — §7.2), **`PUSH_ENABLED`** (until B6a Part 2 is done) |
+| Feature flags off | **`PUSH_ENABLED`** (until B6a Part 2 is done). `POLICE_ROUTING_ENABLED` is **ON** since 15 Oct — it was listed here as off "permanently", which §7.2's second addendum reverses; an SOS emails the nearest Dhaka city thana. Code default stays `false`, so `.env` is what turns it on, and `docker compose restart` will not pick that up — `up -d` will |
 | New settings | `PUSH_ENABLED`, `EXPO_PROJECT_ID`, `EXPO_ACCESS_TOKEN`, `MAX_ALERTS_PER_USER_PER_HOUR=3`, `ALERT_RADIUS_M=500` — in `.env.example` with their reasoning |
 
 #### ⚠️ The migration ledger has drifted, and it is not B6a's doing
@@ -437,21 +504,59 @@ migration plus its own idempotent ledger insert. Whoever owns D08 should record 
 
 ### ▶️ RESUME HERE
 
-**Two things, both needing a phone and neither needing code.**
+**Both phone items are now closed.** They were:
 
-1. **Verify zone alerts in Dhaka** — [`GUARDIAN.md`](docs/walkthroughs/GUARDIAN.md) Part 1,
-   steps 1–6. This is the only part of Guardian never run on a device, and step 6 (lock the
-   phone, walk toward a flagged road, feel it buzz in your pocket) is the strongest thing in
-   the whole demo. From outside Dhaka, seed a flag first:
+1. ~~**Verify zone alerts in Dhaka** — GUARDIAN.md Part 1.~~ **Done 15 Oct**, steps 1–5,
+   against a flag seeded at the test location rather than a walk in Dhaka. The OS does the
+   detection and cannot tell a seeded row from a pipeline row, so the whole path ran for real.
+   Step 6 (pocket, outdoors) stays optional and unrun — the **+250 m ring is unmeasured at
+   walking pace**, as is **battery over a day**. Seed and clean up with:
 
    ```powershell
    docker compose exec api python scripts/seed_flag_here.py --lat <lat> --lon <lon> --clear
    docker compose exec api python scripts/seed_flag_here.py --clear-only   # afterwards
    ```
 
-2. **Try video on a second Android phone.** If it records there, the failure is the Vivo's
-   Unisoc camera stack and not the code — worth knowing before the 24th, and it changes what
-   you say on stage.
+2. ~~**Try video on a second Android phone.**~~ **Done 15 Oct — defect 53.** It records there,
+   so the Vivo V2344's failure is its Unisoc `ums9230` camera stack and not our code. Keep the
+   stage claim conditional anyway: one handset in the fleet cannot record.
+
+**The backlog sweep is finished, so there is no "next sprint" — the next thing is D10.** Every
+row was offered as accept or skip; B9 was built, thirteen were skipped and annotated with what
+reading them found. Do not re-offer them; read the annotations first.
+
+**Two findings from the sweep that are owner decisions, not work:**
+
+1. 🛑 **`com.Meridian.app` — the capital M — is the permanent Android `applicationId`**
+   (`app.json`, `build.gradle`, the Kotlin `package`), while its source directory is lowercase
+   `com/meridian/app`. **It cannot be changed after the first Play Store release** — a different
+   identifier is a different app, with no installs and no reviews carried over. Fix it before
+   any submission, and **not before D10**: it needs an `expo prebuild --clean`, and a new
+   package makes the build on the handset a separate install, so SOS, geofencing and video
+   would all need re-verifying. See B21.
+2. 🎨 **Light mode fails WCAG AA on two tokens** — `textFaint` at **2.43** and `brand` at
+   **2.62**, against a 4.5 threshold for body text. Dark mode passes throughout. These are the
+   two that matter: all small secondary text, and the interactive accent. Fixing the tokens
+   fixes every screen at once. See B19, which also records that **283 touchables** have labels
+   in only **18 files**, with `GuardianScreen` — where SOS is armed — at **zero**.
+
+**New since 15 Oct — one decision, and it is a correctness one:** **defect 58** needs an owner
+call. `rumour_guard`'s merge violates a `risk_flags` CHECK whenever two commonly-owned outlets
+cover one event, because independence grouping pushes `source_count` below the number of cited
+source refs and the constraint forbids exactly that direction. It **fails closed**, so nothing
+is falsely confirmed — corroboration from commonly-owned outlets is just silently lost. Three
+remedies are written up under defect 58 and they differ in what the flag sheet claims, which is
+why it was not picked unilaterally. Worth noting the most truthful option would let the sheet say
+**"3 articles from 2 independent outlets"**, which is better than what it says today.
+
+**And run this before the rehearsal:** `docker exec meridian-api python -m app.agents status`.
+One command says whether the five scheduled agents are healthy, and it exits 1 if any is late or
+broken. Reading the columns is documented in `docs/RUNNING.md` §8.
+
+**What still needs the owner and not a sprint:** sign off the **4 PROPOSED retention windows**
+(`journeys` 30d, `sos_incidents` 180d, `gd_drafts` 90d, `raw_documents` 90d) — nothing has been
+purged while they sit proposed — and fill in GUARDIAN.md's blank fields: the second handset's
+make/model/Android version, and both thresholds.
 
 **Then calibrate both thresholds on whichever phone will be used** (GUARDIAN.md steps 8 and
 11). They are per-handset and must not be set for the first time on demo day.
@@ -502,9 +607,1405 @@ git push   # then PR, squash-merge to main, tell your partner
 
 ---
 
+## The backlog sweep is complete — every row offered, one built, and the skips are now the asset
+
+*2026-10-15 · Arafat · on `backlogs-fix` — uncommitted at time of writing; the owner commits*
+
+Every remaining backlog row was put to the owner one at a time, in plain terms, as **accept or
+skip**. **B9 was accepted and built** (see the entry below). **Twelve were skipped and left in
+the backlog untouched**: B3, B6, B10, B11, B11a's remainder, B12, B15, B16, B17, B18, B19, B20,
+B21, B22.
+
+**The skips are not empty.** Each row now carries what reading it found, so the next person
+starts from measurements rather than from the row's original guess. Several of those readings
+contradict the row they are attached to:
+
+| Row | What reading it found |
+|---|---|
+| **B3** | A quarter already done; **auto-discovery should not be revived as written** — it would publish routes nobody decided to publish, which is defect 56's shape |
+| **B6** | The feature-directory half happened organically; the debt it never names is **`MapScreen.tsx` at 2,257 lines** |
+| **B10** | **Owned and well under way on `origin/feature/journey-guardian`** — 391-line plan, JG1–JG7, and JG1–JG4's schema already live. Do not build in parallel |
+| **B11** | Blocked on a **paid LLM account** (`ANTHROPIC_API_KEY` empty; six free-tier keys), **no Batch API code**, and **~8 days of archive** where it needs months |
+| **B11a** | **The pipeline is conversion-limited, not supply-limited** — 4% of what it reads becomes a flag, and `dmp_news` gave **2 documents in 7 days** |
+| **B12** | **Its legacy-retirement half is already done** by D06 + `chronic.py`; the cost half has exactly **one** instrumentation point |
+| **B15** | The independence property is **structurally enforced and was demonstrated in production** by defects 57 and 58 |
+| **B16** | **Sentry is not "already in the stack"** — one empty settings field; adding it is a privacy decision. Its cost third duplicates B12 |
+| **B17** | Baseline is **3 users, 1 push device**; the likely ceilings are Supabase and LLM **plan limits**, not code |
+| **B18** | **Offline, the map is blank and silent** while the same device already holds the zone table on disk for background alerts |
+| **B19** | **Light mode fails WCAG AA** — `textFaint` **2.43**, `brand` **2.62** — and **283 touchables against 18 files with any label**, with Guardian at zero |
+| **B20** | **A backend SMS gateway cannot serve the offline case at all**; `netinfo` installed and unused; ~400–500 strings, no i18n framework |
+| **B21** | 🛑 **`com.Meridian.app` — capital M — is the permanent Android `applicationId`**, and its directory is lowercase. Fix before the first publish; cannot be changed after |
+| **B22** | B9 accidentally wrote one of its five runbook entries into `RUNNING.md` §8 |
+
+### Three of those deserve attention outside their rows
+
+1. **B21's identifier.** An Android `applicationId` cannot be changed once published — a
+   different one is a different app, with no installs and no reviews carried over.
+   `com.Meridian.app` appears in `app.json`, `build.gradle` and the Kotlin `package`, while the
+   source directory is `com/meridian/app`. **Not fixed on purpose:** it needs another
+   `expo prebuild --clean`, and a new package makes the build on the handset a *separate
+   install*, so SOS, geofencing and video would all need re-verifying eight days before D10.
+2. **B19's contrast.** Two light-mode tokens fail AA for body text, and they are the two that
+   matter: `textFaint` (all small secondary text) and `brand` (the interactive accent). Fixing
+   the tokens fixes every screen at once, which is why **B9's new screen deliberately uses
+   `textFaint` like every other screen** rather than deviating on one page.
+3. **B18 is the only skipped row with a live user-facing safety consequence.** With no data the
+   map is blank and says nothing, which reads as *"no warnings near you"*. First to reconsider
+   after D10.
+
+**Nothing was built for a skipped row.** The only edits outside B9 are the row annotations
+above, one stale-claim correction in `IMPLEMENTATION_PLAN.md` (defect 16's theme half was
+recorded as open and had been closed in commit `f0a83de`), and this entry.
+
+---
+
+## B9 — the fleet readout, and the agent that had never once worked
+
+*2026-10-15 · Arafat · on `backlogs-fix` — uncommitted at time of writing; the owner commits*
+
+B9 was the fourth row offered in the backlog sweep and the first one accepted. Three were
+skipped: **B20** (Bangla + SMS), **B3** (internal cleanup) and **B6** (frontend refactor). Each
+skipped row now carries what reading it found, in `DEMO_PLAN.md`, so the next person does not
+re-derive it.
+
+**What was built, in two halves.** `python -m app.agents status` prints the operator's table;
+`GET /api/v1/agents/status` plus a **System Status** screen under Profile → Safety is the user's.
+The row said *"this is for us, not for users — a simple authenticated page is enough."* Half of
+that survived: the operator half is a terminal command, because there is no admin UI to host a
+page in and an authenticated web page would be a new surface to secure for an audience of two.
+The other half the **owner corrected on consent**, asking for a user screen too — and that was
+right. The app had no answer to *"is this map current"*: a quiet map and a map that is quiet
+because nothing has run are the same picture.
+
+**The two views read one function.** `app/agents/health.py :: fleet_health` feeds both, so the
+operator's view and the user's can never disagree about whether something is healthy; they
+differ only in how much they say. The user payload drops error text, item counts and failure
+tallies — an exception repr is noise to a user and a hint to anyone probing the deployment, item
+counts mean different things across agents, and a failure tally alarms without being actionable
+because a user cannot retry an agent. A test asserts those stay out, so showing one later is a
+decision rather than an autocomplete.
+
+**Everything B9 needed had been written since D01 and read by nothing.** `agent_runs` holds one
+row per run with timings, counts, errors and metrics, indexed two ways. Both the migration and
+`registry.STALE_RUN` had already named the failure a reader would catch — *"a container restart
+mid-run leaves its row at `running` forever, so that stuck row is exactly what Track B's fleet
+view should surface."* Same shape as B6b's provenance data: written, queryable, unread.
+
+### It found two defects in its first thirty seconds of output
+
+**Defect 57 — `report_corroboration`: 38 runs, 0 successes, `community_clusters` empty.** B13 is
+described as landed in three documents and its agent had **never once completed a run.**
+`crime_reports.incident_date_time` is `timestamp without time zone`; the agent bound an aware
+datetime, and asyncpg raises while *encoding* such a parameter, before the statement is sent. So
+it died on its first query, every hour, since B13 shipped.
+
+The near miss is the part worth carrying: **the agent already handled that column correctly on
+the way out.** `_rows_to_candidates` reads it back as UTC with a comment explaining why. The
+author understood the mismatch and fixed one direction of it. Fixed by converting the window
+boundary to naive UTC — the same reading the row parser uses. **Not** by migrating the column,
+which is the correct long-term remedy and is a migration against a table another checkout writes
+to under ADR 0001. First successful run: `ok`, 8 reports in window, 2 eligible, 0 clusters —
+and **zero clusters is correct**, since publishing needs two independent reporters within 200 m.
+
+**Defect 58 — `rumour_guard.merge_into` violates a `risk_flags` CHECK, and the premise is
+inverted rather than mistyped. Open; it needs an owner decision.** The constraint is
+`jsonb_array_length(sources) <= source_count`. `merge_into` appends one `SourceRef` per
+*article* but sets `source_count = len(independent_publishers(...))`, and independence
+**collapses commonly-owned outlets into one owner** — its own docstring shows
+`["dhaka_tribune", "bangla_tribune"]` → `{'tribune_group'}`. Two refs, count of one. So
+independence pushes the count *below* the ref list, which is the one direction the constraint
+forbids. `merge_into`'s docstring claims *"One `SourceRef` per publisher"*, which is what the
+constraint encodes and **not what the code does**. The docstring, the constraint and the code
+hold three different beliefs.
+
+It **fails closed** — the `UPDATE` raises, the flag keeps its previous sources and status, the
+run reports `partial`. Nothing is falsely confirmed; corroboration from commonly-owned outlets
+is silently dropped. Three ways out are written up under defect 58, and the choice changes what
+the flag sheet claims, which is why it was left rather than picked.
+
+### Traps and things worth knowing
+
+* 🪤 **The worst trap of the session, and it nearly made me report a fix that was not live:
+  the Celery worker never re-imports changed code.** `uvicorn` watches `backend/app` and
+  reloads, so the **API** picked up defect 57's fix instantly — a manual
+  `python -m app.agents run report_corroboration` returned `ok`. But the **worker holds the
+  imported module in memory**, so the hourly beat kept failing with the original error at 14:17
+  *and* 15:17, an hour after the fix. And `docker compose up -d api worker` **did not restart
+  it** — nothing about the worker's service definition had changed, so compose reported only
+  `api` and left the stale process running.
+
+  **I also verified it wrongly the first time.** I ran `docker compose exec worker grep` for the
+  fixed line, saw it, and concluded the worker had the fix. The *file* had the fix; the
+  *process* did not. The only honest check is to run it **through the worker** —
+  `celery_app.send_task('agents.run', args=[...])` — which is the same path beat uses. After
+  `docker compose restart worker`, a worker-executed run returned `ok` with `items_in=2`.
+  Written up in `docs/RUNNING.md` §8 beside the `.env` warning, because it is the same family of
+  trap and this one is quieter.
+* **A beat run also fired while I had the fix temporarily reverted** to prove the regression
+  guard fails on the old code, which produced one of the 14:17 failures. Proving a guard against
+  a live schedule is its own hazard.
+* **The `FAIL` column is a 24-hour window, so it lags a fix by a day.** Right after defect 57,
+  the row read 23 runs / 22 failures beside a healthy `ok`. That is history, not a live problem.
+* **`engine.echo = False` is the only way to quieten SQLAlchemy for one command.** `echo`
+  installs an `InstanceLogger` that overrides `isEnabledFor` to consult the engine's own flag, so
+  setting a level on `sqlalchemy.engine` *or* `sqlalchemy.engine.Engine` looks correct and changes
+  nothing. I tried both before reading the source.
+* **`cadence_of` deliberately refuses to guess.** It reads the cron shapes in use and returns
+  `None` for anything else, which surfaces as `unknown` rather than a wrong `late` badge.
+  `test_every_registered_agent_has_a_cadence_this_module_can_read` is what tells you to teach it
+  a new shape, and it names the function.
+* **The catalogue coupling fails from both sides.** `agentCatalogue.ts` holds the plain-language
+  title and blurb per agent; a backend test asserts every registered agent has an entry, and the
+  jest test pins the five names from the client side. Proven by renaming one entry — both failed.
+* **Every blurb was written from the agent's own docstring, not its name**, and `expiry_sweep` is
+  why. Its name suggests the map depends on it; its docstring says the opposite — every surface
+  stops serving an expired row whether the sweep has ever run or not. So its card tells the user
+  that a red state there changes nothing on their map. Guessing from the name would have produced
+  a plausible sentence that frightens people about the wrong thing.
+* **B2's drift check gained a third service file** and its two-way `risk if ... else geo` ternary
+  became a lookup, because `"agents"` would have silently fallen through to the geo file and
+  compared a contract against an unrelated interface.
+* **`test_the_parser_actually_found_fields` had a flat floor of 4 fields.** `FleetStatus`
+  genuinely has three, so the floor is now the model's own size capped at four — which is what
+  the test's own docstring already said it was for (*"a shrinking count is the signal"*).
+
+---
+
+## B1 — four ADRs, and the one that found an authentication bypass
+
+*2026-10-15 · Arafat · on `backlogs-fix` — uncommitted at time of writing; the owner commits*
+
+B1 was consented to as *"pure writing — nothing changes on your phone"*, which is how I
+described it and what the row said. **It was not.** Reading the auth path end to end in order to
+describe it found **defect 56: `POST /api/v1/auth/login` returned a valid, accepted access token
+for any email, with no credential check.**
+
+### The defect, because it matters more than the documents
+
+```python
+# endpoints/auth.py, registered, unauthenticated
+access_token = create_access_token({"sub": "user_id", "email": request.email})
+```
+
+`verify_password` was imported in that file and never called. Both `/auth/login` and
+`/auth/register` sat under a `# TODO: Implement login logic` comment, **which is why they read
+as harmless stubs for months. They were not stubs — they returned working credentials.**
+
+I measured it before changing anything, because "is it actually exploitable" is the only
+question that matters:
+
+```
+verify_supabase_token(forged)  -> *** ACCEPTED ***
+get_current_user(forged)       -> {'user_id': 'user_id', 'email': 'attacker@example.com'}
+```
+
+Every endpoint behind that dependency was reachable without credentials — `/sos/trigger`, which
+as of the same day emails a police station, and `/ai/*` and `/casework/*`, which spend LLM budget
+per call. Blast radius was limited in one respect worth stating: `sub` was the literal string
+`"user_id"`, not a UUID, so user-scoped queries against UUID columns fail. This was privileged
+access and resource abuse, not a clean path to another user's data.
+
+**Three independent faults, each sufficient alone, so all three were fixed rather than the
+cheapest one:**
+
+1. **The backend could mint.** `create_access_token`/`create_refresh_token` signed with
+   `JWT_SECRET_KEY` — contradicting the entire argument defect 33 made for moving to JWKS
+   (*"the backend never holds a credential capable of minting tokens, only of checking them"*).
+   That sentence was in `jwks.py`'s docstring the whole time, and it was false.
+2. **The verifier accepted HS256** whenever that secret was set. So what the backend could sign,
+   the backend would trust — and `.env` is committed deliberately here, so the secret is not
+   secret in the usual sense.
+3. **The `aud` claim was not required.** `options={"verify_aud": True}` with
+   `audience="authenticated"` accepted a token carrying **no `aud` at all**. This one would have
+   blocked the bypass by itself, and requiring the claim rejects nothing legitimate — every
+   genuine Supabase token carries `aud: "authenticated"`.
+
+Deleted: `endpoints/auth.py`, its `include_router` line, `schemas/auth.py`, and the four helpers.
+Narrowed: `_ALLOWED_ALGORITHMS = {"ES256", "RS256"}`, refused on the algorithm alone before any
+key lookup, so it holds whether or not Supabase is reachable. Added:
+`options["require"] = ["exp", "aud", "sub"]`. Also removed `JWT_ALGORITHM` (default `"HS256"` —
+the algorithm that signed the forgeries), `ACCESS_TOKEN_EXPIRE_MINUTES` and
+`REFRESH_TOKEN_EXPIRE_DAYS`, which described a backend that issues sessions.
+
+**Verified both directions, because a security fix that breaks login is not a fix.** Forged
+token → `REFUSED: Unsupported token algorithm: HS256`. `create_access_token` → `ImportError`.
+And legitimate auth intact: `/sos/history`, `/notifications/config`, `/users/me` all **401** on
+missing *and* malformed tokens; API boots clean; `/auth/*` gone from the route table. The client
+was never affected — `api.service.ts` has always refreshed via `supabase.auth.refreshSession()`,
+and its own comment said `/auth/refresh` *"would have 422'd even if it were implemented"*.
+
+**The test is structural, not behavioural**, and that is the lesson rather than a style choice.
+This survived 684 passing tests, every sprint and every device walkthrough **because nothing
+ever called it** — the same reason defect 31's unconditional police routing went unnoticed. A
+behavioural suite cannot fail on a path no one exercises. So
+`test_the_backend_cannot_mint_a_token.py` (10 tests) asks questions about the *shape* of the
+codebase: may any module under `app/` call `jwt.encode`; do the four helpers exist by name; is
+any `/auth` route registered; are both deleted files still deleted; do a symmetric and an
+`alg: none` token raise; is the required-claims list still there.
+
+One of those tests reads `JWT_SECRET_KEY`'s callers **via `ast`, after a text scan gave a false
+positive** on `core/security.py` — whose new docstring *explains* that the deleted helpers used
+to sign with it. Prose about a credential is not use of it, and a check that cannot tell the
+difference is a check that gets suppressed rather than fixed.
+
+⚠️ **`JWT_SECRET_KEY` survives and its name now lies.** Its only remaining reader is
+`agents/report_corroboration.py`, as the HMAC key behind B13's `reporter_ref`. **Rotating it
+silently re-pseudonymises every reporter** — somebody who reported twice becomes two people and
+corroboration counts change. It behaves like a schema constant, not a credential. Recorded beside
+the setting in `config.py`; a rename belongs with a migration that touches `community_clusters`.
+
+### Executed ADR 0001's one consequence, immediately rather than as a cleanup sprint
+
+`endpoints/users.py`, `crimes.py` and `tracking.py` deleted, with their router lines and their
+orphaned schemas. **`crime_ai.py`, the fourth item on that cleanup row, was already gone** —
+deleted in some earlier sprint with the box never ticked, now the fifth time that has happened
+in this repo.
+
+These three were genuinely inert, every handler a bare `pass` — but that is **a 500, not a
+404**, because `pass` returns `None` and `None` against a non-optional `response_model` raises.
+So the API advertised `POST /api/v1/crimes/report` and failed in a shape that reads like the
+caller's bug.
+
+**They went immediately after defect 56 because they are the same shape as defect 56**: a
+registered endpoint nobody calls, unexamined for months. Waiting for a cleanup sprint is what
+let the first one hand out credentials.
+
+Verified: `/users/me`, `/crimes/nearby`, `/tracking/check-danger-zone` → **404** (previously
+500); `/sos/history` → **401**; `/risk/flags` → **422**. **The client needed no change**, which
+is the evidence they were dead.
+
+`test_no_endpoint_is_a_stub.py` deliberately does *not* name the four files. It **parses every
+handler** under `endpoints/` and fails on any body that is only a docstring and/or `pass`/`...`,
+and refuses any router on `/auth`, `/users`, `/crimes`, `/tracking`. An explicit
+`raise NotImplementedError` passes, because a deliberate answer a client can handle is not this
+failure. A fifth test feeds the detector five known bodies, so "can this check still fail?" is
+answered rather than assumed — a named-files check would only ever catch the four already dealt
+with.
+
+**737 collected, 736 passing** (the `public.users` tripwire remains the deliberate red).
+
+### The documents
+
+Four, not three. `0001-data-plane`, `0002-auth`, `0003-user-table-collapse`, `0004-migrations`.
+
+**ADR 0001** ratifies a split the code had already converged on, which is why it was easy: the
+client writes `profiles`, `emergency_contacts`, `sos_hot_words` and `crime_reports` direct, and
+nothing else. It names the three properties that put a table on the FastAPI plane — agentic,
+geospatial, multi-user — assigns all 16 tables, and argues RLS rather than a FastAPI ownership
+check is the enforcement point, because two implementations of one rule is two places to get it
+wrong and the wrong one will be the one nobody reads. `crime_reports` is the interesting case and
+it is split deliberately: **owning a row and having authority over what rows collectively claim
+are different questions**, so CRUD is client-side while `community_clusters` is an agent's.
+It also condemns `endpoints/users.py`, `crimes.py` and `tracking.py` as dead — a `pass` handler
+with a `response_model` is a 500, not a 404. **Deleting those three is still outstanding.**
+
+**ADR 0003** records a decision already executed, and the reason to write it anyway is in it: the
+false belief that SOS depended on `public.users` survived in three documents for weeks because
+somebody read a SQLAlchemy `ForeignKey` as the deployed schema. `git log -L 203,207` on
+`SCHEMA.sql` answered it in one command; nobody ran it, because the wrong answer was already
+written down three times. **An unwritten decision gets re-derived, and re-derivation fails
+silently.** It also carries the new finding that the drop did not stay dropped.
+
+**ADR 0004** promotes `migrate.py`'s docstring to a decision and adds the three things operating
+it has taught: a **duplicate version number is applied-once then skipped for ever** (ADR 0003's
+migration nearly shipped on Nakib's `journey_deadline` timestamp, caught only by a checksum
+mismatch); the **ledger can name migrations whose files are not in this repo**, so a mystery
+version is a question rather than corruption; and **a drop is not final while another checkout
+declares the model.**
+
+**737 collected, one failing** — the `public.users` tripwire the owner chose to leave red.
+`ruff` clean on every file touched. `mypy` unchanged at 7 pre-existing errors, none in any file
+edited. Frontend untouched throughout: no client change was needed, which is itself the evidence
+that all four deleted endpoints were dead.
+
+**Eight files left the backend today and nothing broke.** That is the honest summary of B1: the
+documents were the smaller half, and reading the code closely enough to describe it was the
+deliverable.
+
+---
+
+## B2 — the check that fails when a screen is about to render a blank
+
+*2026-10-15 · Arafat · on `backlogs-fix` — uncommitted at time of writing; the owner commits*
+
+Consented to as the backlog's first implemented row. **Two of B2's three parts turned out to be
+already done** — the invariant suite has 24 files, grown sprint by sprint, and B14 shipped the
+retention registry — so the work was the one part that was missing: the contract-drift check.
+
+### What drift actually looks like, and why nothing caught it
+
+The backend serves `source_count`. Somebody renames it. The client's wire interface still says
+`source_count`, so **`tsc` compiles, the request succeeds, and `wire.source_count` is
+`undefined`** — a blank line on the zone sheet where "3 sources" belongs, or a crime pin with no
+fill. That last one is **defect 3**, which was invisible precisely because a `Record` lookup
+returns `undefined` instead of throwing. `ruff`, `mypy`, `pytest`, `tsc` and `jest` all pass,
+because each half is internally consistent. Nothing compares them.
+
+**I proved this rather than asserting it.** Renaming `RiskFlag.source_count` to `sources_count`
+in `app/contracts/risk.py` and running the frontend typecheck: **`tsc exit=0`**. The client has
+no way to know. Only the new test failed. (Both files restored; `git status` clean on each.)
+
+### What it compares — not the obvious thing
+
+My first instinct was to compare Python against `frontend/src/types/contracts/`. **That would
+have been wrong and would have produced a wall of false failures.** Those camelCase types are
+the client's *domain* model and are allowed to differ: `NewsCrimeIncident` carries
+`latitude`/`longitude` on the wire and `lat`/`lon` in the app, mapped in `toNewsCrimeIncident`
+with a comment saying which. Reading that comment is what stopped me.
+
+The real mirrors are the **`*Wire` interfaces in `frontend/src/services/`**, which exist to name
+the wire shape and nothing else. Those are what can drift. Five pairs are registered explicitly
+— never by name-matching, which would silently cover nothing the day somebody renames an
+interface — and they agree today: 20/20 fields on `RiskFlag`, 16/16 on `CommunityCluster`, 11/11
+on `NewsCrimeIncident`, 7/7 on `GeoResolution`.
+
+**The asymmetry is the design.** A *client* field with no server field is a hard failure — it can
+only ever read `undefined`. A *server* field the client ignores is allowed, but must be named in
+a waiver with a reason (`SourceRef.snippet`: the news-crime card links out rather than quoting).
+Otherwise "the client has not caught up" and "the server renamed this and the client now reads
+nothing" look identical, and the second is a defect. A separate test fails if a waiver outlives
+the field it waives.
+
+Also compared: **nullability** in both directions (`null` where the client promised a value is
+how `.toFixed()` throws), and the six **vocabularies** — `FlagStatus`, `IncidentKind`,
+`MobilityImpact`, the two status unions and `CRIME_CATEGORIES` — exactly, both ways, because a
+client value the server cannot send is dead UI maintained in the belief it is reachable.
+
+### Six of the 38 tests exist to break the check on purpose
+
+A contract test that cannot fail is worse than none, because the suite counts it. So:
+`test_a_renamed_server_field_would_be_caught`, `test_a_nullability_flip_would_be_caught` and
+`test_a_dropped_vocabulary_value_would_be_caught` feed the comparator known-broken synthetic
+input; `test_a_missing_interface_raises_rather_than_returning_nothing` asserts a renamed
+interface *errors* instead of returning an empty field list, which would make every comparison
+vacuously true; `test_the_parser_actually_found_fields` asserts a floor per pair, because the
+likeliest regression is Prettier reformatting a declaration until the regex stops matching; and
+`test_the_drift_contract_is_enforced_somewhere` is the only test in the file with no `skipif`,
+so a missing mount fails loudly instead of turning the other 37 into green skips.
+
+### Where it runs
+
+In the `api` container, via three read-only mounts in `docker-compose.yml` — the arrangement
+B6a's `test_alert_channels_match_the_client.py` introduced, and its comment already explains
+why: a cross-codebase test that skips on every machine is worse than no test. And in **CI job 3b
+`contract-drift`**, its own job rather than a step, on the same argument the supply-chain job
+makes for itself — a drift is not a failing test, it is a screen about to render a blank.
+
+`mypy --strict` on `app/contracts/` was the other open S03 box. **It already passed and was
+already enforced** — `pyproject.toml` has had `app.contracts.*` under `strict = true` since S03
+and CI's mypy step runs with that config. The box was never ticked. Verified: clean, 6 files.
+
+### ⚠️ Two findings that are not B2's doing
+
+**1. The `invariants` CI job has never been able to run.** It installs `pytest pytest-asyncio`
+and no application dependencies, so it cannot import `app.*`; the `backend` job's pytest step
+has the same gap. `tests/invariants/` reaches `app.agents`, `app.ingestion` and `app.llm`, so
+making CI collect it means `requirements/agents.txt`, and therefore `sentence-transformers` and
+torch — the >2 GB install the `backend` job's own comment is explicitly avoiding. **Documented in
+`ci.yml`, not half-fixed:** adding base.txt + dev.txt gets further and still does not collect,
+and choosing what CI installs for a 684-test suite has a runtime cost attached. The tests do run
+on every change, in the container. Recorded so nobody reads a green badge as "the invariants
+ran". Job 3b is pydantic-only (15 packages, proven in a clean venv) so it does not inherit this.
+
+**2. `public.users` is back in the shared database.** The retention tripwire
+(`test_retention_is_declared.py`) went red mid-session with `['users']` unclassified — which is
+the test doing exactly its job. Established: the drop migration **did** apply (ledger row
+`20261015160000`, 07:37:03 UTC today); the table is back with the old mirror's 10 columns, **0
+rows**, a primary key only, **no `trg_users_updated_at`** and **no FK pointing at it**; and
+`users` is **not** in our `Base.metadata`, so this container cannot have recreated it. That
+shape — `create_all`'s, minus the trigger the migration dropped — is what a checkout still
+holding `app/models/user.py` produces on boot. **So another machine on the shared Supabase
+database recreated it**, the `journeys` situation in reverse. Left in place: dropping a table in
+a shared database is the owner's call, and dropping it again without the other checkout pulling
+would just repeat the cycle. **The lesson worth keeping: a table drop cannot stick while any
+teammate still runs the model.** Defect 9 recorded that deleting the class is a prerequisite —
+true, but only for *this* checkout.
+
+**791 collected, one failing: the `users` tripwire above.** The drift check is 38 passed, 0
+skipped, in the container and in a 15-package venv. `ruff` clean on the new file. Frontend
+untouched by this row.
+
+---
+
+## B6b declined — the provenance page will not be built
+
+*2026-10-15 · Arafat · no code changed*
+
+Offered for consent and **declined by the owner**, in their words: *"I don't want to show the
+users this information that what our app fetched and what our app rejected. I don't want to add
+another screen."*
+
+**Recorded as a product decision, not a deferral**, because the distinction matters to whoever
+reads the row next. The data was checked first and was all there — 371 `raw_documents`, 58
+`extracted_incidents`, **34 discarded** (31 `unresolved_location`, 3 `rejected`), 228
+`risk_flags` — so this was not blocked on anything.
+
+The decision is sound on its own terms. The audience for "371 read, 34 discarded, 31 of them
+unplaceable" is a reviewer or an operator, not somebody checking whether a road is safe tonight,
+and every screen added is weight on a person in a hurry. **The provenance itself is untouched:**
+`discarded_reason` and the `raw_documents` → `extracted_incidents` chain are still written and
+still queryable, which is how D04 measured precision and recall without any page existing. "What
+did you throw away?" is answerable with a query.
+
+One knock-on: B14's retention note said `raw_documents`' window had to account for B6b's page
+starting to lie as rows aged out. That concern is gone — it is a `content_hash` dedup question
+only now. ⚠️ If the need ever returns, it belongs in **B9** (operator-facing), not in the app.
+
+---
+
+## Police routing turned on — an SOS now reaches the thana you are standing in
+
+*2026-10-15 · Arafat · on `backlogs-fix` — uncommitted at time of writing; the owner commits*
+
+**This corrects the entry below it, from the same day.** The owner asked why the SOS was not
+being emailed to the nearest station from `police_stations.csv`, having said they had set the
+contact columns to their own address *"just to test it"*. The honest answer is that defect 17's
+close had decided not to, and built a mechanism to make sure it could not.
+
+### The mistake, named
+
+Two separate errors stacked:
+
+1. **§7.2 reasoned from "we cannot *file* with the police" to "we must not *tell* them
+   anything."** Those are different acts. Filing a cognizable offence genuinely cannot be
+   automated — no API, no partner process, and the applicant must appear at the thana with a
+   printed copy, which is exactly why `thana.py` names the station on the GD. Notifying a thana
+   inbox during an emergency needs none of that. "Nothing to transmit to" was true of case
+   filing and false of an email, and five documents repeated it without anyone separating them.
+2. **The close then made that over-reach mechanical**, by measuring the repeated address and
+   refusing to email even with the flag forced true — and was pleased with itself for it. But
+   the repeated address *was the owner's own, placed there to test this very path*. **A gate the
+   data's owner cannot open is not a safety feature; it is a bug with a good explanation.**
+
+The hazard the gate was built for is real and historical: defect 31, where routing was
+unconditionally on while every row held `noorlabib@iut-dhaka.edu`, so every SOS test emailed an
+uninvolved third party. That is a case for a flag, which exists. It is not a case for refusing
+the flag's owner.
+
+### What runs now
+
+`POLICE_ROUTING_ENABLED=true` in `backend/.env`; the **code default stays `false`**, so no
+deployment emails an address it was not told to.
+
+`sos_service._nearest_police_station` asks `casework.thana.nearest_thana` for the single closest
+Dhaka city station to the live SOS coordinates and adds that one address to the alert.
+
+- **One station, not a radius.** The old `_get_nearby_police_emails` collected every email
+  within 5 km, which in central Dhaka is six or seven thanas. One incident has one
+  officer-in-charge, and six stations each assuming another is responding is worse than one
+  being told.
+- **It shares `nearest_thana` on purpose.** That function already refuses outside Bangladesh,
+  refuses beyond 25 km of Dhaka city, and excludes the five rows the CSV marks `legacy —
+  unverified`. More importantly the station emailed and the station printed on the GD are now
+  the same answer *by construction* — the alert reaches the thana the victim will later walk
+  into. `_haversine_distance` was deleted with the old path: it was the repo's second copy of
+  the formula, and two copies is how two answers drift apart.
+- **`_build_dhaka_email_map` is Dhaka-rows-only for correctness, not tidiness.** The CSV has a
+  `Kotwali Police Station` in Dhaka, another in Chattogram and another in Rajshahi, while
+  `nearest_thana` only ever returns Dhaka names. A map over all 607 rows would return another
+  district's address under a name that looked right.
+
+Verified live after `docker compose up -d api worker` (**`restart` does not re-read `.env`** —
+the flag read `False` until the containers were recreated, which is worth knowing):
+
+| from | station emailed | distance |
+|---|---|---|
+| Dhanmondi `23.7465, 90.3760` | `Dhanmondi Police Station` | 0.66 km |
+| Uttara `23.8759, 90.3795` | `Uttara Police Station` | 2.36 km |
+| Jashore `23.1664, 89.2081` | **none** — refused | 132.8 km |
+
+### The tile came back, as a name
+
+Defect 17 removed `"Police stations nearby: 0"` from the SOS result screen because it had read
+`0` on every SOS ever sent and the app had never looked. It looks now, so the tile is back —
+but as **`Police station: Dhanmondi Police Station`**, or `None in range`. A count of `1` is not
+reassuring and a `0` invites "there are no police near you"; a name is a fact. `/sos/trigger`
+gained a `police_station` field (no `response_model` on that endpoint, so it passes through) and
+`SosResult.policeStation: string | null` replaces `policeStationsFound`.
+`SOSHistoryScreen`'s existing `police_station_count` badge becomes truthful for free.
+
+### What is still not true
+
+- **The addresses are not DMP's.** They are the owner's, which with routing on is now
+  load-bearing rather than harmless: the only inbox an SOS can reach is theirs.
+  `_check_contacts_are_per_station` logs that on every send instead of refusing. Real per-thana
+  addresses remain a data change, not a code change — **and must not be guessed at.**
+- **Outside Dhaka city, no station is emailed.** That follows the owner's instruction to use
+  Dhaka city rows only, and it means **testing from Jashore shows `None in range`**. Widening to
+  all 606 rows is a scope change in `thana.py` if nationwide SOS routing is ever wanted.
+- **An email is a notification, not a filing.** Nothing here makes the police act, and §7.2's
+  substance on that is untouched.
+
+**684 pytest** (0 skipped; +24 in `test_thana_lookup_is_dhaka_city.py`, replacing the three that
+asserted the refusal), **427 jest**, `tsc` clean, `sos_service.py` lint 11 → 10. Corrected in
+place: DEMO_PLAN §7.2 (second addendum) and its D10 checkbox, ADR 0007 Decision 3 (partly
+superseded), IMPLEMENTATION_PLAN defect 17 row and body and §9's env block, `docs/RUNNING.md`'s
+troubleshooting entry, `config.py`, `.env`, `.env.example`, and this file's flag table.
+
+---
+
+## B6a closed — zone alerts verified, and a seeded flag is not a lesser geofence
+
+*2026-10-15 · Arafat · on `backlogs-fix` — uncommitted at time of writing; the owner commits*
+
+**No code changed. This entry is a status correction.**
+
+B6a had sat at 🟡 *"built, not yet verified on a device"* since 11 Oct, and three documents gave
+the same reason: every pipeline risk flag is in Dhaka, the testing happened from Jashore 142 km
+away, the app fetches within ~19 km, so the zone count was correctly 0 and Part 1 could not run.
+
+The owner ran GUARDIAN.md Part 1 **steps 1–5** against a flag seeded at the test location with
+`backend/scripts/seed_flag_here.py`. All five passed: the *"all the time"* permission (which
+Android 11+ will not grant from an in-app dialog at all), the zone watch registering, the
+crossing waking the headless task, the notification carrying the server-framed
+`mobility_statement` verbatim with its source count, the six-hour per-zone debounce suppressing
+the repeat, and the history log showing **both** the alert and the suppression.
+
+**What the entry had got wrong:** it treated a seeded flag as a rehearsal and the Dhaka walk as
+the real test. It is the other way round for everything the app owns.
+`Location.startGeofencingAsync` hands circles to Android's `GeofencingClient` and **the OS does
+the detection** — it has no idea whether the row came from the agent pipeline or from a script,
+so every line of our code in that path ran for real. The script was not a workaround for being
+in Jashore; it was the test harness, and the reason it exists.
+
+**What is genuinely still unmeasured**, and stays recorded rather than quietly closed:
+
+- **Step 6, the outdoor pocket walk.** The walkthrough has always marked it optional. It is the
+  only thing that measures whether the **radius + 250 m** ring actually buys three or four
+  minutes of warning at walking pace on a real road. The ring is a design argument until then.
+- **Battery over a day of real use** — S17's other open box, untouched by this. The argument
+  that OS geofencing beats a JS location loop is sound and is still an argument.
+
+Updated: `DEMO_PLAN.md` B6a row (🟡 → 🟢), `IMPLEMENTATION_PLAN.md` S17's verified-on-a-device
+box, this file's CURRENT STATE and the 11 Oct entry's *"deliberately not done"* list,
+`GUARDIAN.md` header and sign-off. The 11 Oct entry's claim is struck through rather than
+deleted, because the reasoning that produced it is the thing worth reading.
+
+**With this, both items the previous RESUME HERE was waiting on a phone for are closed** — the
+other was video on a second handset (defect 53). What is left for the owner is not a phone:
+sign off the 4 PROPOSED retention windows, and fill in GUARDIAN.md's blank handset and
+threshold fields.
+
+---
+
+## Defect 17 closed — by noticing the row had been asking the wrong question
+
+*2026-10-15 · Arafat · on `backlogs-fix` — uncommitted at time of writing; the owner commits*
+
+The last defect on the list, and it closed without a single real thana phone number — because
+**the deliverable it was blocked on had been cancelled five days earlier and nobody re-read the
+row.**
+
+### The thing three documents kept repeating
+
+Defect 17 said: replace the placeholder contacts with real data, and until then
+`POLICE_ROUTING_ENABLED` stays off. **DEMO_PLAN §7.2, closed by ADR 0007 on 10 Oct, had already
+settled that the flag stays off permanently for an unrelated reason: there is nothing to transmit
+to.** Bangladesh Police has no public API, no developer portal and no partner process, and a
+cognizable offence cannot be closed online in any case — the applicant must appear at the thana
+with a printed copy.
+
+So real per-thana emails would have enabled nothing. The defect, the B4 row and the config comment
+all went on saying real contacts were what stood between us and police routing, for five days,
+because the bottom line — *keep the flag off* — kept being correct for the wrong reason. **The
+same failure mode as defect 9**, where an ORM `ForeignKey` was read as the schema in three
+documents: a true conclusion is a poor guard on a false premise.
+
+### What actually needed fixing: names and coordinates
+
+The owner supplied a much better file — **43 rows from DMP's own find-your-local-police map, 3
+from OpenStreetMap** — and the half of it that gets read is what names the thana on a General
+Diary.
+
+**Scoped to Dhaka city.** `thana.py` loaded all 607 Bangladesh rows; it now loads the 51
+`district == "Dhaka"` rows. That filter is only correct because the column holds **exactly** the
+DMP thanas, verified against the upazila names (no Savar, Keraniganj, Dhamrai, Nawabganj, Dohar),
+and a test fails if a re-export ever breaks that.
+
+**A station can be nameable without being locatable, and five are.** Five Dhaka rows carry the
+file's own `legacy — unverified` label, and checking them **against the file's trusted rows**
+rather than against anyone's memory of Dhaka:
+
+| row | its coordinate sits | wrong because |
+|---|---|---|
+| Turag | 1.7 km from **Rampura** | Turag is the far north, by Tongi |
+| Hatirjheel | 4.4 km from **Pallabi** | Hatirjheel is the central lake |
+| Cantonment | 1.4 km from **Shah Ali** | Shah Ali is Mirpur |
+| Bhashantek | 2.4 km from **Khilkhet** | Bhashantek is Mirpur |
+| Uttarkhan | 3.8 km from **Uttara** | adjacent — plausible, but unverified |
+
+All five are real thanas. They stay in the picker, because somebody filing in Turag has to be able
+to find it and dropping it would silently remove a real station; they are out of the distance
+ranking, because a pin 4 km into the wrong neighbourhood is how a GD reaches the wrong
+officer-in-charge. **44 locatable, 49 nameable.** The split is driven by `coord_source`, so
+upgrading a row's label makes it locatable with no code change.
+
+**Outside Dhaka it refuses.** A Dhaka-only list has a sharp new edge: the nearest station to
+Chattogram is a DMP thana **200.9 km** away and the old code would have named it, confidently, on
+a legal document. `MAX_PLAUSIBLE_KM = 25` is derived rather than picked — sweeping a 101×101 grid
+over the project's own gazetteer box, the furthest any point in Dhaka sits from a locatable station
+is **14.6 km**.
+
+**Duplicates, and why both spellings stayed.** `Gandaria`/`Gendaria` and `Bhatara`/`Vatara` are
+co-located variants; `Hazaribagh` and `Vatara` also had exact duplicate rows. Exact duplicates
+dropped. The variants are **kept**, because the picker is searched by the name the user knows and
+dropping one makes that thana unfindable for half the people who need it. Ranking is sorted
+instead, so a signed document cannot say `Gandaria` on one run and `Gendaria` on the next — the old
+first-wins loop was stable only until someone re-exported the file.
+
+### The declined fallback, implemented — and cheaper than proposed
+
+On 15 Oct the offered alternative was to rewrite the placeholders as explicit `unknown` so the code
+could refuse them. That turned out unnecessary: **607 rows sharing one address is already an
+explicit enough statement of not-known.** `sos_service._check_contacts_are_per_station` measures
+distinctness and `_get_nearby_police_emails` refuses when it fails — **verified with
+`POLICE_ROUTING_ENABLED` forced true**. The data is the gate, not a boolean one edit from being
+flipped. It also makes §7.2's promise enforceable rather than aspirational: real per-thana contacts
+would pass the check on their own, so that genuinely stays *"a data change, not a code change"*.
+
+**Thana numbers were never invented.** The contact columns remain the owner's own test values.
+
+> ⚠️ **The two paragraphs above were reversed the same day — see the entry
+> *"Police routing turned on"* at the top of this log.** The owner asked why the SOS was not
+> reaching the nearest station, and they were right to. They had said *"I have set the email and
+> number field as my email and my number just to test it"*: that is somebody wiring up a
+> destination they can watch, and the code answered by refusing to use it. A gate the data's
+> owner cannot open is not a safety feature. The measurement stays — it logs now instead of
+> blocking.
+
+### The README was not the thing claiming it — the SOS screen was
+
+The defect said *"the README should not claim it"*. The stronger claim was a stat tile on
+`SOSFlow`: **"Police stations nearby: 0"**, rendered on every SOS ever sent. At the most
+frightening moment this app has, it told the user it had looked for police near them and found
+none. **It had never looked** — the number came straight from a disabled code path. Tile removed,
+`policeStationsFound` dropped from `useSOS`.
+
+### Status
+
+**680 pytest, 0 skipped** (+20 in `test_thana_lookup_is_dhaka_city.py`), **427 jest**, `tsc`
+clean, no new lint findings against baseline on either side. **The defect list is empty.**
+
+---
+
+## Defect 9 fixed — the emergency email now says the person's name
+
+*2026-10-15 · Arafat · on `backlogs-fix` — uncommitted at time of writing; the owner commits*
+
+Follows directly from the verdict entry below, which re-scoped this from "collapse three user
+tables" to a one-file change. It was four lines of logic and about an hour of making sure the
+removal was safe.
+
+### What it looked like, on live data
+
+| account | mirror `users.full_name` | `profiles.name` |
+|---|---|---|
+| `mdarafat1661@gmail.com` | `mdarafat1661` | **Arafat Ullah** |
+| `nakib1990saleh@gmail.com` | `nakib1990saleh` | **Nakib Saleh** |
+
+The first column is what went in the alert's **subject** and five more times in its body,
+including *"Try calling mdarafat1661."* The second column is what the user typed at registration
+and can edit. `_display_name()` now reads it, and the three real accounts resolve to
+`Arafat Ullah`, `Nakib Saleh`, `Farhan Ishraq`.
+
+**The fallback is the whole email address, never a part of one.** An address is true, complete,
+and visibly an address; a local part reads as a name and is not one — the same principle as
+defect 17's refusal to invent a thana phone number. A missing `profiles` row is logged and never
+raises: an SOS is not the moment to refuse to send an alert over a display string.
+
+### Removed, in one change, because the drop needs all of it
+
+`endpoints/sos.py`'s auto-provisioning block · `app/models/user.py` · four
+`relationship("User", ...)` declarations · five `ForeignKey("users.id")` columns · `users` from
+`models.__all__` · the table and its trigger from `SCHEMA.sql` · `users` from `VERIFY.sql`'s
+expectations, replaced by a **check that it does not exist**.
+
+### Two things this turned up that are worth more than the defect
+
+**`init_db()` would have silently undone the drop.** `core/database.py` runs
+`Base.metadata.create_all` on **every API start**, inside a try/except that logs *"Database not
+available"* and continues. While `models/user.py` was in that metadata, dropping the table in
+Supabase would have been reversed by the next restart — and the swallowed exception would have
+hidden the reason, so it would have looked like the migration simply had not worked. Deleting the
+model is therefore a **prerequisite** for the migration, not tidying up afterwards. The live boot
+log now lists six tables for `create_all` with `users` absent, and
+`test_create_all_cannot_recreate_the_mirror` holds it there.
+
+**The migration's first version number was already taken, by a teammate, with no file.**
+`migrate.py status` reported the new file as `CHANGED` against ledger version `20261015120000` —
+which is `journey_deadline`, applied `by=nakib` on 14 Oct. There are two more:
+`20261015140000` (`journey_leash`) and `20261014150000` (`journeys`). **`migrate.py up` applies by
+version**, so had the file kept that number the runner would have treated it as already applied
+and skipped it forever: the schema change never runs, the ledger claims it did. That is defect
+55's failure mode precisely, and the only reason it surfaced is that the checksums differed.
+Renumbered to `20261015160000`. Three hand-applied migrations with no committed files is **B10
+being built on the shared database right now** — do not drop `journeys`, do not build on its
+shape.
+
+### A skipped invariant, found while counting tests
+
+`test_single_source_never_confirmed.py:376` — *"confirmed flags are corroborated by two
+independent publishers"*, checked against the live database — **was skipping itself in the full
+suite** with `database unreachable: RuntimeError`. It passed when run alone. The cause is the
+module-level async engine pinned to a dead event loop, the same trap documented at length in
+`test_retention_is_declared.py`, and a broad `except Exception` was reporting it as an absent
+database. So the project's central corroboration invariant was quietly not running, which is the
+worst way for a safety check to fail: green, and asleep. Fixed with
+`engine.dispose(close=False)` and by guarding only the connect. **It now runs and passes.**
+
+⚠️ **And my earlier number was wrong.** I reported "643 pytest exit 0" for B14; it was 643
+passed **and 1 skipped**, and the skip was this. The suite is now **660 passed, 0 skipped**.
+
+### The drop landed, and two follow-ups the drop needed
+
+**The owner applied the migration in the Supabase SQL Editor the same day.** Verified afterwards
+rather than assumed: `public.users` absent, `trg_users_updated_at` gone with it, and **all user
+data intact** — `profiles` 3, `crime_reports` 8, `emergency_contacts` 2, `sos_incidents` 17,
+`sos_hot_words` 2, `gd_drafts` 4, `gd_profiles` 1. The three accounts still resolve to their real
+names.
+
+**1 — The ledger had no row for a migration that had run.** Pasting the file into the SQL Editor
+applies the schema change but skips the `schema_migrations` insert that `migrate.py sql` bundles
+into its output. So `status` read `pending` on something already applied, and `up` would have
+tried it again. Recorded with `migrate.py mark 20261015160000 --yes` — **the command built four
+hours earlier for defect 55, used for the first time for exactly the situation it was written
+for.** Worth noting for next time: a migration applied by paste always needs the `mark`, and the
+raw file in `migrations/versions/` deliberately does not carry the ledger insert.
+
+**2 — The retention tripwire fired, and that is what deleted the dead entry.** `retention.py` had
+classified `users` as an explicitly temporary `KEEP`, because while the table existed
+`test_every_table_in_the_database_is_classified` demanded *some* decision about it. The moment
+the drop landed, the other test failed:
+
+```
+AssertionError: retention rules for tables that no longer exist: ['users']
+```
+
+The entry is gone and the reason it left is recorded where it used to be. **Nobody had to
+remember** — two tests handed the task between them, which is the pattern to copy the next time a
+table is on its way out.
+
+### The `init_db` trap, closed in practice
+
+The API was restarted after the drop. `create_all` ran, logged *"Database tables created
+successfully"*, and **the table did not come back.** That is the verification the model deletion
+existed for, and it is the one step that could not be proved before the migration had been
+applied.
+
+### Status
+
+**660 pytest, 0 skipped, 0 failed.** Lint clean on every file touched, no new findings against the
+pre-change baseline. **Defect 9 is fully closed — code, table and ledger.** The only defect left
+on the list is **17**, blocked on the owner's thana data.
+
+---
+
+## Two defect verdicts — one closed by a second phone, one re-scoped by reading the schema
+
+*2026-10-15 · Arafat · on `backlogs-fix` — documentation only, no code changed*
+
+Two of the three remaining defects were put to the test. **Neither answer was the one on the
+board**, and in both cases the thing that resolved it was evidence rather than argument.
+
+### Defect 53 — closed. It was the handset.
+
+The owner ran SOS on a second Android phone: **video captured, uploaded, and arrived attached to
+the alert email.** The row's own last line had said *"next step is data, not code: try a second
+Android handset"*, and the data came back on the side of the code.
+
+**The Vivo measurement is not retracted and should not be.** On the Vivo V2344 (Unisoc
+`ums9230`) CameraX genuinely never delivers a frame — ten full seconds of audio, a correctly
+configured encoder, and `Recorder` logging *"waiting for video keyframe"* 43 times a second.
+That is all still true of that phone. What was wrong was the *scope* I was entitled to claim
+from it. One device cannot separate "our capture code is broken" from "this SoC's CameraX is
+broken," and no amount of further reasoning on one device could have; the second device is a
+**measurement**, not a retry. Worth keeping next to the logcat lesson from the same defect.
+
+**Consequence: the `TEXTURE_VIEW` native patch is now explicitly not worth writing.** Patching
+expo-camera to work around one SoC buys exactly one handset. **Defect 52 is promoted from
+mitigation to the permanent answer** — a failed recording sends location only and says so on
+screen, so the alert goes out on hardware that cannot record. ⚠️ The public claim stays
+conditional — *"location in seconds, plus video where the hardware supports it"* — because one
+confirmed phone in the fleet cannot record. Demo on the one that can.
+
+### Defect 9 — cannot close, but it was never B1-sized either
+
+The owner asked the right question: *does keeping it affect the current app?* It does, in one
+place, and that place is the emergency email. But the audit also found the expensive half of the
+work already done, so **both halves of the old framing were wrong.**
+
+**The migration already happened, piecemeal, without the box being ticked.** `public.users` has
+**no dependents left.** Every user-owned table references `auth.users(id)` directly in
+`SCHEMA.sql` — `crime_reports`, `emergency_contacts`, `sos_hot_words`, `sos_incidents`,
+`user_locations` — and the last holdout, `gd_drafts.user_id`, was repointed by migration
+`20261010160000__gd_profiles_on_auth_users.sql`, which also built `gd_profiles` on `auth.users`
+from the start. **Dropping the table is no longer gated on ADR 0003 or B1.**
+
+**What survives is one symptom, and it is the worst possible place for it.**
+`endpoints/sos.py:57-69` auto-provisions the row with `full_name = email.split("@")[0]`, and
+that derived string is the **only** name the SOS alert ever uses: `email_service.py` puts it in
+the subject (`EMERGENCY: {user_name} needs help`) and five more times in the body, including the
+instruction *"Try calling {user_name}."* So an emergency contact is told to call a person
+identified by an email local part. **This is already observed, not predicted** — migration
+`20261010160000` recorded it in passing while fixing the GD form for the same reason: *"one row
+reads `nakib1990saleh`, an email local part."* And it never self-heals: the block only runs when
+the row is absent, so editing your name in the app updates `profiles` and leaves the alert
+saying the old string forever. The real name is in **`profiles.name`**, written at registration.
+
+**Three things checked specifically so the row does not get re-inflated, all clear:**
+`password_hash = "supabase_managed"` is read by nothing — `decode_token` verifies Supabase
+tokens through JWKS and `verify_password` is imported by `endpoints/auth.py` and never called;
+`users.hot_words` has **zero readers** (B8 reads `sos_hot_words`); and the five
+`ForeignKey("users.id")` lines still in `app/models/` are ORM-vs-schema drift, harmless because
+`SCHEMA.sql` builds the database.
+
+### Three documented claims were wrong, and the mistake was the same one each time
+
+Finding this meant contradicting the repo in three places, all tracing to **reading an ORM
+`ForeignKey` as if it were the deployed schema**:
+
+1. `DEMO_PLAN.md` D09: *"the column does reference the `public.users` mirror"* — it never did.
+   `git log -L 203,207` on `SCHEMA.sql` shows `sos_incidents.user_id` has pointed at
+   `auth.users(id)` since commit `2d924a2` and that line has never been edited.
+2. `PROGRESS.md` ADR-0005 notes: *"dropping `public.users` would have broken SOS"* — it would
+   not have. The auto-provisioning supplies a display name, not referential integrity.
+3. `DEMO_PLAN.md` D01: *"`endpoints/voice.py` imports the model"* — voice.py was deleted in B8.
+
+All three are corrected in place with the reasoning preserved, not quietly edited. The D09
+conclusion (*no migration needed*) was right; the reason given for it was not, which is the kind
+of error that survives longest because the bottom line keeps checking out. **In this repo, the
+schema is `migrations/supabase/SCHEMA.sql`. `app/models/` is a client of it and the two have
+drifted.**
+
+### Status
+
+No code changed. **Open defects: 17** (blocked on the owner's thana data) **and 9** (one-file
+fix, unblocked, not scheduled). Docs updated: `IMPLEMENTATION_PLAN.md` (defect table row 9,
+ADR-0003 row, defect 9 code half, defect 53), `DEMO_PLAN.md` (B1 and B8 rows, the two stale D01
+and D09 notes), `PROGRESS.md` (both defect-53 sections, the ADR-0005 note, `CURRENT STATE`).
+
+---
+
+## B14 — retention declared, and the table nobody had classified
+
+*2026-10-15 · Arafat · on `backlogs-fix` — uncommitted at time of writing; the owner commits*
+
+The concept document makes exactly one testable privacy promise, §9: *"Location history is
+retained only as long as operationally necessary."* Two of that clause's three parts were
+already provable — HTTPS and JWT are in the transport and the auth middleware. The retention
+part was **a sentence with nothing behind it**: no table declared a window, nothing deleted
+anything, and no test could fail.
+
+### Expiry is not deletion, and the codebase already knew
+
+`agents/expiry_sweep.py` says so itself: it marks rows `expired` and **keeps** them,
+*"because an expired row is the evidence that the surface retires things on its own."* That is
+right, and it is a different promise. A flag that stopped being served eight weeks ago is still
+a row saying where an incident was; a journey that ended last month is still a record of where
+somebody went. B14 is the second half.
+
+### The registry, and why it is a registry
+
+`app/privacy/retention.py` classifies **all 21 tables**: 6 with a delete window, 15 `KEEP` with
+an argument for why. `KEEP` is stated in the same structure as a window on purpose — a reader
+can tell "indefinite, deliberately" from "nobody got to it", which a list of only-the-expiring
+tables cannot express. A test enforces that a `KEEP` reason is more than a few words, and it
+caught two of my own thin ones.
+
+**The load-bearing test is the tripwire, not the window.**
+`test_every_table_in_the_database_is_classified` reads the live schema and fails on anything
+unclassified. That is not hypothetical: the registry was written against the live database and
+the most sensitive table in it — **`journeys`, holding per-user origin and destination, exactly
+what §9 names** — is one this repository has no code for. Applied by hand, no committed
+migration, accumulating rows that afternoon. Nobody writing a sweep from memory would have
+covered it. See the correction in the defect-sweep entry below for what it actually is.
+
+| window | days | dated by | basis |
+|---|---|---|---|
+| `user_locations` | 2 | `timestamp` | DERIVED |
+| `journeys` | 30 | `ended_at` | **PROPOSED** |
+| `sos_incidents` | 180 | `timestamp` | **PROPOSED** |
+| `gd_drafts` | 90 | `created_at` | **PROPOSED** |
+| `agent_runs` | 90 | `created_at` | DERIVED |
+| `raw_documents` | 90 | `fetched_at` | **PROPOSED** |
+
+**Four of six are PROPOSED and that is the honest state.** A retention period is a decision
+about somebody else's data, so a window that follows from existing code is DERIVED and the rest
+await sign-off. `scripts/purge_expired.py` refuses to delete under a PROPOSED window without
+`--force`. **Do not flip a basis to DERIVED to make the script run** — there is a test
+asserting the PROPOSED set is non-empty for that reason.
+
+The uncomfortable entries are written down rather than smoothed:
+
+* **`emergency_contacts` is the registry's least comfortable `KEEP`.** Those people never
+  consented — the user entered them. That argues for a window *and* against one: the data is
+  not the user's to keep forever, and an SOS that finds no contact because a timer expired is
+  the feature failing at the only moment it matters.
+* **`sos_incidents` holds references to stored video**, so deleting the row without the
+  Storage object leaves the footage behind. Whoever signs off that window has to decide the
+  object's fate in the same breath.
+* **`gd_profiles` (NID, parents' names, addresses) is `KEEP`** because a window is the wrong
+  instrument — the user enters it once so they need not retype it under stress. It belongs to
+  account deletion, which is not built.
+
+### Three things found by building it
+
+**A real `DELETE` outside the registry, and my test was wrong about it.** The first draft
+forbade every `DELETE FROM` on a registered table and immediately caught
+`alerts/service.py::delete_device`. That is a *privacy feature*: it runs on sign-out, and its
+docstring gives the reason — *"this is a user asking to stop being contacted, and the row holds
+a delivery address."* A privacy test was about to delete a privacy feature. The rule is now
+narrower: **a clock-driven delete belongs in the registry; a user-initiated one belongs in the
+feature and is allowlisted with its reason**, and a second test fails if an allowlisted file
+stops deleting anything.
+
+**Eight date columns are timezone-naive** — `crime_reports` (3), `sos_incidents` (2),
+`user_locations.timestamp`, `users` (2) — while the rest of the schema is `timestamptz`.
+Comparing one against an aware cutoff makes asyncpg type the parameter naive and fail outright.
+They are now read as UTC **explicitly**, in the SQL, rather than by trusting the session
+TimeZone to stay UTC: a retention window that changed meaning with a server setting would be
+the wrong kind of quiet. ⚠️ The real fix is a migration making the schema consistent.
+
+**"Nothing is overdue" is not "deletion works".** Every window is longer than the project is
+old, so that test passes today by arithmetic. So the purge path is proved directly:
+`test_the_purge_predicate_really_removes_an_overdue_row` inserts a year-old `agent_runs` row,
+confirms it counts as overdue, deletes it with the same predicate the script uses, asserts it
+is gone — **then rolls back**, and re-queries on a fresh connection to prove nothing reached
+live data. `agent_runs` on purpose: operational telemetry, no personal data, DERIVED window, so
+a mistake costs a log line.
+
+### Deliberately not done
+
+**The purge is not scheduled.** No `beat_schedule` entry, by decision: a cron job deleting user
+data on a window nobody agreed to is the exact failure this module exists to prevent. It is a
+hand-run script until the windows are signed off. **Nothing has been purged** — the dry run
+reports 0 rows past every window, which is true and will stop being true.
+
+Also not done: account deletion (which `users`, `profiles` and `gd_profiles` all defer to), the
+Storage-object half of `sos_incidents`, and the migration that would make the timestamp columns
+consistent.
+
+### Gotchas for the next agent
+
+* **A module-level async engine outlives the event loop that built it.** `asyncio_mode = "auto"`
+  gives each async test its own loop, while `app.core.database.engine` is a singleton whose
+  pooled connections belong to the first loop that used them. The first integration test passed
+  and the next two failed with `RuntimeError` and `DBAPIError`. `await engine.dispose(close=False)`
+  before use fixes it — **`close=False` matters**, because a plain dispose tries to shut the old
+  loop's connections and raises `Event loop is closed` doing it.
+* **A broad `except` around a query turns a bug into a skip.** The first draft wrapped the whole
+  query in `except Exception: pytest.skip("database unreachable")`, which is how the loop problem
+  above spent twenty minutes looking like a missing database. The skip now covers only the
+  connect.
+* **I typed `python -` as a no-op guard for the fourth time** and hung a call for two minutes.
+  There is no `python` on this Windows host. The word is a trap; `docker exec meridian-api
+  python` is the only safe form.
+
+---
+
+## B11a — the institutional tier, and why it has one source rather than four
+
+*2026-10-15 · Arafat · on `backlogs-fix` — uncommitted at time of writing; the owner commits*
+
+Asked to research feasibility before building, which was the right call: **three of the four
+bodies publish nothing a machine can read, and finding that out is most of the value.**
+
+| body | what its notice board actually holds |
+|---|---|
+| **DMP News** (dmpnews.org) | WordPress. RSS with the body in `content:encoded`, per-category feeds, a 37-page sitemap. **Usable.** |
+| Fire Service (fireservice.gov.bd) | Firefighter joining notices and tenders. `/pages/news` is the DG's newspaper op-ed. No incident or daily-call feed. |
+| DNCC (dncc.gov.bd) | Durga Puja cheque distribution, an e-trolley tender, meeting notices, officer postings, Nazrul Year cultural competitions. **Zero road closures.** |
+| DSCC (dscc.gov.bd) | Meeting notices, municipal tax deadlines, WASA bill verification, waste-collection registration. **Zero closures.** |
+
+The three government sites run the same national-portal CMS: no RSS, no API, and notice boards
+that are administrative by design. The "27,000 fires in 2025" figures that appear in the press
+come from internal reports handed to media, not from anything published. **The institutional
+tier that the three-tier industry standard assumes is largely not machine-readable in
+Bangladesh**, and that is the honest answer if anyone asks why this is one file.
+
+### What was built
+
+`app/ingestion/sources/dmp_news.py` — the tenth source and the first that is not a newspaper.
+Registered **last** in `SOURCES` for the same reason the harvest layers are ordered: it is the
+least proven, `live_risk` ingests in order, and a slow government host should cost the eight
+established publishers nothing.
+
+**The crime category, not traffic**, and that was not the obvious choice. Both exist as feeds.
+Nine of ten traffic items are the daily enforcement counter —
+`ট্রাফিক আইন লঙ্ঘনে ডিএমপির ২৭৯৯ মামলা` — which is a statistic, not a road closure, and each
+would spend a slot of `MAX_EXTRACTIONS_PER_RUN` to be rejected. The crime feed names Dhaka
+thanas and areas directly: যাত্রাবাড়ী, তুরাগ, উত্তরা, শাহবাগ, রমনা.
+
+**`read` makes no request.** `content:encoded` carries the whole article, so `list_recent`
+keeps the bodies and `read` consumes them — one request per listing rather than one per
+article, against a government host. It still falls back to fetching, because a feed that stops
+carrying bodies must degrade rather than return nothing.
+
+Verified against the live feed: 10 refs, 10 bodies, `read` → 768 chars of Bangla with zero
+follow-up requests.
+
+### 🔴 "DMP is authoritative" could not be done the way it was first decided
+
+The owner's first choice was to let one DMP report reach `confirmed`, on the sound reasoning
+that a newspaper reprinting a police release adds no independent verification — the paper got
+it from the release. **That reasoning is right and the implementation was impossible**, because
+`confirmed` is not a label, it is a database constraint:
+
+```
+risk_flags_confirmed_needs_two_sources
+CHECK ((status <> 'confirmed') OR (source_count >= 2))
+```
+
+A single-source confirmed flag is rejected on insert. The two ways around it are both worse
+than what they buy:
+
+* **A migration weakening the CHECK.** `tests/invariants/test_single_source_never_confirmed.py`
+  asserts the constraint by reading the *original* migration's text, so the test would keep
+  passing while the live database diverged — a green invariant over a hole, which is the worst
+  failure shape available.
+* **Writing `source_count = 2` for one source.** `risk_flags_sources_match_count` permits it
+  (`jsonb_array_length(sources) <= source_count`), so it would work. It is false data.
+
+Shown the constraint, the owner chose **weight instead of status**, which turns out to be what
+the intent actually needed: `AUTHORITATIVE_PUBLISHERS` makes `confidence()` return **1.0**
+instead of `UNCONFIRMED_WEIGHT` (0.6), so an official report is not discounted as a rumour,
+while `confirmed` keeps meaning exactly one thing at every layer — **two independent publishers
+agreed.** No migration, no constraint change, nothing false.
+
+**That set is dangerous in the direction `_SAME_OWNER` is not**, and the asymmetry is the
+reason it has a tripwire test. An entry in the ownership map can only ever *reduce* what we
+confirm, so recording one is safe even with an incomplete map. An entry in the authoritative
+set *increases* the weight of a single source, with no permissive default to fall back on. It
+holds one member; a test asserts it holds one member; adding a second is a decision about a
+named institution, not a config change.
+
+### A police unit is not a place
+
+The prompt already said *"never the police station, the court or the hospital"* and that was
+not enough, because **a Dhaka thana is also a neighbourhood.** `ডিএমপির অভিযানে গ্রেফতার ৫৩০`
+self-discards — "DMP" resolves to nothing. `যাত্রাবাড়ী থানার বিশেষ অভিযানে গ্রেফতার ১৭` does
+not: যাত্রাবাড়ী resolves at 1.2 km, so a thana-wide sweep of seventeen arrests would have been
+pinned as though one crime happened at one spot. Decision: only items naming a located
+incident. An Uttara mugging with the auto-rickshaw recovered qualifies; a round-up does not.
+
+### Gotchas for the next agent
+
+* **A near-miss worth recording: I almost reported the project's central safety constraint as
+  missing from the database.** `pg_constraint` sorted alphabetically and I read it through
+  `tail -14`, which cut off `risk_flags_confirmed_needs_two_sources` and
+  `risk_flags_half_life_positive` — both of which are present and correct. Two minutes from
+  writing "your most important invariant is not enforced" into the handoff. Do not `tail` a
+  sorted list you intend to draw a conclusion from.
+* **`is_relevant` filtered out the Uttara mugging in my first live test** and it was right:
+  13.8 h old against a 12 h lookback. The container clock is UTC and the host is UTC+6, so a
+  feed that looks current on the host is half a day old to the agent. Simulate a live run with
+  `now = newest pubDate + 1h` rather than `datetime.now()`.
+* **`base.parse_time` cannot read an RSS date.** It returns None for RFC 822 rather than
+  raising, and `is_relevant` treats None as "unknown, let it through" — so reusing it would
+  have silently disabled the lookback for this source alone.
+
+---
+
+## D04 — the relevance filter, measured: precision 0.31 → 0.43, recall 0.47 → 0.68
+
+*2026-10-15 · Arafat · on `backlogs-fix` — uncommitted at time of writing; the owner commits*
+
+B7 lifted the gazetteer ceiling. This is the other one: `live_risk.is_relevant` decides from
+the headline alone whether an article is worth fetching, and until today nobody knew what it
+was actually doing. The docs said *"~1% of ~390 articles pass"*, which was stale on both
+counts — a real collection listed **2,622 articles and passed 167 (6.4%)**.
+
+**A pass rate is not a quality measure, which is why the first step was a labelling harness
+rather than a tweak.** 1% could be a correctly tight filter on a quiet day or most of Dhaka
+in the bin. `scripts/measure_relevance_filter.py collect` lists every publisher's sitemap
+(no article bodies — cheap and polite), records each ref with the filter's verdict and which
+sub-matcher fired, and `score` reports precision and recall against hand labels. I labelled
+all 167 passed plus a random 250 of the 2,455 rejected: **417 headlines**.
+
+### The baseline, and why one of its numbers was a lie
+
+| | before | after |
+|---|---|---|
+| precision | 0.31 | **0.43** |
+| recall (reweighted) | 0.47 | **0.68** |
+| false positives in the labelled set | 115 | 72 |
+| missed incidents | 6 | 4 |
+
+**The first `score` I wrote reported recall 0.90 and it was nonsense.** Labelling is
+stratified — every passed row gets a label because the set is small and precision depends on
+all of it, while the rejected set is sampled because there are thousands. The raw ratio then
+compares 167-of-167 against 250-of-2,455 and under-counts misses tenfold. Reweighting by each
+stratum's sampling rate gives **0.47**. The script now prints the reweighted figure, the
+estimated population miss count, and the unweighted ratio labelled *"do not quote it"* —
+because 0.90 is the comfortable number and it would have ended the investigation.
+
+### Three causes, and the one that had been losing real Dhaka road deaths
+
+**1 · No geographic gate at all.** The dominant precision failure, and not a borderline one:
+of 167 passed, 115 were not Dhaka incidents — a drone strike in Ukraine, a Houthi attack on
+Saudi Aramco, a roof collapse in Rangpur, a road blockade in Sajek, Rahul Gandhi in Delhi.
+The filter asked *"does this headline name an incident?"* and never *"is it here?"*, so every
+violent event on earth matched.
+
+`names_elsewhere` is a **negative** list, which is the non-obvious half. Requiring a Dhaka
+place name would be the natural design and would be wrong: Dhaka copy names the locality, not
+the city — `ফুটপাতে মারধর`, `বাড্ডায় গৃহবধূর মৃত্যু`, `পল্লবীতে ইজিবাইক চালক হত্যা`. A
+positive gate rejects all of those, and a miss is the expensive error because the article is
+never fetched and so never leaves a `discarded_reason`. `DHAKA_MARKERS` overrides, so
+`ঢাকা ময়মনসিংহ মহাসড়কে দীর্ঘ যানজট` is read as the Dhaka corridor rather than Mymensingh
+news. Tongi, Gazipur, Savar and Keraniganj are deliberately **not** in the list — the
+gazetteer decides distance, not a headline keyword.
+
+**2 · `country` and `countries` were excluded as if they meant "foreign".** They are the
+domestic national desk (দেশ). This blocked 3 of the 6 missed incidents, all inside the pilot
+box: the Tongi medicine factory fire and the Chawkbazar fire. **The worse cost was
+corroboration, and nothing was measuring it** — a flag needs two or more independent
+publishers to reach `confirmed`, and the Tongi fire was filed under `capital` by some papers
+and `country` by others. The pipeline saw one side of the event, so it could never be
+confirmed however many outlets carried it. A section filter that correlates with the publisher
+caps the corroboration ceiling silently. A test already stated the principle
+(*"the pilot box decides distance, not this list"*) and just hadn't applied it to these two.
+
+**3 · 🔴 Bangla has two spellings of ড়, ঢ় and য়, and one of them never matched.** Found by
+accident: my new geographic gate failed to catch a Noakhali headline while naming Noakhali
+explicitly. Each of these letters exists twice in Unicode — one precomposed codepoint
+(U+09DC, U+09DD, U+09DF) or a base letter plus nukta (U+09BC). They render identically and are
+different strings, so `word in title` between the two forms is **always False**.
+
+**1,568 of 2,622 headlines used a precomposed form**, while 17 keywords were written
+decomposed — including `চাপায়` (run over), `কুপিয়ে` (hacked), `ছিনিয়ে` (snatched),
+`ধাওয়া` (chase). Those keywords matched only the publishers that happened to agree with
+them. Measured cost on one sample: 17 headlines, among them
+**`বারিধারায় গাড়িচাপায় নির্মাণশ্রমিকের মৃত্যু`** — a construction worker killed by a car
+in Baridhara, which is in Dhaka — plus two truck fatalities and a Dhaka–Sylhet highway death.
+Not discarded with a reason. Not logged. Never fetched, because the headline "did not name an
+incident".
+
+**NFC is the right canonical target even though it looks wrong.** All three letters are on
+Unicode's composition exclusion list, so NFC *decomposes* U+09DF rather than composing it —
+which also means NFD and NFC are the same string here, and the first draft of the regression
+test was vacuous until its own premise guard caught it.
+
+**The gazetteer was already immune**, and the contrast is the lesson: `gazetteer.py:98` runs
+every name and every query through `NFKC` before comparing, so `যাত্রাবাড়ী` resolves
+identically in all three forms. The filter did raw `in` tests. Same corpus, same letters, one
+normalised and one didn't.
+
+### What the measurement said *not* to change
+
+**`LOOKBACK` stays at 12 hours.** Four of the remaining misses report "too old", which looks
+like a clear signal to widen the window. Their ages are **40.8 h, 40.3 h, 35.0 h and 15.3 h**
+— and the agent runs **every 15 minutes**, so three of those four would have been caught when
+they were fresh. They are artefacts of a single snapshot, not production recall failures,
+which also means the measured 0.68 is **pessimistic** for the running system. Tested 24 h
+directly: one extra true positive, two extra false positives, precision unchanged at 0.43. Not
+worth doubling the candidate volume. Sometimes "measure first, then tune" measures and
+declines to tune.
+
+### Gotchas for the next agent
+
+* **Re-collecting to test a filter change proves nothing** — the sitemaps move hourly, so you
+  would compare two populations. `score --recompute` re-runs the current code over the stored
+  sample with `published_at` replayed against the collection time. Labels are carried across a
+  re-collect by URL, because labelling is the expensive half.
+* **The remaining 72 false positives are mostly not fixable from a headline**: ministers
+  visiting hospitals, court testimony about old attacks, fact-checks of mugging videos, LPG
+  strike statements. They need the body, and the extraction stage already rejects them. The
+  cheap wins here are done.
+
+---
+
+## Track B defect sweep — defects 2, 16 and 55, four already fixed, and a stray table
+
+*2026-10-15 · Arafat · on `backlogs-fix` — uncommitted at time of writing; the owner commits*
+
+Began working the backlog with consent asked per item. The first useful output was not a fix
+at all: **four of the ten defects I listed as open were already closed**, and the list was
+wrong because the plan's checkboxes were never ticked when the work landed somewhere else.
+
+**Why the checkboxes lie.** ADR 0005 reordered the finale, so the S05 and S07 *sprints* never
+ran as written — their defects were absorbed into D01, D06, D07 and D09. Nobody went back to
+tick the original boxes. Anyone reading `IMPLEMENTATION_PLAN.md` top-down will therefore
+re-do finished work. What the code actually says:
+
+| Defect | Real state | Where it says so |
+|---|---|---|
+| 6 | Closed | `routing/scorer.py` — `passes_filters`: *"Both are honoured now."* |
+| 8 | Closed in D06 | `contracts/surface.py:89` marks `flags_near_path` as the fix, on the protocol so every surface inherits it |
+| 5 + 29 | Closed **by decision**, not by porting | `requirements/ai.txt` — mediapipe dropped: *"Porting it was the plan until the obvious question — 33 landmark coordinates do not describe a crime."* |
+| 30 | Closed by the same decision | YOLO dropped; *"a vocabulary gap is not closeable by adding signals. The vision-language model has no fixed vocabulary."* |
+
+Those four are now ticked. **Verify against code before believing a checkbox in this repo.**
+
+The same held for **backlog row B5**, which read "one third done" until I checked the other two
+thirds. The `HomeScreen` stale-closure cleanup was already done — the file has one three-line
+note explaining why `readZones` runs on focus rather than mount, which is an explanation and
+stays. And the shake threshold was settled on 11 Oct **better than the row asked**: the row
+said *"pick one and justify it with a measurement"*, and the right answer was that no constant
+is correct for every handset, so it became a user setting with a live accelerometer reading.
+`guardianStore.ts` puts it plainly — *"shipping one constant for every handset is how a panic
+trigger ends up either firing in a pocket or not firing when someone is being attacked."*
+B5 is **done**, and closing it took one real fix plus two verifications.
+
+### Defect 2 — fixed by deletion, which neither planned option anticipated
+
+The plan offered two routes: restore `pydub`, or send the device's audio straight through.
+Both assume a caller. There wasn't one. **B8 had already routed around this endpoint** —
+dictation moved on-device *because* the server path was broken — and
+`features/voice/privacy.test.ts` asserts that no audio-upload path remains. So repairing it
+meant shipping ffmpeg and Google Cloud credentials to resurrect a feature the product
+abandoned on privacy grounds, and keeping a live audio-upload route with nothing calling it.
+
+The bug itself: `speech_service.py:11` had `# from pydub import AudioSegment` commented out
+while line 64 still called `AudioSegment.from_file`. Every request raised `NameError`.
+
+Deleted: `POST /ai/speech-to-text`; `GET /ai/supported-languages` (a hardcoded 15-language
+list advertising Bengali support from a service that was never wired up); `GET /ai/health`
+(reported only on the speech client, and named "Google Cloud Speech-to-Text" as the provider
+of a client that could not initialise); `app/services/ai/speech_service.py`;
+`tests/test_speech_service.py`; seven `GOOGLE_CLOUD_*` / `SPEECH_*` settings; and
+`google-cloud-speech`, `google-cloud-storage` and `pydub` from `requirements/ai.txt`.
+
+Two things checked before deleting rather than assumed:
+
+* **`google.cloud` had exactly one importer** — the deleted file. `google-cloud-storage` was
+  never imported at all; evidence photos go to Supabase Storage (`app/vision/storage.py`).
+* **Nothing called any of the three endpoints** — not the frontend, not the tests. Verified
+  against the live OpenAPI schema and the whole of `frontend/src/`.
+
+**No test was added, deliberately,** though the plan asked for "a test that would have caught
+the `NameError`". The `NameError` is unreachable once the code is gone, and a test asserting a
+deleted route returns 404 pins an absence rather than a behaviour. 601 → **600** backend
+tests; the one that went is the dead speech test.
+
+### Defect 16 — and the three services nobody noticed were missing
+
+`routeService` now comes from the services barrel, with `RouteRequest` and `RouteResponse`.
+**`Location` was left out on purpose:** `route.service.ts` declares one, the location domain
+has its own, and `Location` is a global in the DOM lib — a barrel is the worst possible place
+to make a name that generic ambiguous.
+
+While there: **`casework`, `geo` and `sos` are also absent from the barrel.** Same class of
+gap, but not what defect 16 named, so it is written down rather than quietly folded in. The
+`theme/colors.ts` half of defect 16 remains open under B3.
+
+### Defect 55 — and the root cause was a sentence in a docstring
+
+`status` now reads `applied` for all 11 migrations. The two D08 rows went in, but the part
+worth keeping is **why they were missing**, which was written down as a design virtue:
+
+> `ledger_insert`: *"Included in `sql` output so that pasting into a SQL editor leaves the
+> ledger correct... **It is why there is no separate 'mark this as applied' command.**"*
+
+That is a reasonable argument and it was wrong in practice. The paste is one step whose last
+line is the ledger insert, so an operator runs the DDL, sees it succeed, and closes the tab.
+There was then no recovery except `up`, which **re-runs** the migration. A convention with no
+recovery path for not following it is a convention that will be broken and left broken — this
+sat as a false `pending` for five days.
+
+So there is a `mark VERSION` command now. It refuses a version with no file on disk, refuses
+one already recorded, records `applied_by='marked'` so the ledger distinguishes it from a real
+run, and without `--yes` prints the migration's `create`/`alter` lines and exits 1.
+
+**Marking is the one command here that can lie to the ledger**, and the dangerous direction is
+the opposite of the bug: marking a migration that did *not* run means the schema change is
+skipped forever while `status` claims otherwise. So the evidence was gathered first —
+`gd_drafts` exists (only the first migration creates it), `gd_profiles` exists (only the second
+does), and `public.users` has **no** `gd_*` columns, which is correct precisely because the
+first adds them and the second drops them after moving the profile to `gd_profiles`. That
+absence read like a failure at first glance and was the confirmation.
+
+**A test caught a flaw in my own fix.** The first version connected to the database before
+checking `--yes`, so finding out what the command *would* do required `DATABASE_URL` — making
+the cautious path the harder one. The test asserting "does not connect without `--yes`" failed,
+and the implementation moved rather than the test. 600 → **603**.
+
+### 🔴 A `journeys` table exists in the live database and nothing in this repo knows
+
+Found while fixing defect 55, which is the only reason anyone looked. `migrate.py status`
+reports one unresolved drift:
+
+```
+drift detected:
+  - 20261014150000: applied, but no file on disk
+```
+
+Querying the ledger names it: **`20261014150000 | journeys | manual | 2026-10-14 14:36:40`**.
+The table is really there, with 16 columns — `journey_id`, `user_id`, `state`, `origin`,
+`destination`, `destination_label`, `route_id`, `route_profile`, `distance_km`,
+`duration_minutes`, `safety_score`, `started_at`, `eta_at`, `ended_at`, `created_at`,
+`updated_at` — and **0 rows**.
+
+> ### ⚠️ Corrected a few hours later, during B14 — it is live work, not an orphan
+>
+> B14 read the schema again and found **22 columns and 7 rows**. The six new columns are
+> `deadline_at`, `last_heartbeat_at`, `escalation_state`, `check_in_sent_at`, `answered_at`,
+> `unanswered_at` — the **Journey Guardian escalation state machine**, not just a trips model.
+> The rows were created between 18:16 and 19:37 UTC on 14 Oct, with states `active` and
+> `cancelled`: somebody starting and cancelling journeys from the app while this session was
+> running.
+>
+> Still nothing in the working tree: `grep` for `journeys`, `journey_id` or `escalation_state`
+> across `backend/app`, `backend/scripts` and `frontend/src` returns nothing, and
+> `origin/feature/journey-guardian` holds **a design document only** (`JOURNEY_GUARDIAN.md`,
+> *"Journey Guardian: the case for it, and seven phases"*) with no code and no migration.
+>
+> **So the right reading is not "orphaned table" but "a teammate's uncommitted work against
+> the shared database."** The paragraph below saying "nothing reads or writes the table" was
+> true when written and is now false. Treat the schema as somebody's in-flight design: do not
+> build on its shape, and do not drop it.
+>
+> B14 classified it as the highest-risk table in the retention registry for exactly this
+> reason — `user_id` plus `origin` plus `destination` plus timestamps is a movement history,
+> which is the thing concept document §9 names, and it was accumulating with no retention rule
+> and no committed code.
+
+**Why this matters more than the drift warning suggests.** `journeys` is the trips model. This
+document and `DEMO_PLAN.md`'s B8 row both say the trips model is unbuilt, and that **B10
+(Journey Guardian) is blocked on it**. The schema half appears to exist. What does not exist,
+anywhere in the repo: the migration file, `app/trips/`, and `features/journey/`. Nothing reads
+or writes the table, which is consistent with 0 rows. *(Superseded — see the correction above.)*
+
+`grep -rn 20261014150000` across every `.sql`, `.py` and `.md` returns nothing, so the file was
+never committed — applied from somewhere outside version control on the afternoon of 14 Oct.
+
+**Decision, by the owner on 15 Oct: record the drift and leave both sides alone.** Not
+reconstructed into a migration file, not dropped. So this is the standing state, and the
+`drift detected` line in every `migrate.py status` run is **expected output, not a new
+problem** — if you are reading this because `status` warned you, this paragraph is the answer.
+
+The two rejected options and why they are still available:
+
+* **Reconstruct the migration from the live schema and commit it.** Would clear the warning and
+  make the repo describe the database. Deferred because writing a migration file for SQL nobody
+  can produce means guessing at the original's constraints, indexes and RLS policies — a file
+  that *looks* authoritative while being a reconstruction is worse than a known gap.
+* **Drop the table.** Destructive, and 0 rows is not evidence it is unwanted — it is equally
+  consistent with schema staged ahead of its code. Not to be done without the owner saying so
+  explicitly.
+
+**Do not run `migrate.py up` expecting this to resolve** — there is no file to run. And do not
+assume `journeys` is safe to build on: nothing in the repo describes its constraints, so treat
+it as undocumented until either option above is taken.
+
+### Gotchas for the next agent
+
+* **`docker exec meridian-api python -m pytest -q | tail` is a trap.** The progress dots wrap
+  at 72 per line, so the last line shows the *remainder* — I read `........................`
+  as "24 tests" when the suite had run 600. `pyproject.toml` sets `addopts = "-q
+  --strict-markers"`, and the final `N passed` line does not survive the pipe. Count with
+  `head -9 /tmp/pt.txt | tr -cd "." | wc -c`, or trust `exit=0`.
+* **Git Bash mangles container-absolute paths.** `docker exec meridian-api ls /app` becomes
+  `ls 'C:/Program Files/Git/app'`. Wrap it: `docker exec meridian-api sh -c 'ls /app'`.
+* **I hit the host-python trap for the third time**, in the dumbest possible way: I wrote
+  `python - <<'PY'` as a *no-op guard* at the top of a `perl` command and it hung the call for
+  two minutes. There is no `python` on this Windows host. Do not type the word.
+
+---
+
 ## B7 — the gazetteer was the ceiling, and now it is 6,054 entries
 
-*2026-10-14 · Arafat · UNCOMMITTED on `news-ingestion-pipeline`*
+*2026-10-14 · Arafat · committed in `9024718`, merged from `news-ingestion-pipeline` in PR #19*
 
 S30 ended by naming the gazetteer the limit on everything, so this is that bill paid. **1,022
 entries became 6,054**, and the reason it mattered is not density in the abstract: every agent
@@ -629,7 +2130,7 @@ A green test suite had a live crash in it for two sessions. The gap was lint, no
 
 ### RESUME HERE
 
-1. **Commit S30 + B7.** Nothing from either is committed.
+1. ~~**Commit S30 + B7.**~~ Done — `9024718`, merged in PR #19.
 2. **Aliases are the remaining lever.** 21 of 193 references still resolve to nothing, mostly
    minor roads and the outer fringe, and no fuzzy matching reaches a synonym.
 3. The owner's list is unchanged: zone alerts in Dhaka, video on a second handset, B0
@@ -639,7 +2140,7 @@ A green test suite had a live crash in it for two sessions. The gap was lint, no
 
 ## S30 — nine publishers, and crime that says who reported it
 
-*2026-10-14 · Arafat · UNCOMMITTED on `develop`*
+*2026-10-14 · Arafat · committed in `9024718`, merged from `news-ingestion-pipeline` in PR #19*
 
 Started as an R&D review of a proposal to widen the news ingestion pipeline. The proposal's
 *strategy* was right and most of its *implementation* was not usable — two of the six outlets
@@ -761,7 +2262,7 @@ the product repeats somebody else's word. So:
 1. **Apply `backend/migrations/supabase/S30_APPLY_IN_SUPABASE.sql`** in the Supabase SQL
    editor, then run `S30_VERIFY.sql` — expect every row PASS. Until the table exists the
    crime half writes nothing and the agent logs an error per extraction.
-2. **Commit S30.** Nothing from it is committed.
+2. ~~**Commit S30.**~~ Done — `9024718`, merged in PR #19.
 3. **Grow the gazetteer.** It is now the ceiling on every agent's yield, not just this one.
 4. The owner's list is unchanged: zone alerts in Dhaka, video on a second handset, B0
    credential rotation, D10 on Oct 23.
@@ -996,6 +2497,14 @@ The remaining lever is CameraX's `PreviewView` implementation mode — `TEXTURE_
 documented workaround and the log confirms expo-camera uses `SurfaceViewImpl` — but
 expo-camera does not expose it, so it needs a native patch. Not before the finale.
 
+> **Settled 2026-10-15: it was the device. Defect 53 is closed and the native patch will not be
+> written.** SOS video captured and delivered on a second Android phone, so the starvation is
+> Unisoc `ums9230` driver behaviour. The measurement above stands; only the conclusion I was
+> entitled to draw from it was narrower than "the code is fine" or "the code is broken", and a
+> second handset was the cheapest instrument that could tell those apart. Worth keeping as the
+> general lesson alongside the logcat one: **when one device disagrees with expectations, the
+> second device is a measurement, not a retry.**
+
 **I spent five rounds changing things I merely suspected before reading the native log.** Vivo
 blocks `adb logcat` but **not `adb shell logcat`**, which answered it in one command. The
 honest lesson: when a native error says "Unknown", go to the platform log immediately — three
@@ -1004,9 +2513,13 @@ was the cause.
 
 ### What is deliberately not done
 
-- **Zone alerts are unverified on a device.** `backend/scripts/seed_flag_here.py` writes one
-  live flag at given coordinates so Part 1 can be run from anywhere; the real test is a pocket
-  and a walk toward a flagged road in Dhaka.
+- ~~**Zone alerts are unverified on a device.**~~ **Closed 2026-10-15 (B6a).** The owner ran
+  GUARDIAN.md Part 1 steps 1–5 against a flag seeded at the test location with
+  `backend/scripts/seed_flag_here.py` — permission, registration, crossing, notification,
+  debounce and history log all confirmed. The entry assumed only a walk in Dhaka would do;
+  that was wrong, because Android's `GeofencingClient` does the detection and cannot
+  distinguish a seeded row from a pipeline row. Step 6 (pocket, outdoors) remains optional and
+  unrun, which leaves the +250 m ring unmeasured at walking pace.
 - ~~**Filing a crime report does not create a risk flag.**~~ **Closed by B13**, and not the way
   the entry assumed. A report cluster does *not* become a risk flag: a risk flag is a mobility
   claim, `MobilityImpact`'s six values are all about traffic flow, and `policy/framing.py` bans
@@ -2582,6 +4095,16 @@ because nothing had ever written to a geography column — `sos_incidents` was e
 7. **ADR 0003 stayed out of D01**, as [ADR 0005](docs/adr/0005-finale-reordering.md) decided. Dropping
    `public.users` would have broken SOS: `endpoints/sos.py` still auto-provisions into it on every
    trigger. Track B (B1).
+
+   > ⚠️ **Corrected 2026-10-15.** Dropping the table would **not** have broken SOS, and does not
+   > now. `sos_incidents.user_id` references **`auth.users(id)`**, and has since `SCHEMA.sql` was
+   > first committed (`git log -L 203,207` on that file shows the line never changed). The belief
+   > that it pointed at the mirror came from `app/models/sos.py`'s `ForeignKey("users.id")` — an
+   > ORM declaration that does not build the Supabase schema. What `sos.py`'s auto-provisioning
+   > actually supplies is not referential integrity but **a display name**, and it supplies a bad
+   > one: `full_name = email.split("@")[0]`, which is the only name the emergency email ever
+   > prints. Deferring ADR 0003 was still the right call for other reasons; this particular
+   > justification for it was never true. See the re-scoped **defect 9**.
 
 ### Migrations
 

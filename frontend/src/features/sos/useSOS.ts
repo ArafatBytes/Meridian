@@ -55,8 +55,21 @@ export type SosTrigger = 'button' | 'shake' | 'hot-word';
 export interface SosResult {
   ok: boolean;
   contactsNotified: number;
-  policeStationsFound: number;
   videoAttached: boolean;
+  /**
+   * The police station that was emailed, or `null` when none was.
+   *
+   * A *name*, not the count this used to be. `police_stations_found` read `0`
+   * on every SOS ever sent, because police emailing was off — so the screen was
+   * telling the user, at the most frightening moment the app has, that it had
+   * looked for police near them and found none. It had not looked.
+   *
+   * It looks now. `POLICE_ROUTING_ENABLED` is on and the server emails the one
+   * Dhaka city thana whose jurisdiction the caller's coordinates fall in. Null
+   * is still the honest answer outside Dhaka city, and the screen says so
+   * rather than showing a zero.
+   */
+  policeStation: string | null;
   /** Why it failed. Only set when `ok` is false. */
   message?: string;
 }
@@ -282,16 +295,16 @@ export function useSOS(): SosController {
       setResult({
         ok: true,
         contactsNotified: data.contacts_notified ?? 0,
-        policeStationsFound: data.police_stations_found ?? 0,
         videoAttached: Boolean(uri),
+        policeStation: data.police_station ?? null,
       });
     } catch (error: any) {
       console.error('SOS Error:', error);
       setResult({
         ok: false,
         contactsNotified: 0,
-        policeStationsFound: 0,
         videoAttached: false,
+        policeStation: null,
         message: error.message || 'Could not send the alert. Please try again.',
       });
     } finally {

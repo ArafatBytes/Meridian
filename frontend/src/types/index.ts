@@ -320,6 +320,11 @@ export type ProfileStackParamList = {
   // B6a/B8. Guardian: the one screen where zone alerts, voice SOS and shake SOS
   // are armed, calibrated against live meters, and proved.
   Guardian: undefined;
+  // B9. Whether the background parts that keep the map current are actually
+  // running. Registered in ProfileNavigator and on the profile menu -- the app
+  // previously had no answer to "is this map current", because a map that is
+  // empty and a map that is empty because nothing ran look identical.
+  SystemStatus: undefined;
   Settings: undefined;
   TrackingHistory: undefined;
   About: undefined;

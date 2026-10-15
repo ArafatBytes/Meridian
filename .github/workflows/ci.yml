@@ -139,6 +139,25 @@ jobs:
           python-version: "3.11"
           cache: pip
 
+      # ⚠️ FINDING, 2026-10-15 (B2): this installs no application dependencies,
+      # so this job cannot import `app.*` and has not been able to since the
+      # first invariant test landed. `tests/invariants/` reaches `app.agents`,
+      # `app.ingestion`, `app.llm`, `app.geo` and `app.scoring`, which need
+      # pydantic, sqlalchemy, fastapi and — via requirements/agents.txt —
+      # `sentence-transformers` and torch, the >2 GB install the comment in the
+      # `backend` job above is explicitly avoiding. The `backend` job's own
+      # pytest step has the same problem.
+      #
+      # Left as it is rather than half-fixed: adding base.txt + dev.txt would
+      # get further and still not collect, and choosing what CI should install
+      # for a 684-test suite is a decision with a runtime cost attached, not a
+      # one-line patch. The 684 tests do run, in the `api` container, on every
+      # change — `docs/RUNNING.md`. Recorded so this is a known gap rather than
+      # a false green, and so the next person does not conclude from a passing
+      # badge that the invariants ran.
+      #
+      # The contract-drift check in job 3b is deliberately independent of this:
+      # pydantic-only imports, so it installs in seconds and genuinely runs.
       - name: Install tooling
         run: pip install pytest pytest-asyncio
 
@@ -150,6 +169,50 @@ jobs:
           else
             echo "::notice::tests/invariants/ does not exist yet — created in S03."
           fi
+
+  # ==========================================================================
+  # 3b. contract-drift — the Python contract and its TypeScript mirror
+  # ==========================================================================
+  # B2 / S03's "a CI check that flags drift".
+  #
+  # Its own job, and deliberately not a step inside `invariants`, for two
+  # reasons.
+  #
+  # **It can actually run here.** `tests/invariants/test_contracts_do_not_drift.py`
+  # imports `app.contracts.{risk,community,news_crime}` and nothing else, and
+  # those modules import pydantic and the standard library — no sqlalchemy, no
+  # fastapi, no AI stack. Fifteen packages, proven by running the file in a venv
+  # holding exactly these three. Most of the rest of `tests/invariants/` reaches
+  # `app.agents`, `app.ingestion` and `app.llm`, which need `requirements/
+  # agents.txt` and therefore `sentence-transformers` and torch.
+  #
+  # **And when this is the red check, it should be unmistakable** — the same
+  # argument the supply-chain job above makes for itself. A contract drift is not
+  # a failing test; it is a screen that will render a blank in front of a user,
+  # and it is fixed by changing one of the two halves rather than by debugging.
+  contract-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # Not requirements/*.txt. See the note above: this file's imports are
+      # pydantic-only by design, and keeping the install this small is what makes
+      # the check cheap enough to be a required check on every push.
+      - name: Install tooling
+        run: pip install pytest pytest-asyncio pydantic
+
+      # The full checkout is what this needs: the test reads
+      # frontend/src/services/*.ts and frontend/src/types/contracts/ from the
+      # repository root. Inside the api container those arrive as read-only
+      # mounts instead — docker-compose.yml says why.
+      - name: Contracts have not drifted
+        working-directory: backend
+        run: pytest tests/invariants/test_contracts_do_not_drift.py -v
 
   # ==========================================================================
   # 4. migrations-guard — a merged migration is immutable

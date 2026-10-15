@@ -35,11 +35,18 @@
 # app/llm/client.py.
 # =============================================================================
 
-# ---- speech ------------------------------------------------------------------
-# Not D07's. The hot-word path is still a stub -- voice.py returns an empty
-# transcript, so no hot word can ever match -- and these are what a real
-# implementation would use.
-google-cloud-speech
-google-cloud-storage
-pydub               # NOTE: its import in speech_service.py is commented out, so
-                    # that service raises NameError at runtime. Defect 2, Track B (B4).
+# ---- speech: all three dropped on 2026-10-15, defect 2 -----------------------
+# This block read "these are what a real implementation would use". There is no
+# longer a server-side implementation to build: B8 moved dictation and hot-word
+# matching onto the device, because the screen in question is about a phrase you
+# will shout in an emergency and uploading a recording of it was the wrong shape.
+#
+#   google-cloud-speech     imported only by the deleted speech_service.py.
+#   google-cloud-storage    never imported at all -- evidence photos go to
+#                           Supabase Storage (app/vision/storage.py).
+#   pydub                   its import was commented out while the code below it
+#                           still called AudioSegment.from_file, so every request
+#                           raised NameError. That WAS defect 2. Installing it
+#                           would also have meant shipping ffmpeg.
+#
+# Nothing in app/ imports google.cloud or pydub now.

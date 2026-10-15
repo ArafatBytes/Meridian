@@ -1,6 +1,21 @@
 """
-AI and NLP API Endpoints
-Speech-to-Text, Crime Detection, and other AI services
+AI API endpoints — crime detection from a report photo.
+
+**The speech-to-text endpoint, its hardcoded language list, and the AI health
+check that only reported on it were deleted on 2026-10-15. That was defect 2.**
+
+The service behind them had its `pydub` import commented out while line 64 still
+called `AudioSegment.from_file`, so any request raised `NameError`. Nothing called
+them: B8 moved dictation on-device (`frontend/src/features/voice/dictate.ts`)
+specifically so that a recording of somebody's voice never leaves the phone, and
+`frontend/src/features/voice/privacy.test.ts` asserts no audio-upload path remains.
+
+Restoring them would have meant shipping ffmpeg and Google Cloud credentials to
+serve a feature the product had deliberately abandoned on privacy grounds, and
+keeping a live audio-upload route that no client calls. `/ai/health` went with
+them because it reported only on the speech client and named a provider that was
+never wired up; the liveness check is `/health` and the vision one is
+`/ai/crime-detection/status`.
 """
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form, status, Depends
 from fastapi.responses import JSONResponse
@@ -11,7 +26,6 @@ from PIL import UnidentifiedImageError
 
 from app.core.security import get_current_user
 from app.llm.client import FEATURE_CRIME, LLMUnavailable, chain, keys_for
-from app.services.ai.speech_service import speech_service
 from app.vision.analyze import analyze_photo
 from app.vision.mapping import (
     CUE_FIELDS,
@@ -24,161 +38,6 @@ from app.vision.storage import signed_url, store_evidence
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-@router.post("/speech-to-text", response_model=dict)
-async def transcribe_speech(
-    audio: UploadFile = File(..., description="Audio file to transcribe"),
-    language: Optional[str] = Form(default="en-US", description="Language code (e.g., en-US, bn-BD)"),
-):
-    """
-    Convert speech audio to text using Google Cloud Speech-to-Text API
-    
-    **Supported audio formats:**
-    - M4A (iOS/Android recordings)
-    - MP3
-    - WAV
-    - FLAC
-    - OGG
-    
-    **Supported languages:**
-    - en-US (English - United States)
-    - bn-BD (Bengali - Bangladesh)
-    - And 100+ more languages
-    
-    **Parameters:**
-    - audio: Audio file (max 30 seconds for real-time, longer for async)
-    - language: Language code (default: en-US)
-    
-    **Returns:**
-    - text: Transcribed text
-    - confidence: Confidence score (0-1)
-    - language: Language used
-    - word_count: Number of words transcribed
-    """
-    try:
-        # Validate file
-        if not audio.filename:
-            raise HTTPException(status_code=400, detail="No audio file provided")
-
-        # Get file extension
-        file_extension = audio.filename.split('.')[-1].lower()
-        valid_formats = ['m4a', 'mp3', 'wav', 'flac', 'ogg', 'aac', 'webm']
-        
-        if file_extension not in valid_formats:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unsupported audio format: {file_extension}. "
-                       f"Supported formats: {', '.join(valid_formats)}"
-            )
-
-        # Read audio file
-        logger.info(f"Received audio file: {audio.filename} ({file_extension})")
-        audio_content = await audio.read()
-        
-        # Check file size (max 10MB for real-time)
-        max_size = 10 * 1024 * 1024  # 10MB
-        if len(audio_content) > max_size:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Audio file too large. Maximum size: 10MB"
-            )
-
-        # Transcribe audio
-        result = await speech_service.transcribe_audio(
-            audio_content=audio_content,
-            language_code=language,
-            audio_format=file_extension,
-            enable_automatic_punctuation=True,
-        )
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "data": result,
-                "message": "Audio transcribed successfully"
-            }
-        )
-
-    except ValueError as e:
-        logger.error(f"Validation error: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Transcription error: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to transcribe audio: {str(e)}"
-        )
-
-
-@router.get("/supported-languages", response_model=dict)
-async def get_supported_languages():
-    """
-    Get list of supported languages for speech-to-text
-    
-    **Returns:**
-    - List of language codes and names
-    """
-    languages = [
-        {"code": "en-US", "name": "English (United States)"},
-        {"code": "en-GB", "name": "English (United Kingdom)"},
-        {"code": "bn-BD", "name": "Bengali (Bangladesh)"},
-        {"code": "hi-IN", "name": "Hindi (India)"},
-        {"code": "es-ES", "name": "Spanish (Spain)"},
-        {"code": "fr-FR", "name": "French (France)"},
-        {"code": "de-DE", "name": "German (Germany)"},
-        {"code": "ja-JP", "name": "Japanese (Japan)"},
-        {"code": "ko-KR", "name": "Korean (South Korea)"},
-        {"code": "zh-CN", "name": "Chinese (Mandarin, Simplified)"},
-        {"code": "ar-SA", "name": "Arabic (Saudi Arabia)"},
-        {"code": "pt-BR", "name": "Portuguese (Brazil)"},
-        {"code": "ru-RU", "name": "Russian (Russia)"},
-        {"code": "it-IT", "name": "Italian (Italy)"},
-        {"code": "nl-NL", "name": "Dutch (Netherlands)"},
-    ]
-    
-    return {
-        "success": True,
-        "data": {
-            "languages": languages,
-            "total": len(languages),
-            "default": "en-US"
-        },
-        "message": "Supported languages retrieved successfully"
-    }
-
-
-@router.get("/health", response_model=dict)
-async def ai_service_health():
-    """
-    Check health status of AI services
-    
-    **Returns:**
-    - Status of Speech-to-Text service
-    """
-    try:
-        # Check if speech service is initialized
-        is_available = speech_service.client is not None
-        
-        return {
-            "success": True,
-            "data": {
-                "speech_to_text": "available" if is_available else "unavailable",
-                "provider": "Google Cloud Speech-to-Text",
-                "status": "healthy" if is_available else "unhealthy"
-            },
-            "message": "AI service health check completed"
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "data": {
-                "speech_to_text": "error",
-                "error": str(e)
-            },
-            "message": "AI service health check failed"
-        }
 
 
 # ============================================================================

@@ -11,8 +11,9 @@
  * `features/voice/useVoiceGuard`, which listens app-wide and fires a real SOS
  * when one of them is *shouted* — and the microphone button dictates **on the
  * device** instead of uploading a clip to `/ai/speech-to-text`, which removed
- * the last caller of a path that is broken anyway (defect 2, `pydub` commented
- * out).
+ * the last caller of a path that was broken anyway (defect 2, `pydub` commented
+ * out). That endpoint was deleted on 2026-10-15; this screen is why it had no
+ * caller to break.
  *
  * This screen is the phrase list only. Arming, the shout threshold and the live
  * meters are on the **Guardian** screen, because the recogniser session must
@@ -172,7 +173,7 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
    * Replaces a round trip that recorded a clip with `expo-audio`, uploaded it to
    * `/ai/speech-to-text` and waited. Three things wrong with that: it sent audio
    * of the user's voice to a server to fill in a text field, the endpoint behind
-   * it is broken (defect 2 -- `pydub` import commented out), and it needed a
+   * it was broken (defect 2 -- `pydub` import commented out), and it needed a
    * stop button and a 30-second cap to manage a recording that did not need to
    * exist.
    *

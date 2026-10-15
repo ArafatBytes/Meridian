@@ -1,8 +1,7 @@
 """
 SOS incident model
 """
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Boolean
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, DateTime, Text, Boolean
 from geoalchemy2 import Geography
 from datetime import datetime
 import uuid
@@ -14,7 +13,9 @@ class SOSIncident(Base):
     __tablename__ = "sos_incidents"
     
     id = Column(UUIDStr, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(UUIDStr, ForeignKey("users.id"), nullable=False)
+    # Defect 9: no ForeignKey. The real constraint is in SCHEMA.sql and targets
+    # `auth.users(id)`, a schema this metadata does not map. See `models/crime.py`.
+    user_id = Column(UUIDStr, nullable=False)
     location = Column(Geography(geometry_type='POINT', srid=4326), nullable=False)
     video_url = Column(String)
     police_station_id = Column(String)
@@ -33,5 +34,4 @@ class SOSIncident(Base):
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     resolved_at = Column(DateTime)
     
-    # Relationships
-    user = relationship("User", back_populates="sos_incidents")
+    # No `user` relationship -- see `models/crime.py`. Defect 9.
