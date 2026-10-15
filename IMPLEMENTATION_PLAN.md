@@ -52,7 +52,7 @@ A full audit of the existing codebase produced this summary. It is the baseline 
 | 6 | Medium | `avoid_high_crime_zones` / `max_crime_score` accepted by `RouteRequest` and never read. Both honoured now, with one decision attached: **a filter that would reject every route is relaxed, not applied** — everything comes back best-first with `filter_relaxed: true`, because answering "no acceptable route" to someone asking how to get home is the worst available answer. | **D06 ✅** |
 | 7 | Medium | `route_service` hardcodes the public OSRM demo server, ignores `OSRM_BASE_URL`, uses the `driving` profile, and discards OSRM's own durations for a flat 30 km/h. All four fixed in `app/routing/osrm.py`, and the fallback to the demo server is now **loud** — `RouteResponse.engine` carries it. ⚠️ **Two honest limits remain:** walking answers from a `car.lua` graph (durations recomputed, caveat on screen; a `foot.lua` graph is the fix), and OSRM's own duration turned out to be **free-flow** — 54.8 km/h across central Dhaka — because an OSM extract holds no traffic data, so it is scaled by `ROUTE_CONGESTION_FACTOR`. The real fix is `osrm-customize --segment-speed-file`, which needs a traffic source → **Track B**. | **D06 ✅** |
 | 8 | Medium | `_calculate_path_risk` loads all crimes then loops path-points × crimes in Python — `select(CrimeReport)` with **no spatial predicate at all**. Now one `ST_DWithin` against an `ST_MakeLine` of the route, through a new `RiskSurface.flags_near_path` so both surfaces answer it and `routing/` works unchanged on the offline fixture (S12's own check). | **D06 ✅** |
-| 9 | Medium | Three user tables: `auth.users`, `public.profiles` (app), `public.users` (backend). `create_users_table.sql` and `models/user.py` define incompatible shapes. | S02 / S05 |
+| 9 | Medium | Three user tables: `auth.users`, `public.profiles` (app), `public.users` (backend). `create_users_table.sql` and `models/user.py` define incompatible shapes. **Fixed 2026-10-15.** `public.users` had **no dependents** — every `user_id` FK points at `auth.users`, `gd_drafts` included — so the only live symptom was that `sos.py` derived the alert's name from the email local part: *"EMERGENCY: mdarafat1661 needs help"*. It now reads `profiles.name` → *"EMERGENCY: Arafat Ullah needs help"*, verified on the three real accounts. Model, relationships and ORM FKs deleted; the table dropped by migration `20261015160000`, applied the same day. | **S05 ✅** |
 | 10 | Medium | Nominatim called from the device with no `User-Agent`, against their usage policy — and from **five** call sites with no caching, so the per-IP limit was spent separately by every phone. Now `app/geo/nominatim.py` behind `GET /geo/search` and `GET /geo/reverse`: one identifying agent, one shared Redis cache (**471 ms cold → 52 ms warm**, 24 h TTL). Kept separate from `/geo/resolve`, which is allowed to refuse. | **D06 ✅** |
 | 11 | Medium | Three crime-score scales coexist: 0–100, 0–10, and percent. One scale now — **`safety_score`, 0–100, higher is safer.** `RouteSegment.crime_score` deleted, the card renders `71/100` rather than `70.6% Safe`, and a test asserts the response carries exactly one risk scale so a second cannot return quietly. | **D06 ✅** |
 | 12 | Low | `EmergencyContact` declared twice in `types/index.ts` with different shapes | **S01b ✅** — re-point at the contract type in S03 |
@@ -60,7 +60,7 @@ A full audit of the existing codebase produced this summary. It is the baseline 
 | 14 | Low | `MapScreen` SOS button is still a `// TODO` alert while `HomeScreen`'s is real | S07 |
 | 15 | Low | `Pillow`, `pandas`, `pytest` commented out in `requirements.txt` but used by code, scripts, tests | S04 |
 | 16 | Low | `theme/colors.ts` + `theme/darkTheme.ts` are dead; `routeService` not exported from the services barrel | S04 / S07 |
-| 17 | Low | All 606 rows of `police_stations.csv` share one placeholder email and phone | S05 |
+| 17 | Low | All 607 rows of `police_stations.csv` share one email and phone. **Closed 2026-10-15 — the row asked the wrong question.** §7.2/ADR 0007 had already made the contact columns permanently unused (no police API to transmit to), so real contacts would have enabled nothing. The half that *is* read was fixed instead: scoped to the 51 Dhaka city thanas, five unverified coordinates made nameable-but-not-rankable, out-of-Dhaka points refused, duplicate spellings made deterministic. ⚠️ **Corrected same day:** the first close also made police emailing *refused by the data*, which was wrong — the owner had put their own address in every row in order to test routing, and §7.2's "nothing to transmit to" was about **filing**, not notifying. `POLICE_ROUTING_ENABLED=true` now and an SOS emails the single nearest Dhaka city thana to the caller's live coordinates. | **S05 ✅** |
 | 18 | **Blocker** | `.env` was **not** gitignored — the root rule covered only `.env.*.local`, so a `backend/.env` holding the Supabase service-role key, the database password and the Anthropic key was fully trackable. Found during S01; no `.env` ever reached history. | **S01 ✅** |
 | 19 | High | No `package-lock.json` is committed, so the two of us resolve different dependency trees and CI cannot use `npm ci`. Found during S01. **Root cause found later:** `.gitignore` listed `package-lock.json` and `yarn.lock` outright, so the file `npm install` generated could not be added — correct for a published library, wrong for an application, and the same shape as defect 1's bare `lib/`. The rules are removed; the file still needs committing. | **S01 ✅ unblocked**, commit outstanding |
 | 20 | **Blocker** | `requirements.txt` declared plain `sqlalchemy`, but SQLAlchemy's asyncio support requires `greenlet`. `app.main` could not be imported at all: *"The SQLAlchemy asyncio module requires that the Python 'greenlet' library is installed."* The backend has therefore never started from a clean dependency install. Found when the Docker image first ran. | **S01b ✅** |
@@ -753,8 +753,11 @@ to 54.
 - [x] Declare, default-off and actually *check* `POLICE_ROUTING_ENABLED`, and
       warn when `police_stations.csv` is still placeholder data — **defect 31**
 - [x] SMTP vars wired into `backend/.env` so SOS can actually send
-- [ ] Write `docs/adr/0002-auth.md` itself ⏳ *the code landed ahead of the ADR;
-      S02 still owes the document, and it should describe what is now in place*
+- [x] ~~Write `docs/adr/0002-auth.md` itself~~ **Done 15 Oct in B1.** It describes
+      what was in place — and what was *not*: writing it surfaced **defect 56**,
+      an unauthenticated token-minting endpoint that made every protected
+      endpoint reachable. The code had landed ahead of the ADR, and the gap
+      between them was the defect
 
 **Measurement before tuning**
 
@@ -791,10 +794,10 @@ to 54.
 
 **Suggested owner:** Nakib. **Prototype:** `./scripts/seed.sh --fresh` builds the whole schema from zero.
 
-- [ ] `docs/adr/0001-data-plane.md` — the Supabase-direct vs FastAPI rule. Proposal: **Supabase for user-owned CRUD; FastAPI for anything agentic, geospatial, or multi-user.** Write down which tables each may write.
-- [ ] `docs/adr/0002-auth.md` — Supabase remains the IdP. Document the JWT path and **migrate off the shared HS256 secret** to Supabase JWKS verification (new projects default to asymmetric keys; the current `HS256` + `verify_aud=False` setup is fragile)
-- [ ] `docs/adr/0003-user-identity.md` — collapse three user tables to one. Proposal: `auth.users` is identity, `public.profiles` is the only profile table, delete `public.users`, point `emergency_contacts.user_id` and `crime_reports.user_id` at `auth.users(id)` — **Defect 9**
-- [ ] `docs/adr/0004-migrations.md` — forward-only timestamped SQL + runner, and why not Alembic
+- [x] ~~`docs/adr/0001-data-plane.md` — the Supabase-direct vs FastAPI rule. Proposal: **Supabase for user-owned CRUD; FastAPI for anything agentic, geospatial, or multi-user.** Write down which tables each may write.~~ **Written 15 Oct (B1).** The proposal is adopted as-is, because the code had already converged on it: the client writes `profiles`, `emergency_contacts`, `sos_hot_words` and `crime_reports` directly, and nothing else. The ADR names the three properties that put a table on the FastAPI plane (agentic, geospatial, multi-user), assigns all 16 tables, and argues RLS — not a FastAPI ownership check — is the enforcement point for user-owned rows. It also rules that **`endpoints/users.py`, `crimes.py` and `tracking.py` are dead and must go**: every operation they name is user-owned CRUD the client already does Supabase-direct, and a `pass` handler with a `response_model` is a 500, not a 404. ⚠️ Deleting those three is still outstanding — see the cleanup item in S06
+- [x] ~~`docs/adr/0002-auth.md` — Supabase remains the IdP. Document the JWT path and **migrate off the shared HS256 secret** to Supabase JWKS verification (new projects default to asymmetric keys; the current `HS256` + `verify_aud=False` setup is fragile)~~ **Written 15 Oct (B1) — and writing it found defect 56, a live authentication bypass.** The row's instinct was right and understated: the HS256 fallback was not merely "fragile", it was what made a forged token verify. `/auth/login` minted accepted tokens for any email with no credential check. See **Defect 56** for the measurement and the three-part fix; the ADR carries the decision and the `JWT_SECRET_KEY` consequence
+- [x] ~~`docs/adr/0003-user-identity.md` — collapse three user tables to one. Proposal: `auth.users` is identity, `public.profiles` is the only profile table, delete `public.users`, point `emergency_contacts.user_id` and `crime_reports.user_id` at `auth.users(id)` — **Defect 9**. ⚠️ **This proposal is now executed in everything but the document. Only the ADR is outstanding.** `emergency_contacts.user_id` and `crime_reports.user_id` *already* reference `auth.users(id)`, as does every other user-owned table; `public.profiles` is already the only profile table; and **`public.users` was deleted outright on 2026-10-15** — code and table, migration `20261015160000` applied. See **Defect 9 (code half)** in S05. So this row is reduced to writing down a decision that has already been made and shipped — which is still worth doing, because the belief that `sos_incidents` depended on the mirror survived in three documents for weeks precisely because nobody had written the ADR.~~ **Written 15 Oct (B1)** as `docs/adr/0003-user-table-collapse.md` — the filename differs from the row because the decision is about tables, not about identity in general, which is ADR 0002's subject. It records the execution, names the ORM-`ForeignKey`-read-as-schema mistake that blocked it for weeks, and carries the new finding that **the drop does not stay dropped**: `public.users` reappeared hours later from another checkout's `create_all`
+- [x] ~~`docs/adr/0004-migrations.md` — forward-only timestamped SQL + runner, and why not Alembic~~ **Written 15 Oct (B1).** Promotes `migrate.py`'s module docstring to a decision and adds the three things operating it has taught, each of which cost real time: a **duplicate version number is skipped for ever** (`up` applies by version, not checksum — ADR 0003's migration nearly shipped with Nakib's `journey_deadline` timestamp); the **ledger can name migrations whose files are not in this repo** (three `journeys` rows, so a mystery version is a question, not corruption); and a **drop is not final while another checkout declares the model**
 - [ ] `scripts/migrate.py` + `schema_migrations` table
 - [ ] Migration: `risk_flags` with PostGIS `GEOGRAPHY(POINT, 4326)`, GiST index on location, index on `(status, expires_at)`, and **`CHECK (half_life_hours > 0)`** (§4 decay invariant, at the schema level)
 - [ ] Migration: `raw_documents`, `extracted_incidents`, `agent_runs`
@@ -809,12 +812,12 @@ to 54.
 
 **Suggested owner:** Arafat. **Prototype:** `mypy --strict app/contracts` clean; invariant tests running in CI.
 
-- [ ] `app/contracts/{risk,agents,surface,trips,casework}.py` — §6
-- [ ] `frontend/src/types/contracts/` — hand-mirrored TypeScript, plus a CI check that flags drift
-- [ ] `app/policy/framing.py` — `to_mobility_statement()`, `assert_mobility_safe()`, banned-term list
-- [ ] `app/privacy/retention.py` — the retention registry, with every existing location-bearing table declared
-- [ ] `backend/tests/invariants/` with the S03 tests from §4 wired into CI
-- [ ] `mypy --strict` passes on `app/contracts/`
+- [x] ~~`app/contracts/{risk,agents,surface,trips,casework}.py` — §6~~ **Five of five shapes, two of the filenames different.** `risk.py`, `agents.py`, `surface.py` as listed, plus `community.py` and `news_crime.py` which the row did not anticipate. **No `trips.py`** — the trips model is still unbuilt (S18/B10), so a contract for it would describe nothing. **No `casework.py`** — casework's shapes live in `app/schemas/casework.py` because they are request/response bodies for one endpoint pair rather than objects several subsystems agree on, which is what this package is for
+- [x] ~~`frontend/src/types/contracts/` — hand-mirrored TypeScript, plus a CI check that flags drift~~ **Done in B2, 15 Oct.** The mirrors existed; the drift check is `tests/invariants/test_contracts_do_not_drift.py` (38 tests) and CI job **3b `contract-drift`**. ⚠️ **It compares the `*Wire` interfaces in `frontend/src/services/`, not the camelCase types in `types/contracts/`** — the latter are the client's *domain* model and are allowed to differ, as `NewsCrimeIncident`'s `latitude`→`lat` mapping does on purpose. Proven to catch the real failure: renaming `RiskFlag.source_count` on the server leaves `tsc` at **exit 0** and is caught only here
+- [x] ~~`app/policy/framing.py` — `to_mobility_statement()`, `assert_mobility_safe()`, banned-term list~~ **Shipped** — `test_no_flag_text_bypasses_framing.py` is its invariant
+- [x] ~~`app/privacy/retention.py` — the retention registry, with every existing location-bearing table declared~~ **Done in B14**, all 21 tables
+- [ ] 🟡 **`backend/tests/invariants/` exists (24 files) and runs on every change — but NOT in CI.** The `invariants` job installs `pytest pytest-asyncio` and no application dependencies, so it has never been able to import `app.*`; the `backend` job's pytest step has the same gap. The suite runs in the `api` container instead. **Found and documented in B2, deliberately not half-fixed** — the files reach `app.agents`, `app.ingestion` and `app.llm`, so making CI collect them means `requirements/agents.txt`, which means `sentence-transformers` and torch. That is a runtime-cost decision, not a one-line patch. The drift check in job 3b is independent of it on purpose: pydantic-only imports, 15 packages, genuinely runs
+- [x] ~~`mypy --strict` passes on `app/contracts/`~~ **Already true and already enforced** — `pyproject.toml` has had `app.contracts.*` under `strict = true` since S03 and CI's mypy step runs with that config. The box was simply never ticked; verified clean on 6 source files
 
 **Gate:** a deliberately bad flag statement is rejected by `assert_mobility_safe` in a test.
 
@@ -832,7 +835,7 @@ to 54.
 - [ ] `StubRumourGuard` — passes everything through as `unconfirmed`
 - [ ] `app/llm/client.py` + `models.py` — real implementation, with the invariant test asserting it is the only `anthropic` importer
 - [ ] Each stub has a test asserting it satisfies its protocol
-- [ ] Endpoint auto-discovery replaces `api.py`'s manual includes; `models/__init__.py` auto-import
+- [ ] ⏭️ Endpoint auto-discovery replaces `api.py`'s manual includes; `models/__init__.py` auto-import — **B3, skipped by the owner 15 Oct, and the auto-discovery half should not be revived as written.** `api.py`'s explicit list is the one place where publishing a public route is a decision somebody makes, and defect 56 was a registered route nobody had looked at handing out accepted tokens for any email. A loader that publishes whatever is in `endpoints/` makes that easier; the honest version of this want is a **test** that fails when a module exists but is never registered. See the B3 row in `DEMO_PLAN.md`.
 - [ ] `app/core/config.py` → `app/config/` package, one class per domain
 - [ ] `requirements.txt` → `requirements/{base,ai,agents,dev}.txt`, **every dependency the whole plan needs added now**: `anthropic`, `sentence-transformers`, `beautifulsoup4`, `playwright`, `pandas`, `Pillow`, `pytest`, `pytest-asyncio`, `pytest-cov`, `ruff`, `mypy`, `shapely`, `httpx` — **Defect 15**
 - [ ] Frontend: `expo-task-manager`, `expo-background-fetch`; `types/index.ts` → `types/`; services de-barrelled; all route names + placeholder screens pre-created in `navigation/`
@@ -860,15 +863,79 @@ to 54.
 
 **Suggested owner:** Arafat. **Prototype:** routing works against the local OSRM container, with a measured latency number.
 
-- [ ] **Defect 2:** Fix `speech_service`. Either restore `pydub` + document the ffmpeg dependency, or (preferred) drop format conversion and send the device's m4a/webm straight through with the correct `RecognitionConfig` encoding. Add a test that would have caught the `NameError`.
-- [ ] **Defect 6:** Honour `avoid_high_crime_zones` and `max_crime_score`, or delete them from the schema. Do not keep accepted-and-ignored parameters.
+- [x] **Defect 2:** ~~Fix `speech_service`. Either restore `pydub` + document the ffmpeg dependency, or (preferred) drop format conversion and send the device's m4a/webm straight through.~~ — **closed 2026-10-15 by deleting it, which neither option anticipated.** Both assumed a caller. By the time this was reached there was none: B8 had moved dictation on-device (`features/voice/dictate.ts`) *because* this endpoint was broken, and `features/voice/privacy.test.ts` asserts no audio-upload path remains. Repairing it would have meant shipping ffmpeg and Google Cloud credentials to restore a feature the product had deliberately abandoned on privacy grounds, and keeping a live audio-upload route with nothing calling it. **Deleted:** `POST /ai/speech-to-text`, `GET /ai/supported-languages` (a hardcoded 15-language list advertising Bengali support that was never wired), `GET /ai/health` (reported only on the speech client and named a provider that did not exist), `app/services/ai/speech_service.py`, `tests/test_speech_service.py`, seven `GOOGLE_CLOUD_*`/`SPEECH_*` settings read by that one file, and `google-cloud-speech` + `google-cloud-storage` + `pydub` from `requirements/ai.txt` — `google.cloud` had exactly one importer and evidence photos go to Supabase Storage. **No test was added, deliberately:** the `NameError` is unreachable once the code is gone, and a test asserting a deleted route 404s pins an absence rather than a behaviour. 601 → 600 backend tests, the one removed being the dead speech test itself.
+- [x] **Defect 6:** ~~Honour `avoid_high_crime_zones` and `max_crime_score`, or delete them from the schema.~~ — **already closed; this box was never ticked.** `routing/scorer.py`'s `passes_filters` says *"Both are honoured now"*, and keeps the awkward names on purpose: they are public request fields, so renaming them to match defect 11's single scale would break any client already sending them. Found 2026-10-15 while auditing the backlog.
 - [ ] **Defect 7:** `OSRMClient` — read `OSRM_BASE_URL`, prefer the local container, fall back to the demo server with a loud warning, add the `foot` profile alongside `driving`, use OSRM's own `duration` instead of a flat 30 km/h.
-- [ ] **Defect 8:** Replace the Python double loop with a PostGIS query (`ST_DWithin` against the path as a `LINESTRING`). **Benchmark before and after on a full-overview Dhaka route; record both numbers in `PROGRESS.md`.**
-- [ ] **Defect 9 (code half):** delete `models/user.py`'s table and the `sos.py` auto-provisioning block
+- [x] **Defect 8:** ~~Replace the Python double loop with a PostGIS query (`ST_DWithin` against the path as a `LINESTRING`).~~ — **already closed in D06; this box was never ticked.** `contracts/surface.py:89` names itself the fix: `flags_near_path` sits on the *protocol* rather than inside `DbRiskSurface`, so `routing/` works unchanged on every surface, and the docstring records why a bounding box was not an acceptable substitute — *"a 12 km route across Dhaka has a bounding box containing most of the city's flags, almost none of which are on it."* ⚠️ The before/after benchmark this row asked for was never recorded. Found 2026-10-15 while auditing the backlog.
+- [x] **Defect 9 (code half):** ~~delete `models/user.py`'s table and the `sos.py` auto-provisioning block~~ — **done 2026-10-15. The audit below is what the fix was built from; one step is left and it is the owner's to run.**
+
+      **Fixed:** `sos.py` now reads the alert's name from `profiles.name` via `_display_name()`; the auto-provisioning block, `app/models/user.py`, four `relationship("User", ...)` declarations and five `ForeignKey("users.id")` columns are gone. **Proved on live data** — the three real accounts now resolve to `Arafat Ullah`, `Nakib Saleh`, `Farhan Ishraq`, where the mirror table still holds `full_name='mdarafat1661'` and `'nakib1990saleh'`. 16 new invariant tests (`test_sos_alert_names_the_person.py`), **660 pytest**, no new lint findings.
+
+      **The fallback is the whole email address, never a part of one.** An address is a true, complete identifier a contact may recognise and is visibly an address; a local part reads as a name and is not one. A missing `profiles` row is logged, and never raises — an SOS is not the moment to refuse to send an alert over a display string.
+
+      ✅ **Migration applied by the owner in the Supabase SQL Editor, 2026-10-15. `public.users` is gone and defect 9 is fully closed.** Verified after the fact: table absent, orphan trigger gone, **all user data intact** (`profiles` 3, `crime_reports` 8, `emergency_contacts` 2, `sos_incidents` 17, `sos_hot_words` 2, `gd_drafts` 4, `gd_profiles` 1), and the three accounts still resolve to their real names.
+
+      **Two follow-ups the drop needed, both done:**
+
+      **The ledger had no row for it.** Pasting the file into the SQL Editor applies the schema change but skips the `schema_migrations` insert that `migrate.py sql` would have bundled — so `status` read `pending` on a migration that had run, and `up` would have tried it again. Recorded with `migrate.py mark 20261015160000 --yes`, the command built four hours earlier for **defect 55**, which is the first time it has been used for the thing it was written for. `applied_by='marked'`.
+
+      **The retention tripwire fired, and that is how the dead entry got deleted.** `app/privacy/retention.py` had classified `users` as an explicitly temporary `KEEP`. The moment the drop landed, `test_the_registry_does_not_describe_tables_that_do_not_exist` failed with *"retention rules for tables that no longer exist: ['users']"*. The entry is removed and the reason it left is recorded in place. Nobody had to remember.
+
+      ✅ **The `init_db` trap is closed in practice, not just in theory.** The API was restarted after the drop: `create_all` ran, logged *"Database tables created successfully"*, and **the table did not come back.** That is the verification the whole model deletion existed for.
+
+      **660 pytest, 0 skipped, 0 failed.**
+
+      ---
+
+      **The audit the fix came from. Both halves of the old framing were wrong.**
+
+      **The schema half already happened, without this box ever being ticked.** `public.users` has **no dependents left**. Every user-owned table references `auth.users(id)` directly in `migrations/supabase/SCHEMA.sql` — `crime_reports` (84), `emergency_contacts` (126), `sos_hot_words` (155), `sos_incidents` (205), `user_locations` (234) — and the last holdout, `gd_drafts.user_id`, was repointed from `public.users` to `auth.users` by `migrations/versions/20261010160000__gd_profiles_on_auth_users.sql`, which also created `gd_profiles` on `auth.users` from the start. Nothing joins to `public.users`. Nothing needs a row in it. **Dropping the table is no longer blocked on ADR 0003**, so this does not have to wait for B1.
+
+      **But one live consequence remains, and it lands in the emergency email.** `sos.py:57-69` auto-provisions the row with `full_name = email.split("@")[0]`, and that derived string is the **only** name the SOS alert ever uses: `email_service.py` puts it in the subject (`EMERGENCY: {user_name} needs help`) and five times in the body, including the instruction *"Try calling {user_name}."* So an emergency contact is told to call a person identified by an email local part. This is not hypothetical — migration `20261010160000` already recorded the live evidence while fixing the GD form for the same reason: *"one row reads `nakib1990saleh`, an email local part."*
+
+      **It never self-heals.** The block only runs when the row is absent, and nothing syncs `profiles` → `public.users` afterwards. Editing your name in `EditProfileScreen` updates `profiles` and leaves the SOS email saying the old derived string forever.
+
+      **The real name is right there.** `profiles.name` is written at registration (`frontend/src/services/auth.service.ts:42`) and is user-editable. The fix is to read it instead of inventing one — one query in one file, plus dropping the auto-provision.
+
+      **What is *not* a consequence, checked so the row does not get re-inflated:** `password_hash = "supabase_managed"` is read by nothing — `core/security.py:decode_token` verifies Supabase tokens through JWKS, and `verify_password` is imported by `endpoints/auth.py` and never called; `users.hot_words` has **zero readers** (B8 reads `sos_hot_words`); and the five `ForeignKey("users.id")` declarations still in `app/models/` are model-vs-schema drift only, because SCHEMA.sql builds the database, not the models.
+
+      **Two findings worth keeping beyond this defect.**
+
+      **`init_db()` would have undone the drop.** `core/database.py` runs `Base.metadata.create_all` on **every API start**, inside a try/except that logs *"Database not available"* and continues. While `models/user.py` existed, dropping the table in Supabase would have been reversed by the next restart and the swallowed exception would have hidden why. Deleting the model is a prerequisite for the migration, not a tidy-up after it — `test_create_all_cannot_recreate_the_mirror` asserts `Base.metadata` agrees, and the live boot log now lists six tables with `users` absent.
+
+      **The migration's first version number was already taken.** `20261015120000` is `journey_deadline`, applied `by=nakib` with **no file in this repository**, alongside `20261015140000` (`journey_leash`) and `20261014150000` (`journeys`). `migrate.py up` applies by version, so that file would have been treated as already applied and **skipped forever** — defect 55's failure exactly, caught only because the checksum differed. Renumbered to `20261015160000`. Three hand-applied migrations with no committed files is B10 in progress on the shared database: **do not drop `journeys`, do not build on its shape.**
 - [ ] **Defect 10 (backend half):** `/geo/search` + `/geo/reverse` proxy with a compliant `User-Agent`, Redis cache, and rate limit. **First real use of Redis.**
-- [ ] **Defect 17:** Replace `police_stations.csv` placeholder contacts with real data. The `POLICE_ROUTING_ENABLED` gate now exists and defaults off (defect 31), so this is no longer urgent — but the flag stays off until the CSV is real, which means **police routing is currently not a feature**, and the README should not claim it.
+- [x] **Defect 17:** ~~Replace `police_stations.csv` placeholder contacts with real data.~~ — **closed 2026-10-15, and not by obtaining contacts. The row asked the wrong question.**
+
+      **§7.2 had already made the contact columns permanently irrelevant and nobody re-read this row afterwards.** ADR 0007 closed police routing on 10 Oct for a reason that has nothing to do with data quality: **there is nothing to transmit to.** Bangladesh Police has no public API, no developer portal and no partner process, and a cognizable offence cannot be closed online in any case — the applicant must appear at the thana with a printed copy. So real per-thana emails would not have enabled anything. This row sat "blocked on data" for a deliverable that had been cancelled.
+
+      ⚠️ **That paragraph is half right, and the wrong half cost a working feature.** "Nothing to transmit to" is true of **filing a case** and false of **sending an email**. §7.2 reasoned from the first to the second without noticing they are different acts, this row repeated it, and the close then built a refusal on top. Corrected by the owner the same day. Filing still cannot be automated, which is exactly why the thana is named on the GD; notifying the nearest thana of an SOS needs no API, no portal and no partner process, and now happens.
+
+      What *is* read is the half that matters: **station names and coordinates**, which is what names the thana on a General Diary. The owner supplied a far better file on 15 Oct — **43 rows sourced from DMP's own find-your-local-police map, plus 3 from OpenStreetMap** — and that is where the work went.
+
+      **Scoped to Dhaka city.** `thana.py` now loads only `district == "Dhaka"`, which is **exactly the 51 DMP thanas** — verified that the column contains no Dhaka-district upazila stations (no Savar, Keraniganj, Dhamrai, Nawabganj, Dohar), because the filter is only correct if that holds, and a test now fails if a re-export breaks it. Previously all 607 rows were loaded, Sherpur included.
+
+      **A station can now be named without being located, and five are.** Five Dhaka rows are labelled `legacy — unverified` by the file itself, and their coordinates do not survive checking **against the file's own trusted rows** — the row called `Turag` sits 1.7 km from Rampura, `Hatirjheel` 4.4 km from Pallabi, `Cantonment` 1.4 km from Shah Ali. All five are real thanas. They stay in the review-screen picker, because somebody filing in Turag must be able to find it, and are excluded from distance ranking, because a pin 4 km into the wrong neighbourhood is how a GD reaches the wrong officer-in-charge. **44 locatable, 49 nameable.** Driven by the `coord_source` column, not by anyone's recollection of Dhaka geography: upgrade a row's label and it becomes locatable with no code change.
+
+      **Outside Dhaka it now refuses instead of guessing.** Once the list is Dhaka-only, the nearest station to Chattogram is a DMP thana **200.9 km** away, and the old code would have returned it with a confident name. `MAX_PLAUSIBLE_KM = 25` is derived, not picked: sweeping a 101×101 grid over the project's own gazetteer box, the furthest any point in Dhaka sits from a locatable station is **14.6 km**.
+
+      **Duplicates.** `Gandaria`/`Gendaria` and `Bhatara`/`Vatara` are co-located spelling variants and `Hazaribagh`/`Vatara` had exact duplicate rows. Exact duplicates dropped; **both spellings kept**, because the picker is searched by the name the user knows and dropping one makes that thana unfindable for half the people who need it. Ranking is sorted so co-located variants always resolve to the same name — a signed document must not say `Gandaria` one run and `Gendaria` the next.
+
+      ~~**The declined fallback, implemented — and better than proposed.** The alternative offered on 15 Oct was to rewrite the placeholders as explicit `unknown`. Not needed: **607 rows sharing one address is already an explicit enough statement of not-known**, so `sos_service._check_contacts_are_per_station` measures it and `_get_nearby_police_emails` refuses **even with `POLICE_ROUTING_ENABLED` forced true** — verified by test. The data is the gate, not a boolean one edit away from being flipped.~~ ⚠️ **Reversed hours later, by the owner asking why the SOS was not reaching the nearest station.** This was the one wrong move in the close, and it is worth keeping visible: the owner had said *"I have set the email and number field as my email and my number just to test it"* — which is somebody wiring up a destination they can watch — and the code answered by refusing to use it. **A gate the data's owner cannot open is not a safety feature.** The flag is the gate; `_check_contacts_are_per_station` now logs the shared address on every send instead of blocking it. The hazard it was built for is defect 31's — routing on while the column held a *stranger's* address — and that is addressed by the column holding the owner's own.
+
+      **What the routing actually does now.** `_nearest_police_station` asks `casework.thana.nearest_thana` for the single closest Dhaka city station to the live SOS coordinates and adds that one address. One station, not the old 5 km radius: central Dhaka has six or seven thanas inside 5 km, and six stations each assuming another is responding is worse than one being told. Sharing `nearest_thana` is the point — the thana emailed and the thana printed on the GD are the same station by construction, so the alert reaches the thana the victim will later walk into. Verified live: Dhanmondi coordinates → `Dhanmondi Police Station` 0.66 km; Uttara → `Uttara Police Station` 2.36 km; Jashore → **none**, 132.8 km, refused. `_haversine_distance` was deleted with it — it was the second copy of the formula in the repo, and two copies is how the two answers drift apart.
+
+      **The README was not the thing claiming it — the SOS screen was.** This row said *"the README should not claim it"*. The stronger claim was a stat tile on `SOSFlow`: **"Police stations nearby: 0"**, shown on every SOS ever sent, telling the user at the worst moment the app has that it had searched for police near them and found none. It had never looked. The tile is back now that it *does* look, but as a **name** rather than a count — `Police station: Dhanmondi Police Station`, or `None in range` outside Dhaka city. A count of 1 is not reassuring and a `0` invites "there are no police near you"; a name is a fact the person can act on. `policeStation: string | null` replaces `policeStationsFound` on `SosResult`, fed by a new `police_station` field on `/sos/trigger` (the endpoint has no `response_model`, so it passes through).
+
+      **684 pytest** (+24 in `test_thana_lookup_is_dhaka_city.py`), **427 jest**, `tsc` clean, no new lint findings — `sos_service.py` went 11 → 10 as `_haversine_distance` left. ⚠️ **The contact columns are still not real DMP data** — they are the owner's own address and number — and that is now load-bearing rather than harmless: with routing on, the only inbox an SOS can reach is theirs. **Put real per-thana addresses in the CSV before anyone outside the team relies on this**; the code needs no change for it. **Do not invent or infer thana phone numbers to close that** — a wrong number in a safety app during an emergency is the worst failure in this repo, and a plausible-looking one is worse than an obvious placeholder. ⚠️ **An SOS from outside Dhaka city emails no station**, by design and by the owner's instruction to use Dhaka city rows only. Testing from Jashore will show `None in range`; widening to all 606 rows is a one-line scope change in `thana.py` if nationwide routing is ever wanted.
 - [ ] **Defect 35:** Persist `SOSIncident` on trigger, and keep the evidence. Measured after a verified-delivered SOS: `sos_incidents` held **0 rows**, and `_save_video` writes the clip to a temp file, attaches it, then `os.remove`s it. So the README's "incident logged in database" is false and the only copy of the video is in the recipient's inbox. Needs: a row written before the send (so a failed send is still recorded), the clip uploaded to Storage with a `media_ref`, and a status field that can distinguish delivered / failed / cancelled / false alarm.
-- [ ] **Cleanup:** delete `crime_ai.py` (dead duplicate). Delete or implement the `auth.py` / `crimes.py` / `users.py` / `tracking.py` stubs per ADR 0001 — a `pass` endpoint in a public API is worse than no endpoint.
+- [x] ~~**Cleanup:** delete `crime_ai.py` (dead duplicate). Delete or implement the `auth.py` / `crimes.py` / `users.py` / `tracking.py` stubs per ADR 0001 — a `pass` endpoint in a public API is worse than no endpoint.~~ **Done 15 Oct, and the last clause of this row was the understatement of the project.**
+
+      `crime_ai.py` was **already gone** — deleted in an earlier sprint with this box never ticked, which is now the fifth time that has happened here (see also defects 6, 8, 29+5, 30 and all of B5).
+
+      All four endpoint modules deleted, with their `include_router` lines and their orphaned schemas (`schemas/auth.py`, `user.py`, `crime.py`, `tracking.py` — no other importer). **`auth.py` was not a stub**: `/auth/login` and `/auth/register` returned signed, accepted tokens for any email with no credential check. See **Defect 56**. The other three were genuinely `pass`, which is still a **500** rather than a 404 — `pass` returns `None` and `None` against a non-optional `response_model` raises. Verified after: `/users/me`, `/crimes/nearby`, `/tracking/check-danger-zone` → **404**; `/sos/history` → **401**; `/risk/flags` → **422**. Nothing in the client changed, which is the evidence they were dead.
+
+      `tests/invariants/test_no_endpoint_is_a_stub.py` generalises the rule instead of naming the four: it **parses every handler** under `endpoints/` and fails on any whose body is only a docstring and/or `pass`/`...`, so it catches the *next* one. An explicit `raise NotImplementedError` passes — a deliberate answer a client can handle is not the failure. It also refuses any router mounted on `/auth`, `/users`, `/crimes` or `/tracking`, since ADR 0001 puts those on the Supabase-direct plane, and it has a test feeding the detector five known bodies so that "can this check still fail?" is answered rather than assumed.
 
 ---
 
@@ -876,8 +943,8 @@ to 54.
 
 **Suggested owner:** Nakib. **Prototype:** a two-person photo produces a real interaction analysis for the first time.
 
-- [ ] **Defects 29 + 5:** Port `pose_service.py` from the removed `mp.solutions.pose` namespace to `mediapipe.tasks.python.vision.PoseLandmarker`. Pose analysis is **not running at all** today — the import fails and `pose_service` is left `None`, which is why `pose_analysis` is `null` on every response. `PoseLandmarker` takes a `num_poses` option, so the multi-person fix (defect 5) comes with the port rather than needing a YOLO-crop loop. **This makes the interaction logic and the harassment profile reachable for the first time since they were written.**
-- [ ] **Defect 30:** Close the vocabulary gap. 11 of the 21 object signals the decision engine scores against are not COCO classes, so `harassment`, `theft` and `vandalism` cannot currently be returned by any input. Pick one per signal: find a model that emits it, re-express the gate in terms of something reachable, or delete the signal. **A gate that cannot fire is worse than no gate — it reads as coverage.** `scripts/eval_crime_vision.py` prints the reachability table; it must show zero `NEVER` rows at the end of this sprint.
+- [x] **Defects 29 + 5:** ~~Port `pose_service.py` to `mediapipe.tasks.python.vision.PoseLandmarker`.~~ — **closed by a decision not to port, and this box was never ticked.** `requirements/ai.txt` records it: *"Porting it was the plan until the obvious question — 33 landmark coordinates do not describe a crime."* mediapipe, ultralytics, torch, torchvision, transformers, safetensors, onnxruntime, scipy, opencv-python and pandas were all dropped, and a vision-language model took their place. Dropping them *"is what makes the backend deployable on a free tier at all."* `app/` no longer contains a pose path to port. Found 2026-10-15 while auditing the backlog.
+- [x] **Defect 30:** ~~Close the vocabulary gap — 11 of 21 object signals are not COCO classes, so `harassment`, `theft` and `vandalism` cannot be returned by any input.~~ — **closed by the same decision as 29 + 5, and this box was never ticked.** The row's three options were "find a model that emits it, re-express the gate, or delete the signal"; the answer was to delete the *vocabulary*. `requirements/ai.txt`: *"A vocabulary gap is not closeable by adding signals. The vision-language model has no fixed vocabulary, and it returns people_count too, which was the last thing YOLO was for."* The principle this row stated — **a gate that cannot fire is worse than no gate, because it reads as coverage** — is why the fixed-vocabulary detector went rather than the gates. Found 2026-10-15 while auditing the backlog.
 - [ ] Grow `backend/data/eval/crime_vision/` to the README's target (≥10 per class, ~50/50 negatives, real Bangladesh scenes) **before** changing pipeline behaviour, then `--save-baseline` and treat every later change as `--compare`
 - [ ] Fixtures: two-person, three-person, single-person, no-person
 - [ ] **Defect 13:** Persist report evidence. Supabase Storage bucket + `crime_reports.media_refs`; the analysed photo is kept, not discarded.
@@ -892,11 +959,11 @@ to 54.
 
 - [ ] **Defect 3:** `CRIME_COLORS` → lowercase keys matching the DB enum. Derive the map from the contract type so it cannot drift again.
 - [x] **Defect 4:** ~~Delete the `HomeScreen` voice-monitoring block entirely.~~ **Done in S01** — it imported `expo-av`, which SDK 57 removed (defect 37), so deleting it was the cheapest way through the upgrade. Real hot-word detection is still S18, on an on-device wake-word engine.
-- [ ] Remove the ~30 lines of stale-closure deliberation left in `HomeScreen`. ~~Fix the shake threshold comment (says 3.5 g, code is 6.0 — pick one, justify it with a measurement)~~ **settled in Guardian (11 Oct): it is a user setting.** Neither number was right to hard-code — shake magnitude in g varies by handset — so the Guardian screen pairs it with a **live accelerometer reading** and a stepper, and the measurement is taken by the person whose phone it is. 6.0 g is the default because that is the value that had actually run on a device; 3.5 g is reachable by putting a phone down firmly.
+- [x] ~~Remove the ~30 lines of stale-closure deliberation left in `HomeScreen`.~~ — **already gone; verified 2026-10-15.** `HomeScreen.tsx` is 472 lines and contains exactly one mention of staleness, a three-line note explaining why `readZones` runs on every focus rather than on mount (the tab navigator keeps the screen mounted, so returning from the Guardian screen would otherwise show stale state). That is an explanation, not deliberation — keep it. ~~Fix the shake threshold comment (says 3.5 g, code is 6.0 — pick one, justify it with a measurement)~~ **settled in Guardian (11 Oct): it is a user setting.** Neither number was right to hard-code — shake magnitude in g varies by handset — so the Guardian screen pairs it with a **live accelerometer reading** and a stepper, and the measurement is taken by the person whose phone it is. 6.0 g is the default because that is the value that had actually run on a device; 3.5 g is reachable by putting a phone down firmly.
 - [ ] **Defect 11:** One score scale. **0–100 everywhere, higher = safer, named `safety_score`.** Delete the 0–10 `crime_score` and the percent variants. Add a test.
 - [x] **Defect 12:** ~~De-duplicate `EmergencyContact`~~ — done in S01b; re-point at the contract type when S03 lands.
 - [ ] **Defect 14:** Make `MapScreen`'s SOS button call the same path as `HomeScreen`'s. Extract one `useSOS()` hook; both screens consume it.
-- [ ] **Defect 16:** Export `routeService` from the services barrel.
+- [x] **Defect 16:** ~~Export `routeService` from the services barrel.~~ — done 2026-10-15, with `RouteRequest` and `RouteResponse` beside it. **`Location` was deliberately left out:** `route.service.ts` declares one, the location domain has its own, and `Location` is a global in the DOM lib — a barrel is the worst place to make a name that generic ambiguous. Three other services (`casework`, `geo`, `sos`) are also absent from the barrel; that is the same class of gap but not what this defect named, so it is recorded here rather than silently folded in. The `theme/colors.ts` half of defect 16 is **also done, and this line claimed otherwise until 15 Oct** — `theme/colors.ts` and `theme/darkTheme.ts` were deleted in commit `f0a83de`, found already gone when B3 was read for consent. `theme/theme.test.ts` carries the reason they had survived: a missing theme key is a runtime `undefined` that React Native silently ignores rather than erroring, so two unexported colour objects could sit beside `palette.ts` with nothing complaining. That file now asserts the keys the screens actually read, including the `error`/`textPrimary` aliases, so the legacy `theme.ts` cannot lose one quietly. **Defect 16 is closed in full.**
 - [ ] **Defect 10 (frontend half):** route all Nominatim traffic through the S05 backend proxy.
 - [ ] Surface the evidence photos S06 started persisting
 
@@ -916,13 +983,130 @@ walkthroughs told us nothing about any of it.
 - [x] **Defect 51:** ~~`startRecording` ran twice, throwing `IllegalStateException: A recording is already in progress`~~ — `onCameraReady` fires more than once (changing a capture prop reconfigures the session), and both calls read `isRecording` from **state**, i.e. their own render's closure, so both saw `false`. **Fixed** with a ref written synchronously before any `await`.
 - [x] **Defect 52:** ~~A camera failure killed the entire SOS~~ — `/sos/trigger` has always taken the video as optional (`video: Optional[UploadFile] = File(None)`); the client never used that path. **Fixed:** a failed recording now sends location only and says so on screen. This is what makes SOS work at all on hardware that cannot record.
 
-#### Still open
+#### Was "still open" — now empty. 53 closed by a second device, 54–55 by code
 
-- [ ] **Defect 53:** **CameraX never delivers a video frame to `VideoCapture` on the Vivo V2344 (Unisoc `ums9230`).** At `Quality.LOWEST`, `Quality.SD` and the 1080p default the recording runs its full ten seconds, audio is captured throughout, the encoder is configured correctly, and `Recorder` logs *"waiting for video keyframe"* 43 times a second for the entire duration. Audio works; video never arrives. The remaining lever is CameraX's `PreviewView` implementation mode — `TEXTURE_VIEW` is Google's documented workaround for this class of device bug and the log confirms expo-camera uses `SurfaceViewImpl` — but **expo-camera does not expose it as a prop**, so it needs a native patch. Mitigated by defect 52, not fixed. **Next step is data, not code: try a second Android handset.**
+- [x] **Defect 53:** ~~**CameraX never delivers a video frame to `VideoCapture` on the Vivo V2344 (Unisoc `ums9230`).**~~ — **closed 2026-10-15: it is that one handset, not the code.** The owner ran SOS on a second Android phone and **video captured, uploaded and arrived attached to the alert email.** That was the step this row asked for in its own last line — *"next step is data, not code: try a second Android handset"* — and the data came back on the side of the code.
+
+      The Vivo finding stands exactly as measured and is not retracted: at `Quality.LOWEST`, `Quality.SD` and the 1080p default the recording runs its full ten seconds, audio is captured throughout, the encoder is configured correctly, and `Recorder` logs *"waiting for video keyframe"* 43 times a second for the entire duration. What changed is the *scope* of the claim. One device could not distinguish "our capture code is wrong" from "this SoC's CameraX is wrong", and a second device settles it: **Unisoc `ums9230` driver behaviour, upstream of anything in this repo.**
+
+      **No code change, and none is wanted.** The remaining lever is still CameraX's `PreviewView` implementation mode (`TEXTURE_VIEW`, which expo-camera does not expose as a prop), and a native patch to work around one SoC is not worth carrying. Defect 52 is what makes this survivable and it is the right permanent answer: a failed recording sends **location only and says so on screen**, so the alert goes out on hardware that cannot record. That degradation is now a tested product behaviour rather than a workaround for an open defect.
+
+      ⚠️ **The claim to make is still conditional** — *"location to emergency contacts in seconds, plus a video clip where the hardware supports it"* — because the fleet has one confirmed device that cannot record. Demo on the phone that works.
 - [x] **Defect 54:** ~~**`crime_reports` and `risk_flags` have no pipeline between them**~~ — **fixed, with one correction to the proposed bridge.** The mechanism was right: Rumour Guard's logic applied to user reports, N independent reports, same area, same window. The destination was not. A report cluster cannot be a `risk_flag`: a flag is a *mobility* claim, `MobilityImpact`'s six values are all about traffic flow (a corner where people were robbed is not a road that is blocked), and `policy/framing.py` bans `theft`, `robbery`, `assault` and twenty more from any published flag text — *"a risk flag is the product's own published claim about a place, and it does not get to say any of this."* Promoting into `risk_flags` would have needed a new kind, a wider `MobilityImpact` and a loosened framing guard: three changes to the table whose correctness this project has invested most in.
       So the pipeline ends in a **sibling** table, `community_clusters`, reusing the mechanism (dedup identity, corroboration count, decay, derived expiry, the sweep) without diluting the contract. What it publishes is a count and a recency — *"3 independent reports within 200 m in the last 6 days"* — which states what the system knows and never characterises the place. Precedent: `scoring/chronic.py` already puts police crime statistics on the map as a framed claim.
       Also fixed, same commit: `crime_reports.status` allowed `('pending','verified','investigating','resolved')`, mixing a trust question nothing could answer with a casework question `gd_drafts` already owns — every user saw "Pending" forever beside an unreachable `✓`. It is now `('filed','withdrawn','removed')`, `verified` is dropped, and **the self-verify hole is closed**: `crime_reports_update_own` granted UPDATE on your own row and `status` was a column on it, so three lines of Supabase client code self-awarded `verified = true`. Table-level UPDATE is revoked from `authenticated` and granted back column by column, omitting `status`, `user_id` and `created_at`. Reports are also private to their author now (SELECT was `using (true)`; `MapScreen` read every report ever filed, unbounded in time and space). **S29 / B13.**
-- [ ] **Defect 55:** `migrate.py status` reports two of D08's migrations as `pending` when they are applied — run by hand through the Supabase editor without the ledger row. **Do not run `migrate.py up` to tidy it**; that would re-run them. Whoever owns D08 should insert the two rows.
+- [x] **Defect 55:** ~~`migrate.py status` reports two of D08's migrations as `pending` when they are applied.~~ — **closed 2026-10-15.** `status` now reads `applied` for all 11.
+
+      **Verified before marking, not assumed.** Marking a migration that did *not* run is worse than the false `pending` it fixes: the schema change is skipped forever and the ledger claims otherwise. Evidence both had run — `gd_drafts` exists and only `20261010120000` creates it; `gd_profiles` exists and only `20261010160000` creates it; and `public.users` has **no** `gd_*` columns, which is right because the first migration adds them and the second drops them again after moving the profile to `gd_profiles`. The absence was the confirmation, which is the opposite of how it first read.
+
+      **A `mark` command now exists, because the root cause was that it did not.** `ledger_insert`'s docstring argued that bundling the ledger insert into the `sql` paste was *"why there is no separate 'mark this as applied' command"*. That assumption is what cost five days: the paste is one step whose last line is the ledger insert, so an operator runs the DDL, sees it succeed and closes the tab. The only recovery was `up`, which re-runs. `mark VERSION` refuses a version with no file on disk (the checksum has to come from somewhere), refuses one already recorded, and without `--yes` prints the `create`/`alter` lines and exits 1 without connecting. It records `applied_by='marked'` so the ledger distinguishes this from a real run.
+
+      **A test caught a flaw in the fix itself:** the first version connected to the database *before* checking `--yes`, so being told what the command would do required `DATABASE_URL` — making the safe path the harder one. Reordered. 3 tests added (600 → 603), covering the two refusals and the argparse wiring, on the principle that a handler argparse never reaches is the same as no fix.
+
+      ⚠️ **One drift remains and it is not this defect** — see the `journeys` finding in `PROGRESS.md`.
+
+#### Found by writing an ADR, 15 Oct — and it was the worst defect in the repo
+
+**B1 was three documents and no code. Writing one of them found a live
+authentication bypass.** That is the entire argument for ADR documents, made
+accidentally and better than any argument for them could have been: the fault
+had been sitting in `endpoints/auth.py` since the inherited application, through
+every sprint, every device walkthrough and 684 passing tests, because **nothing
+ever called it.**
+
+- [x] **Defect 56:** ~~`POST /api/v1/auth/login` returns a valid, accepted access token for any email, with no credential check — an unauthenticated bypass of every protected endpoint.~~ — **found and fixed 2026-10-15 while writing ADR 0002.**
+
+      `/auth/login` and `/auth/register` were registered, unauthenticated, and minted `create_access_token({"sub": "user_id", "email": request.email})`. `verify_password` was imported in that file and never called. Both sat under a `# TODO: Implement login logic` comment, which is why they read as harmless stubs — **they were not stubs, they returned working credentials.**
+
+      **Measured end to end before touching anything**, because "is it actually exploitable" is the only question that matters: the forged token passed `verify_supabase_token`, and `get_current_user` returned `{'user_id': 'user_id', 'email': 'attacker@example.com'}`. So every endpoint behind that dependency was reachable without credentials — `/sos/trigger`, which emails a police station as of the same day, and `/ai/*` and `/casework/*`, which spend LLM budget per call.
+
+      **Three independent faults, all three fixed rather than the cheapest one.** (1) The backend could *mint*: `create_access_token`/`create_refresh_token` signed with `JWT_SECRET_KEY`, contradicting the whole reason for moving to JWKS in defect 33. (2) The verifier accepted **HS256** whenever that secret was set — so what the backend could sign, the backend would trust, and `.env` is committed deliberately here, so the secret is not secret. (3) The **`aud` claim was not required**: `options={"verify_aud": True}` with `audience="authenticated"` accepted a token carrying no `aud` at all. Fault 3 alone would have blocked the bypass.
+
+      Deleted: `endpoints/auth.py`, its `include_router` line, `schemas/auth.py`, and the four helpers `create_access_token`/`create_refresh_token`/`verify_password`/`get_password_hash`. Narrowed: `_ALLOWED_ALGORITHMS = {"ES256", "RS256"}`, refused on the algorithm alone before any key lookup. Added: `options["require"] = ["exp", "aud", "sub"]`. Also removed `JWT_ALGORITHM` (which defaulted to `"HS256"`), `ACCESS_TOKEN_EXPIRE_MINUTES` and `REFRESH_TOKEN_EXPIRE_DAYS` — they described a backend that issues sessions.
+
+      **Verified both directions.** Forged token now `REFUSED: Unsupported token algorithm: HS256`; `create_access_token` raises `ImportError`. And legitimate auth is intact: `/sos/history`, `/notifications/config` and `/users/me` all return **401** for missing *and* malformed tokens, API boots clean. The client was never affected — `api.service.ts` has always refreshed through `supabase.auth.refreshSession()`, and its comment already said `/auth/refresh` was a stub that *"would have 422'd even if it were implemented"*.
+
+      `tests/invariants/test_the_backend_cannot_mint_a_token.py` (10 tests) asserts **structure, not behaviour** — no module under `app/` may call `jwt.encode`, the four helpers must not exist by name, no `/auth` route may be registered, both deleted files must stay deleted, symmetric and `alg: none` tokens must raise, and the required-claims list must survive. Behaviour tests cannot catch this class: the bypass survived *because* it was never exercised, the same reason defect 31's unconditional police routing went unnoticed. One of those tests reads `JWT_SECRET_KEY`'s callers via **`ast` rather than a text scan**, after the first version flagged `core/security.py` — whose docstring merely *explains* the deleted helpers. Prose about a credential is not use of it, and a check that cannot tell the difference gets suppressed instead of fixed.
+
+      ⚠️ **`JWT_SECRET_KEY` survives and its name now lies.** Its only remaining reader is `agents/report_corroboration.py`, as the HMAC key behind B13's `reporter_ref`. **Rotating it silently re-pseudonymises every reporter** — one person who reported twice becomes two people, and corroboration counts change. It is closer to a schema constant than a credential; a rename belongs with a migration that touches `community_clusters`.
+
+#### Found by B9's fleet status, 15 Oct — two agents nobody was watching
+
+⚠️ **Numbering note: there are two "Defect 56"s already** — the auth bypass above and a
+`Glass` double-padding entry in the UI list below. Pre-existing collision, left alone rather
+than renumbered because other documents cite both. These two start at **57**.
+
+The pattern both share is the one B9 exists for: **a failing agent writes an `agent_runs` row
+and nothing else.** No alert, no empty-output warning, and until this sprint nothing read that
+table back. Writing the status command took an afternoon and found a feature that had never
+worked once.
+
+- [x] **Defect 57:** ~~`report_corroboration` has never completed a single successful run. 38
+      runs, 0 `ok`, `community_clusters` empty — and three documents describe B13 as landed.~~
+      — **found and fixed 2026-10-15, within minutes of B9's first output.**
+
+      `crime_reports.incident_date_time` is `timestamp without time zone`. The agent bound
+      `since = ctx.now - CLUSTER_WINDOW`, which is timezone-aware, and **asyncpg refuses to
+      encode an aware datetime into a naive column** — it raises while binding, before the
+      statement is sent, so the run died on its first query every hour on the hour.
+
+      **The near miss that makes this worth reading:** the agent already handled this column
+      correctly *on the way out*. `_rows_to_candidates` reads it back as UTC, with a comment
+      explaining that it has to, because it is compared against `auth.users.created_at`. The
+      author understood the mismatch and handled one direction of it. Only the bound parameter
+      was missed, and no test exercised `run()` against a real column type.
+
+      Fixed by converting the window boundary to naive UTC — the **same reading**
+      `_rows_to_candidates` applies, so the boundary and the rows inside it are interpreted
+      identically. **Not** fixed by migrating the column to `timestamptz`, which is the correct
+      long-term remedy and is deliberately deferred: `crime_reports` is written Supabase-direct
+      by the client under ADR 0001, so changing its type is a migration against a table another
+      checkout is writing to, and that does not belong inside a bug fix.
+
+      **Verified:** first successful run in the agent's history — `status: ok`, 8 reports in the
+      window, 2 eligible, 0 clusters published. Zero clusters is **correct, not a second bug**:
+      publishing needs two independent reporters within 200 m and 14 days, and the two eligible
+      reports are not co-located. `tests/invariants/test_report_corroboration.py` gained a guard
+      that drives `run()` through a recording session and asserts the bound parameter is naive;
+      proven to fail on the reverted code before being kept.
+
+- [ ] **Defect 58:** `rumour_guard.merge_into` violates `risk_flags_sources_match_count`
+      whenever a flag accumulates articles from two **commonly-owned** outlets. **Found
+      2026-10-15 by B9's status output; diagnosed, not fixed — it needs a decision that is not
+      mine to take.**
+
+      The constraint is `jsonb_array_length(sources) <= source_count`, and its comment states
+      the premise: *"A flag may cite fewer SourceRefs than its source_count (Rumour Guard can
+      count a corroboration it does not keep the full text of) but never more."*
+
+      `merge_into` appends **one `SourceRef` per article** but sets `source_count =
+      len(independent_publishers(...))`, and `policy/independence.py` collapses commonly-owned
+      outlets into one owner. Its own docstring is the proof: `independent_publishers(
+      ["dhaka_tribune", "bangla_tribune"])` → `{'tribune_group'}`. **Two refs, count of one, and
+      the constraint demands refs ≤ count.** So independence grouping pushes the count *below*
+      the number of refs, which is the exact direction the constraint forbids — the premise is
+      inverted, not mistyped.
+
+      `merge_into`'s docstring also says *"One `SourceRef` per publisher"*, which is what the
+      constraint encodes and **not what the code does** — it appends per `source_id`. The
+      docstring, the constraint and the code hold three different beliefs.
+
+      **It fails closed, which is why this is a defect and not an incident.** The `UPDATE`
+      raises, the flag keeps its previous `sources` and `status`, and the run reports `partial`.
+      Nothing is falsely confirmed; corroboration from commonly-owned outlets is silently lost.
+      Observed live on flag `cf6152a74071` at `source_count = 6`.
+
+      **Three ways out, and the choice changes what the flag sheet means — owner's call:**
+      (a) collapse `sources` to one ref per owner on merge, which satisfies both the constraint
+      and the docstring but **discards the second outlet's URL**, and a judge tapping the source
+      strip sees fewer links than there are articles; (b) relax the constraint, which gives up
+      the protection against `source_count` drifting away from the list it summarises — the
+      thing it was added for; (c) keep every ref and add a separate column for the cited count,
+      which is honest and is a migration plus a contract change plus the `RiskFlagWire` mirror.
+      **(a) is the smallest and (c) is the most truthful.** Worth noting that the *badge* a judge
+      reads says "Confirmed — N sources" where N is the independent count, so (c) would let the
+      sheet show "3 articles from 2 independent outlets", which is the most accurate claim this
+      system can make and is strictly better than what it says today.
 
 #### Found on a phone, 13 Oct — the UI defects live navigation surfaced
 
@@ -1132,7 +1316,7 @@ The subtlest correctness requirement in the system.
 - [x] ~~Retention window from the S03 registry applied to stored locations~~ **Not applicable, by design.** No location history is stored at all — the geofence handler needs no position, only the region identifier the OS hands back, and `push_devices.last_location` holds a single overwritten point. `public.user_locations` is still written by nothing. There is no retention surface here to govern, which is the better answer than a window on one
 - [x] ~~Geofence alerting — crossing into an active flag radius notifies with the mobility statement and source count. Debounced; no repeat for the same flag.~~ **Done.** Watched at radius **+ 250 m** so the warning arrives while there is still a junction to turn at; the notification forwards the server-framed `mobility_statement` verbatim plus the source count; six-hour per-zone debounce with suppressed crossings written to a user-visible log, so "it stayed quiet correctly" is distinguishable from "it never fired". **Local** notification, not a push — detection is on the phone
 - [ ] ⚠️ **NOT DONE: measured battery impact recorded.** Needs a day of real use on a charged phone, which no amount of code gets you. The design argument is that the OS's own geofencing is far cheaper than a JS location loop, but that is an argument, not a measurement
-- [ ] ⚠️ **NOT DONE: verified on a device.** `docs/walkthroughs/GUARDIAN.md`, which runs entirely on the phone
+- [x] ~~⚠️ **NOT DONE: verified on a device.** `docs/walkthroughs/GUARDIAN.md`, which runs entirely on the phone~~ **Done 15 Oct**, against a **seeded flag** (`scripts/seed_flag_here.py`) rather than an outdoor walk. Steps 1–5 of GUARDIAN.md Part 1 all passed: the *"all the time"* permission, the zone watch registering, the crossing firing the headless task, the notification carrying the mobility statement, the six-hour debounce suppressing the repeat, and both outcomes appearing in the history log. A seeded flag is the real geofence — Android does not know or care who wrote the row — so this closes the box the row was asking about. Step 6 (the pocket walk) stays optional and unrun, which leaves the **+250 m margin unmeasured at walking pace**; the battery box above is independent and stays open
 
 ---
 
@@ -1189,11 +1373,37 @@ The subtlest correctness requirement in the system.
 
 **Suggested owner:** Arafat. **Prototype:** one page that tells you whether the agent fleet is healthy.
 
+🟢 **Delivered as B9, 15 Oct.** Two of the five boxes below are done, one was answered
+differently from how it was asked, and the two that remain are cost and accuracy trends.
+
 - [ ] Flag counts by status / kind / age
-- [ ] Agent run history with status, duration, items in/out, errors
+- [x] ~~Agent run history with status, duration, items in/out, errors~~ — **`python -m app.agents
+      status`**, over the `agent_runs` rows that had been written since D01 and read by nothing.
+      Per agent: state, last-run age, cadence, last status, items in/out, 24-hour run and failure
+      counts, error text, and a written diagnosis for a stuck or late agent rather than a column
+      the reader has to interpret. Exits 1 on `late`/`problem` so it is usable as a health check.
+      **Logic in `app/agents/health.py`, not in the CLI**, which is what let the same measurement
+      feed a second reader without the two ever disagreeing.
 - [ ] LLM cost and cache-hit rate per agent run
 - [ ] Geolocation accuracy trend against the committed baseline
-- [ ] This is for us, not for users — a simple authenticated page is enough
+- [x] ~~This is for us, not for users — a simple authenticated page is enough~~ — **half right,
+      and the owner corrected the other half.** The operator half is a terminal command, not a
+      page: there is no admin UI to host one in, and an authenticated web page would have been a
+      new surface to secure for an audience of two. But *"not for users"* did not survive
+      contact with the question users actually have. **`GET /api/v1/agents/status` and a System
+      Status screen under Profile → Safety** answer *"is what I am looking at current"*, which
+      the app previously could not answer at all — a quiet map and a map that is quiet because
+      nothing has run look identical. The user payload is narrower than the CLI's on purpose
+      (no error text, no item counts, no failure tallies; see `AgentHealthReport`'s docstring),
+      and the endpoint **is** authenticated, unlike `/ingestion/status`, which is open because
+      *"it describes public news, not a user"* — fleet health describes the deployment.
+
+      ⚠️ **This row's real yield was not the readout.** Its first output showed
+      `report_corroboration` at 38 runs and 0 successes — **defect 57**, B13's agent, which had
+      never worked, leaving `community_clusters` empty while three documents called B13 landed.
+      It also surfaced **defect 58**, a `risk_flags` constraint violation in `rumour_guard`'s
+      merge. Both were invisible because a failed agent writes an `agent_runs` row and nothing
+      else: no alert, no empty-output warning, and no reader.
 
 ---
 
@@ -1464,6 +1674,196 @@ coming from news which are verified."* The design that makes that honest is attr
 - [ ] GD drafts pass native-speaker review
 - [ ] Guardian self-trial complete: <1 false check-in per user per week
 - [ ] Measured ৳/day for the full agent fleet
+
+---
+
+## B14 — privacy and retention enforcement
+
+**Delivered 2026-10-15.** The concept document's §9 makes one testable privacy promise:
+*"Location history is retained only as long as operationally necessary."* HTTPS and JWT, the
+clause's other two parts, were already provable from the transport and the auth middleware.
+This one had nothing behind it — no table declared a window, nothing deleted anything, no test
+could fail.
+
+- [x] **`app/privacy/retention.py` classifies all 21 tables** — 6 with a delete window, 15
+      `KEEP` with an argument. `KEEP` is expressed in the same structure as a window on purpose:
+      a reader can then tell "indefinite, deliberately" from "nobody got to it". A test requires
+      a `KEEP` reason to be more than a few words and caught two of my own thin ones.
+- [x] **The tripwire is the load-bearing test, not the windows.**
+      `test_every_table_in_the_database_is_classified` reads the **live schema** and fails on
+      anything unclassified. That is how `journeys` surfaced: per-user origin and destination —
+      exactly what §9 names — in a table this repository has no code for, applied by hand, no
+      committed migration, accumulating rows that afternoon. A sweep written from the models
+      would have missed it entirely.
+- [x] **Expiry and deletion are kept separate, and a test enforces it.**
+      `agents/expiry_sweep.py` marks rows `expired` and keeps them *"because an expired row is
+      the evidence that the surface retires things on its own"*. `test_the_expiry_sweep_marks_
+      rather_than_deletes` asserts it issues no `DELETE`, so that distinction cannot erode.
+- [x] **4 of 6 windows are `PROPOSED`**, and `scripts/purge_expired.py` refuses them without
+      `--force`. A retention period is a decision about somebody else's data; a window that
+      follows from existing code is `DERIVED`, the rest await sign-off. A test asserts the
+      PROPOSED set is non-empty, so nobody can quiet the script by flipping a basis.
+- [x] **A real `DELETE` outside the registry — and the first version of the test was wrong
+      about it.** It forbade every `DELETE FROM` on a registered table and caught
+      `alerts/service.py::delete_device`, which is a privacy *feature*: sign-out erases a
+      delivery address because the user asked not to be contacted. The rule is now **clock-driven
+      deletes belong in the registry, user-initiated ones belong in the feature and are
+      allowlisted with a reason** — plus a test that fails if an allowlisted file stops deleting.
+- [x] **Eight date columns are timezone-naive** (`crime_reports` ×3, `sos_incidents` ×2,
+      `user_locations.timestamp`, `users` ×2) while the rest of the schema is `timestamptz`.
+      Comparing one to an aware cutoff makes asyncpg type the parameter naive and fail. They are
+      read as UTC **explicitly in the SQL**, not by trusting the session TimeZone — a window that
+      changed meaning with a server setting would be the wrong kind of quiet.
+- [x] **The purge is proved, not assumed.** Every window is longer than the project is old, so
+      "nothing is overdue" passes by arithmetic and proves nothing about deletion. So
+      `test_the_purge_predicate_really_removes_an_overdue_row` plants a year-old `agent_runs`
+      row, confirms it counts as overdue, deletes it with the script's own predicate, asserts it
+      is gone, **rolls back**, and re-queries on a fresh connection to prove nothing reached live
+      data.
+- [ ] ⚠️ **The windows need sign-off**, and three carry a second decision with them:
+      `sos_incidents` holds references to Storage video, so deleting the row leaves the footage;
+      `gd_drafts` does not yet distinguish filed from unfiled; `raw_documents` is read by
+      `content_hash` dedup — and *was* also read by B6b's provenance page, which would have
+      started lying once rows aged out. **B6b was declined on 15 Oct and will not be built**, so
+      that half of the concern is gone and `raw_documents`' window is now a dedup question only.
+- [ ] ⚠️ **`emergency_contacts` is the least comfortable `KEEP` in the registry.** Those people
+      never consented — the user entered them. That argues for a window and against one at once:
+      the data is not the user's to keep forever, and an SOS finding no contact because a timer
+      expired is the feature failing at the only moment it matters.
+- [ ] ⚠️ **Account deletion is not built**, and `users`, `profiles` and `gd_profiles` all defer
+      to it. A window is the wrong instrument for a profile the user fills in once so they need
+      not retype it under stress; a cascade is the right one.
+
+**Deliberately not done: the purge is not scheduled.** No `beat_schedule` entry, by decision —
+a cron job deleting user data on a window nobody agreed to is the precise failure this module
+exists to prevent. **Nothing has been purged.** The dry run reports 0 rows past every window,
+which is true today and will stop being true. Also not done: the migration that would make the
+timestamp columns consistent.
+
+---
+
+## B11a — the institutional tier (official feeds third)
+
+**Delivered 2026-10-15**, after a feasibility survey the owner asked for before any build —
+which was the right order, because **three of the four bodies publish nothing a machine can
+read, and establishing that is most of the deliverable.**
+
+- [x] **The survey.** `app/ingestion/sources/dmp_news.py` carries the table. DMP News is
+      WordPress: RSS with the article in `content:encoded`, per-category feeds, a 37-page
+      sitemap. Fire Service: firefighter joining notices and tenders, `/pages/news` is the DG's
+      newspaper op-ed, no incident feed. DNCC: Durga Puja cheque distribution, an e-trolley
+      tender, officer postings. DSCC: meeting notices, municipal tax deadlines, WASA bill
+      verification. The three government sites run one national-portal CMS with no RSS or API
+      and administrative notice boards. **The institutional tier assumed by the three-tier
+      standard is largely not machine-readable in Bangladesh.** Say that rather than implying
+      the work is pending.
+- [x] **The crime category, not traffic.** Both exist. Nine of ten traffic items are the daily
+      enforcement counter (`ট্রাফিক আইন লঙ্ঘনে ডিএমপির ২৭৯৯ মামলা`) — a statistic that would
+      spend a slot of `MAX_EXTRACTIONS_PER_RUN` to be rejected. The crime feed names Dhaka
+      thanas directly: যাত্রাবাড়ী, তুরাগ, উত্তরা, শাহবাগ, রমনা.
+- [x] **Registered last in `SOURCES`,** for the reason the harvest layers are ordered: least
+      proven source, `live_risk` ingests in order, a slow government host must cost the eight
+      established publishers nothing.
+- [x] **`read` makes no request.** The body arrives in the feed, so `list_recent` keeps it and
+      `read` consumes it — one request per listing, not one per article. Falls back to fetching,
+      because a feed that stops carrying bodies must degrade rather than return nothing.
+- [x] 🔴 **"DMP is authoritative" could not be done as first decided, and the reason is a
+      database constraint.** The owner's first choice was to let one DMP report reach
+      `confirmed`, on the sound reasoning that a newspaper reprinting a police release adds no
+      independent verification. `confirmed` is enforced by
+      `risk_flags_confirmed_needs_two_sources: CHECK ((status <> 'confirmed') OR (source_count
+      >= 2))`, so such a row is rejected on insert. Both workarounds are worse than what they
+      buy: a migration weakening the CHECK, while
+      `tests/invariants/test_single_source_never_confirmed.py` asserts it from the *original*
+      migration's text and would keep passing over the hole; or `source_count = 2` for one
+      source, which `risk_flags_sources_match_count` permits and which is false data.
+      **Resolved as weight:** `AUTHORITATIVE_PUBLISHERS` makes `confidence()` return 1.0
+      instead of `UNCONFIRMED_WEIGHT`, so an official report is not discounted as a rumour and
+      `confirmed` keeps meaning two independent publishers at every layer.
+- [x] **The authoritative set has a tripwire, because it is dangerous in the direction
+      `_SAME_OWNER` is not.** An ownership entry can only *reduce* what we confirm; an
+      authority entry *increases* a single source's weight, with no permissive default. One
+      member, asserted to be one member, and widening it is a decision about a named
+      institution.
+- [x] **A police unit is not a place.** The prompt already said *"never the police station"*
+      and that was insufficient: **a Dhaka thana is also a neighbourhood.**
+      `ডিএমপির অভিযানে গ্রেফতার ৫৩০` self-discards because "DMP" resolves to nothing;
+      `যাত্রাবাড়ী থানার বিশেষ অভিযানে গ্রেফতার ১৭` does not, because যাত্রাবাড়ী resolves at
+      1.2 km — a thana-wide sweep would have been pinned as one crime at one spot.
+- [ ] ⚠️ **Still open: the other two thirds of B11a** — RSS beyond DMP, Telegram, and the
+      social-media half the concept document promises in five places. **Until that lands, do
+      not say the system reads social media.**
+
+**Deliberately not done:** the traffic category (a statistics ticker); no attempt at Facebook
+or Instagram page scraping; no change to `MAX_EXTRACTIONS_PER_RUN` despite a tenth source.
+
+---
+
+## D04 — the relevance filter, measured
+
+**Delivered 2026-10-15.** B7 lifted the gazetteer ceiling; this is the other one.
+`live_risk.is_relevant` decides from a headline alone whether an article is worth fetching,
+and nobody knew what it was doing. The documented *"~1% of ~390 articles"* was stale on both
+counts: a real collection listed **2,622 and passed 167 (6.4%)**.
+
+**A pass rate is not a quality measure.** 1% could be a correctly tight filter or most of
+Dhaka in the bin, so the first deliverable was `scripts/measure_relevance_filter.py`, not a
+tweak. `collect` lists every sitemap (no bodies — cheap and polite) and records each ref with
+the verdict and which sub-matcher fired; `score` reports precision and recall against hand
+labels. 417 headlines labelled: all 167 passed, plus a random 250 of 2,455 rejected.
+
+| | before | after |
+|---|---|---|
+| precision | 0.31 | **0.43** |
+| recall (reweighted) | 0.47 | **0.68** |
+| missed incidents in the labelled set | 6 | 4 |
+| backend tests | 603 | **609** |
+
+- [x] **Recall has to be reweighted, and the first version of this script lied.** It reported
+      **0.90**. Labelling is stratified — the passed set is labelled in full because precision
+      depends on all of it, the rejected set is sampled — so the raw ratio compares 167-of-167
+      against 250-of-2,455 and under-counts misses tenfold. Reweighting by each stratum's rate
+      gives 0.47. `score` now prints the reweighted figure, the estimated population miss
+      count, and the unweighted ratio labelled *"do not quote it"*, because 0.90 is the
+      comfortable number and it would have ended the investigation.
+- [x] **No geographic gate existed.** 115 of 167 passed articles were not Dhaka incidents.
+      `names_elsewhere` is a **negative** list on purpose: requiring a Dhaka place name is the
+      natural design and rejects `ফুটপাতে মারধর`, `বাড্ডায় গৃহবধূর মৃত্যু`,
+      `পল্লবীতে ইজিবাইক চালক হত্যা` — Dhaka copy names the locality, not the city — and a miss
+      is the expensive error because the article is never fetched and leaves no
+      `discarded_reason`. `DHAKA_MARKERS` overrides, so `ঢাকা ময়মনসিংহ মহাসড়কে দীর্ঘ যানজট`
+      stays. Tongi, Gazipur, Savar and Keraniganj are **not** listed: the gazetteer decides
+      distance, not a headline keyword.
+- [x] **`country`/`countries` were excluded as if they meant "foreign"** — they are the
+      domestic দেশ desk. Blocked 3 of 6 misses, all inside the pilot box. **The worse cost was
+      corroboration and nothing measured it:** the Tongi fire was filed under `capital` by
+      some publishers and `country` by others, so `confirmed` was unreachable however many
+      papers carried it. A section filter correlated with the publisher caps the corroboration
+      ceiling silently.
+- [x] 🔴 **ড়, ঢ় and য় each have two Unicode spellings and one never matched.** Precomposed
+      (U+09DC/U+09DD/U+09DF) or base-plus-nukta (U+09BC): identical on screen, unequal as
+      strings. **1,568 of 2,622 headlines used a precomposed form** while 17 keywords were
+      written decomposed — `চাপায়`, `কুপিয়ে`, `ছিনিয়ে`, `ধাওয়া`. Cost on one sample: 17
+      headlines including **`বারিধারায় গাড়িচাপায় নির্মাণশ্রমিকের মৃত্যু`**, a worker killed
+      by a car in Baridhara, inside Dhaka, plus two truck fatalities. Never fetched, never
+      logged. NFC is the right target *because* these letters are composition-excluded, so NFC
+      decomposes rather than composes — which also makes NFD and NFC identical here, and made
+      the first regression test vacuous until its own premise guard failed.
+      **The gazetteer was already immune** (`gazetteer.py:98` runs everything through NFKC);
+      the filter did raw `in` tests. Same corpus, same letters, one normalised.
+- [x] **`LOOKBACK` deliberately unchanged at 12 h.** Four remaining misses report "too old",
+      which reads as a signal to widen it. Their ages are 40.8 h, 40.3 h, 35.0 h and 15.3 h,
+      and the agent runs **every 15 minutes** — three would have been caught when fresh. They
+      are snapshot artefacts, so the measured 0.68 is **pessimistic** for the running system.
+      24 h tested directly: +1 true positive, +2 false positives, precision unchanged.
+- [ ] ⚠️ **The remaining 72 false positives mostly need the article body.** Ministers visiting
+      hospitals, court testimony about old attacks, fact-checks of mugging videos, LPG strike
+      statements. The extraction stage already rejects these. The headline-level wins are done;
+      the next lever is the extraction prompt, not this filter.
+
+**Deliberately not done:** no change to `MAX_EXTRACTIONS_PER_RUN` or the free-tier budget; no
+LLM in the filter (it runs on thousands of headlines per run); no attempt to label the full
+2,622, since a stratified sample with honest reweighting beats a rushed exhaustive pass.
 
 ---
 
@@ -1873,7 +2273,7 @@ RAW_DOCUMENT_RETENTION_DAYS=180
 TRIP_TRACE_RETENTION_DAYS=14
 
 # --- Feature flags ---
-POLICE_ROUTING_ENABLED=false       # until real contact data lands (S05)
+POLICE_ROUTING_ENABLED=true        # SOS emails the nearest Dhaka thana (defect 17; code default false)
 CASEWORK_ENABLED=false             # until native-speaker review passes (S28)
 ```
 

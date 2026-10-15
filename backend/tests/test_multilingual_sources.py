@@ -11,12 +11,17 @@ and stores zero documents raises no error anywhere.
 
 from __future__ import annotations
 
+import unicodedata
+from datetime import UTC, datetime, timedelta
+
 from app.agents.live_risk import (
     EXCLUDED_SECTIONS,
     INCIDENT_WORDS_EN,
+    NOT_DHAKA,
     interleave,
     is_relevant,
     names_an_incident,
+    names_elsewhere,
     place_candidates,
 )
 from app.agents.scheduled_risk import is_announcement
@@ -24,8 +29,6 @@ from app.contracts.risk import RawDocument
 from app.ingestion.sources import SOURCES
 from app.ingestion.sources.base import ArticleRef, article_body, latin_paragraphs
 from app.policy.independence import independent_publishers, is_confirmable
-
-from datetime import UTC, datetime, timedelta
 
 NOW = datetime(2026, 10, 14, 12, 0, tzinfo=UTC)
 
@@ -156,10 +159,123 @@ def test_domestic_desks_near_dhaka_are_deliberately_not_excluded() -> None:
     """
     `country-news` and `whole-country` carry Tongi, Gazipur and Narayanganj, which
     are on the roads out of Dhaka. The pilot box decides distance, not this list.
+
+    **`country` and `countries` belonged here from the start and were on the wrong
+    side of it until 2026-10-15.** They read as "foreign" to an English speaker and
+    mean the opposite: the দেশ desk is the domestic national desk. Measured on
+    2,622 labelled headlines, that exclusion blocked 3 of 6 missed incidents, all
+    of them inside the pilot box — the Tongi medicine factory fire and the
+    Chawkbazar fire.
+
+    The subtler cost was **corroboration**, which no test was watching. A flag
+    needs two or more independent publishers to reach `confirmed`. The Tongi fire
+    was filed under `capital` by some papers and `country` by others, so the
+    pipeline saw one side of it and the event could not be confirmed however many
+    outlets carried it. A section filter that correlates with the publisher caps
+    the corroboration ceiling silently.
     """
-    assert "country-news" not in EXCLUDED_SECTIONS
-    assert "whole-country" not in EXCLUDED_SECTIONS
-    assert "capital" not in EXCLUDED_SECTIONS
+    for desk in ("country-news", "whole-country", "capital", "country", "countries"):
+        assert desk not in EXCLUDED_SECTIONS, desk
+
+
+# ---------------------------------------------------------------------------
+# Bangla has two spellings of ড়, ঢ় and য় — D04, 2026-10-15
+# ---------------------------------------------------------------------------
+
+
+def test_a_precomposed_bangla_headline_matches_a_decomposed_keyword() -> None:
+    """
+    The silent miss that `_nfc` exists for, and the one that cost real incidents.
+
+    ড়/ঢ়/য় each exist twice in Unicode: one precomposed codepoint (U+09DC, U+09DD,
+    U+09DF) or a base letter plus nukta (U+09BC). They render identically and are
+    different strings, so a raw `word in title` test between the two forms is
+    always False.
+
+    1,568 of 2,622 collected headlines used a precomposed form while 17 keywords
+    were written decomposed — among them `চাপায়` (run over), `কুপিয়ে` (hacked)
+    and `ছিনিয়ে` (snatched). The measured cost included
+    `বারিধারায় গাড়িচাপায় নির্মাণশ্রমিকের মৃত্যু`: a construction worker killed
+    by a car in Baridhara, inside Dhaka, never fetched and never logged as
+    discarded, because the headline "did not name an incident".
+    """
+    decomposed = unicodedata.normalize("NFD", "বারিধারায় গাড়িচাপায় শ্রমিকের মৃত্যু")
+    # Built by codepoint, not by `normalize("NFC", ...)`. These letters are on
+    # Unicode's composition exclusion list, so NFC does **not** recompose them and
+    # NFD and NFC are the same string here — which is why the two spellings can
+    # coexist in one corpus indefinitely, and why the first draft of this test was
+    # vacuous until its own premise guard failed.
+    precomposed = decomposed.replace("ড়", "ড়").replace(
+        "য়", "য়"
+    )
+    assert decomposed != precomposed
+    assert "ড়" in precomposed and "ড়" not in decomposed
+    assert names_an_incident(decomposed)
+    assert names_an_incident(precomposed)
+
+
+def test_the_geographic_gate_is_normalised_too() -> None:
+    """
+    `নোয়াখালীতে` stores য় precomposed and `NOT_DHAKA` spells it decomposed, so a
+    Noakhali arrest passed a filter that names Noakhali explicitly. This gate is
+    how the whole normalisation bug was found.
+    """
+    decomposed = unicodedata.normalize("NFD", "নোয়াখালীতে চার চোরাই বাইকসহ গ্রেপ্তার তিন")
+    precomposed = decomposed.replace("য়", "য়")
+    assert decomposed != precomposed
+    assert names_elsewhere(decomposed)
+    assert names_elsewhere(precomposed)
+
+
+# ---------------------------------------------------------------------------
+# The geographic gate — D04
+# ---------------------------------------------------------------------------
+
+
+def test_an_incident_somewhere_else_is_not_our_incident() -> None:
+    """
+    Measured cause of nearly every false positive: precision was **0.31** because
+    the filter asked "does this name an incident?" and never "is it here?". Of 167
+    headlines it passed, 115 were not Dhaka incidents.
+    """
+    for title in (
+        "চাকরির কথা বলে নেওয়া হয় যুদ্ধক্ষেত্রে, রাশিয়ায় নিহত ২০ বাংলাদেশি",
+        "জামায়াতের কুমিল্লা মহানগর কমিটি গঠন নিয়ে বিরোধ, ককটেল বিস্ফোরণ",
+        "বৃহস্পতিবার থেকে সাজেকে অনির্দিষ্টকালের জন্য সড়ক অবরোধ",
+        "Rangpur municipal secretary detained over roof collapse deaths",
+    ):
+        assert not is_relevant(ref(title), NOW), title
+
+
+def test_a_dhaka_marker_beats_an_elsewhere_marker() -> None:
+    """
+    A headline naming both is about here. `ঢাকা ময়মনসিংহ মহাসড়কে দীর্ঘ যানজট` is a
+    jam on the Dhaka corridor, not news from Mymensingh — and it is exactly the
+    kind of headline a positive "must name Dhaka" gate would have been built for
+    and a negative gate would break without this override.
+    """
+    assert is_relevant(ref("ঢাকা ময়মনসিংহ মহাসড়কে দীর্ঘ যানজট"), NOW)
+
+
+def test_the_gate_does_not_reach_inside_the_pilot_box() -> None:
+    """
+    Tongi sits at ~23.89 N, inside the box, and carried the largest fire in the
+    sample. Gazipur, Savar and Keraniganj are close enough that the gazetteer
+    should decide, not a headline keyword — the same principle as the desk list.
+    """
+    for place in ("টঙ্গী", "গাজীপুর", "সাভার", "কেরানীগঞ্জ"):
+        assert place not in NOT_DHAKA, place
+    assert is_relevant(ref("টঙ্গীতে ওষুধ কারখানায় আগুন"), NOW)
+
+
+def test_a_nineteen_unit_fire_response_names_an_incident() -> None:
+    """
+    Follow-up copy on a large blaze reports the *response* and often drops the word
+    আগুন entirely. `নিয়ন্ত্রণে ফায়ার সার্ভিসের ১৯ ইউনিট যোগ দিয়েছে সেনাবাহিনী`
+    named no fire and was a measured miss. A nineteen-unit deployment is a road
+    closure whatever the headline calls it.
+    """
+    assert names_an_incident("নিয়ন্ত্রণে ফায়ার সার্ভিসের ১৯ ইউনিট যোগ দিয়েছে সেনাবাহিনী")
 
 
 # ---------------------------------------------------------------------------

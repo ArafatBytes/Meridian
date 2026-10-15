@@ -358,22 +358,40 @@ async def test_no_row_in_the_database_is_confirmed_on_one_publisher() -> None:
     from sqlalchemy import text as sql
 
     try:
-        from app.core.database import AsyncSessionLocal
+        from app.core.database import AsyncSessionLocal, engine
     except Exception as exc:  # pragma: no cover
         pytest.skip(f"no database configured: {exc}")
 
+    # `asyncio_mode = "auto"` gives every async test its own event loop, while
+    # `engine` is a module-level singleton whose pooled connections belong to
+    # whichever loop first touched them. Run alone, this test passed; run after
+    # the rest of the suite it **skipped itself** with
+    # `database unreachable: RuntimeError` -- the connection was attached to a
+    # loop that no longer existed, and the broad `except` below reported that as
+    # an absent database. So the project's central corroboration invariant was
+    # quietly not running in CI, which is the worst way for a safety check to
+    # fail. `close=False` matters: a plain dispose tries to shut the dead loop's
+    # connections and raises. Same trap and same fix as
+    # `test_retention_is_declared.py`, which documents it at length.
+    await engine.dispose(close=False)
+
+    # Only the connect is guarded. The query itself must be allowed to fail
+    # loudly: a broken invariant has to look different from an absent database.
     try:
-        async with AsyncSessionLocal() as db:
-            rows = (
-                await db.execute(
-                    sql(
-                        "select event_key, status, source_count, sources::text as sources_json "
-                        "from public.risk_flags where status = 'confirmed'"
-                    )
-                )
-            ).mappings().all()
+        connection = AsyncSessionLocal()
+        await connection.connection()
     except Exception as exc:
-        pytest.skip(f"database unreachable: {type(exc).__name__}")
+        pytest.skip(f"database unreachable: {type(exc).__name__}: {exc}")
+
+    async with connection as db:
+        rows = (
+            await db.execute(
+                sql(
+                    "select event_key, status, source_count, sources::text as sources_json "
+                    "from public.risk_flags where status = 'confirmed'"
+                )
+            )
+        ).mappings().all()
 
     from app.policy.independence import independent_publishers
 
@@ -393,3 +411,97 @@ async def test_no_row_in_the_database_is_confirmed_on_one_publisher() -> None:
         "confirmed flags in the database that are not corroborated by two independent "
         "publishers:\n  " + "\n  ".join(offenders)
     )
+
+
+# ---------------------------------------------------------------------------
+# 5. Authority is weight, not confirmation — B11a, 2026-10-15
+# ---------------------------------------------------------------------------
+#
+# DMP News is the police's own outlet, so a newspaper reprinting its release adds
+# no independent verification. The owner's first instinct was to let one DMP
+# report reach `confirmed`; the database says otherwise, and these tests pin the
+# resolution so the question cannot be quietly reopened in code.
+
+
+def test_an_authoritative_publisher_still_cannot_confirm_alone() -> None:
+    """
+    The whole point of the resolution. `AUTHORITATIVE_PUBLISHERS` grants weight and
+    **not** `confirmed`, because `confirmed` is enforced in Postgres by
+    `risk_flags_confirmed_needs_two_sources` and a single-source confirmed flag is
+    rejected on insert. If this ever passes, the database will start rejecting
+    writes that the code believes are valid.
+    """
+    from app.core.config import settings
+    from app.policy.independence import AUTHORITATIVE_PUBLISHERS, is_confirmable
+
+    for publisher in AUTHORITATIVE_PUBLISHERS:
+        assert not is_confirmable([publisher], minimum=settings.MIN_SOURCES_FOR_CONFIRMED), (
+            f"{publisher} is authoritative, which grants full weight, not confirmation. "
+            "Two independent publishers is what 'confirmed' means at every layer."
+        )
+
+
+def test_authority_is_expressed_as_full_weight() -> None:
+    """
+    What the grant actually is: an official report is not discounted as a rumour.
+
+    `expired` and `rejected` must stay at 0.0 even for an authoritative publisher —
+    the carve-out lives inside the `unconfirmed` branch precisely so that a flag
+    which is no longer served cannot contribute through it.
+    """
+    from app.policy.independence import UNCONFIRMED_WEIGHT, confidence
+
+    assert confidence("unconfirmed", ["dmp_news"]) == 1.0
+    assert confidence("unconfirmed", ["prothom_alo"]) == UNCONFIRMED_WEIGHT
+    assert confidence("unconfirmed") == UNCONFIRMED_WEIGHT, "the default must not change"
+    for dead in ("expired", "rejected"):
+        assert confidence(dead, ["dmp_news"]) == 0.0, dead
+
+
+def test_the_authoritative_set_is_a_tripwire_not_a_config_knob() -> None:
+    """
+    **This set is dangerous in the direction `_SAME_OWNER` is not.**
+
+    An entry in the ownership map can only ever *reduce* what we are willing to
+    trust, so recording one is safe even when the map is incomplete. An entry here
+    *increases* the weight of a single source, and there is no permissive default to
+    fall back on. So the membership is asserted, and widening it has to be a
+    deliberate change to this test alongside a decision about a named institution.
+
+    If you are here because this test failed: that is the test working. Say in the
+    handoff who decided, and why that body is the primary record of what it reports
+    rather than a claim about it.
+    """
+    from app.ingestion.sources import SOURCES
+    from app.policy.independence import AUTHORITATIVE_PUBLISHERS
+
+    assert AUTHORITATIVE_PUBLISHERS == {"dmp_news"}, (
+        "the authoritative set has changed. Every member must be the primary record "
+        "of what it reports -- not a well-regarded outlet, and not a government body "
+        "that merely sounds official."
+    )
+
+    # An authoritative id that no source produces would be dead policy, and the
+    # silent kind: nothing would ever be weighted by it and nothing would say so.
+    known = {source.source_id for source in SOURCES}
+    assert AUTHORITATIVE_PUBLISHERS <= known, (
+        f"authoritative publishers absent from SOURCES: {AUTHORITATIVE_PUBLISHERS - known}"
+    )
+
+
+def test_both_surfaces_weight_an_authoritative_source_the_same_way() -> None:
+    """
+    `DbRiskSurface` and `SeededRiskSurface` derive `confidence` independently, so a
+    policy change applied to one and not the other is the standing hazard here —
+    which is what `test_surfaces_agree` exists for generally. This checks the
+    specific thing B11a added: both call sites pass their publishers through.
+    """
+    db = (BACKEND / "app" / "scoring" / "surface_db.py").read_text(encoding="utf-8")
+    seeded = (BACKEND / "app" / "scoring" / "surface_seeded.py").read_text(encoding="utf-8")
+    for name, text in (("surface_db.py", db), ("surface_seeded.py", seeded)):
+        assert "confidence(" in text, name
+        call = text[text.index("confidence(") :][:200]
+        assert "source_id" in call, (
+            f"{name} calls confidence() without passing its publishers, so an "
+            "authoritative source would be silently discounted there"
+        )

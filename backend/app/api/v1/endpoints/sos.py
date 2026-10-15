@@ -3,7 +3,7 @@ SOS Emergency endpoints
 """
 import json
 import logging
-from sqlalchemy import select, text
+from sqlalchemy import text
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, Any, Final
@@ -16,11 +16,59 @@ from app.schemas.sos import (
     SOSHistoryResponse,
 )
 from app.services.sos_service import sos_service
-from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# Defect 9. The name an emergency contact reads, and where it has to come from.
+#
+# `email_service` prints this string in the alert's **subject**
+# (`EMERGENCY: {user_name} needs help`) and five more times in the body,
+# including the instruction *"Try calling {user_name}."* It is the only name the
+# alert ever carries, so it is the one field here that a stranger acts on.
+#
+# This used to be `email.split("@")[0]`, invented by an auto-provisioning block
+# that wrote a mirror row into `public.users` on first SOS. That produced
+# alerts reading *"EMERGENCY: nakib1990saleh needs help"* -- a real row, found
+# and recorded by migration 20261010160000 while it was fixing the GD form for
+# the same reason. It also never self-healed: the block only ran when the mirror
+# row was absent, so editing your name in the app updated `profiles` and left
+# the alert saying the derived string forever.
+#
+# `public.profiles` is the app's profile table. `auth.service.ts` writes `name`
+# at registration and `EditProfileScreen` edits it, so it is both correct and
+# current. Raw SQL rather than a model because the backend has no `profiles`
+# model and does not need one for a single column.
+_NAME_SQL: Final = text("select name from public.profiles where id = :uid")
+
+
+async def _display_name(db: AsyncSession, user_id: str, email: str | None) -> str:
+    """
+    The complainant's name for the alert, or an honest substitute.
+
+    Falls back to the **whole email address**, never a part of one. An address
+    is a true and complete identifier that the contact may well recognise, and
+    it is visibly an address rather than something shaped like a name -- which
+    is the distinction the old code got wrong. A plausible-looking wrong name is
+    worse than an obviously mechanical one, in an email whose whole purpose is
+    to tell somebody who needs help.
+
+    A missing `profiles` row means registration did not complete normally, so it
+    is logged. It does not raise: an SOS is not the moment to refuse to send an
+    alert over a display string.
+    """
+    row = (await db.execute(_NAME_SQL, {"uid": str(user_id)})).first()
+    if row and row[0] and row[0].strip():
+        return row[0].strip()
+
+    logger.warning(
+        "No profiles.name for user %s; alert will identify them by email. "
+        "A profile row should exist from registration.",
+        user_id,
+    )
+    return email or "A Meridian user"
 
 
 @router.post("/trigger", status_code=status.HTTP_201_CREATED)
@@ -41,33 +89,13 @@ async def trigger_sos(
     - Video must be less than 25MB
     """
     try:
-        # Fetch actual user object to get name
-        # current_user from security is a dict {"user_id": ..., "email": ...}
+        # current_user from security is a dict {"user_id": ..., "email": ...}.
+        # `user_id` is the Supabase JWT's `sub` -- the auth.users id, which is
+        # what every user_id column in the schema actually references. Nothing
+        # needs to be provisioned first; see `_display_name` above for what the
+        # block that used to sit here was really doing, and defect 9.
         user_id = current_user["user_id"]
-        result = await db.execute(select(User).where(User.id == user_id))
-        user_obj = result.scalars().first()
-        
-        if not user_obj:
-             # Auto-provision user from Supabase token details
-             print(f"⚠️ User {user_id} not found in local DB. Creating now...")
-             email = current_user.get("email", f"user_{user_id}@example.com")
-             # Derive name from email
-             name = email.split("@")[0] if "@" in email else "Meridian User"
-             
-             user_obj = User(
-                 id=user_id,
-                 email=email,
-                 full_name=name,
-                 phone="N/A",  # Required field
-                 password_hash="supabase_managed",  # Required field
-                 is_verified=True
-             )
-             db.add(user_obj)
-             await db.flush() # Ensure ID is valid for foreign keys
-             # Note: Commit happens in sos_service or via dependency cleanup? 
-             # Safer to commit here to persist user.
-             await db.commit()
-             await db.refresh(user_obj)
+        user_name = await _display_name(db, user_id, current_user.get("email"))
 
         location = {
             "latitude": latitude,
@@ -75,8 +103,8 @@ async def trigger_sos(
         }
 
         result = await sos_service.trigger_sos_alert(
-            user_id=user_obj.id,
-            user_name=user_obj.full_name,
+            user_id=user_id,
+            user_name=user_name,
             location=location,
             video_file=video,
             db=db,

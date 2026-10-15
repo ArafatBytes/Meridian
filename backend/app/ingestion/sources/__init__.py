@@ -104,6 +104,7 @@ from typing import Final
 
 from app.ingestion.sources.base import ArticleRef, Source
 from app.ingestion.sources.channel24 import Channel24Source
+from app.ingestion.sources.dmp_news import DmpNewsSource
 from app.ingestion.sources.news_sitemap import NewsSitemapSource
 
 SOURCES: Final[tuple[Source, ...]] = (
@@ -158,6 +159,15 @@ SOURCES: Final[tuple[Source, ...]] = (
         body_selector="article p",
         language="en",
     ),
+    # B11a, 2026-10-15. Last on purpose, for the same reason the harvest layers
+    # are ordered: this is the newest and least proven source, and `live_risk`
+    # ingests in this order, so a slow or broken institutional feed costs the
+    # eight established publishers nothing.
+    #
+    # **Not a newspaper, and `app/policy/independence.py` knows it.** DMP is
+    # registered as authoritative, so one of its reports can reach `confirmed`
+    # alone. See that module for who decided that and what it costs.
+    DmpNewsSource(),
 )
 
 def publisher_name(source_id: str) -> str:

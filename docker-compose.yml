@@ -81,6 +81,31 @@ services:
       # Mounted at the path it would have on the host, so the test's path lookup
       # is the same code in both environments.
       - ./frontend/src/features/alerts/channels.ts:/frontend/src/features/alerts/channels.ts:ro
+      # B2. The client half of the contract-drift check, same arrangement and
+      # same reason as the line above.
+      #
+      # `tests/invariants/test_contracts_do_not_drift.py` compares each Pydantic
+      # contract against the `*Wire` interface that mirrors it, and each
+      # `Literal`/`StrEnum` against the client's matching union. The failure it
+      # exists for is silent on both halves: rename `source_count` on the server
+      # and the client reads `undefined`, which renders as a blank line rather
+      # than an error.
+      #
+      # The services files hold the wire interfaces; types/contracts holds the
+      # vocabularies. Read-only, mounted at their host paths so the test's
+      # lookup is the same code in both environments.
+      - ./frontend/src/services/risk.service.ts:/frontend/src/services/risk.service.ts:ro
+      - ./frontend/src/services/geo.service.ts:/frontend/src/services/geo.service.ts:ro
+      - ./frontend/src/types/contracts:/frontend/src/types/contracts:ro
+      # B9. Two more client files the backend suite reads, same arrangement.
+      #
+      # `agents.service.ts` carries `AgentHealthWire`/`FleetStatusWire`, so it
+      # joins the drift check above. `agentCatalogue.ts` is checked by
+      # `tests/test_agent_health.py`: it holds the plain-language title and blurb
+      # for each agent, and the server is the only side that knows the real list
+      # of agents, so coverage has to be asserted from here.
+      - ./frontend/src/services/agents.service.ts:/frontend/src/services/agents.service.ts:ro
+      - ./frontend/src/features/status/agentCatalogue.ts:/frontend/src/features/status/agentCatalogue.ts:ro
       # Was ~700 MB of model weights (YOLOv9c 82 MB, CLIP ~600 MB), downloaded
       # on the first AI request. D07 deleted both: nothing in the image loads
       # local weights any more. Kept only because HF_HOME/TORCH_HOME still point

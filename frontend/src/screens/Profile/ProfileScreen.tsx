@@ -151,6 +151,16 @@ const ProfileScreen: React.FC<Props> = ({ navigation }) => {
       hint: 'Every alert you have sent',
       onPress: () => navigation.navigate('SOSHistory'),
     },
+    {
+      // B9. In Safety rather than a section of its own, because the question it
+      // answers is a safety question: whether the protections above are actually
+      // running. Last in the section — it is the row you look for when something
+      // seems wrong, not one you visit to set anything up.
+      icon: 'pulse-outline',
+      title: 'System status',
+      hint: 'Is your map up to date',
+      onPress: () => navigation.navigate('SystemStatus'),
+    },
   ];
 
   return (

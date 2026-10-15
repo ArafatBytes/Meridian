@@ -6,6 +6,24 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
+-- 1a. public.users must NOT exist  (defect 9)
+-- ---------------------------------------------------------------------------
+-- A check for an absence, because this one can come back on its own. While
+-- `app/models/user.py` existed, `init_db()`'s `Base.metadata.create_all` --
+-- which runs on every API boot inside a try/except that logs "Database not
+-- available" and continues -- would recreate the table after any drop, and hide
+-- the reason. The model is deleted; this is the tripwire that says so stayed
+-- true. If this FAILs, something reintroduced a third user table: identity is
+-- `auth.users`, display data is `public.profiles`.
+select
+    'public.users is gone' as check_name,
+    case when count(*) = 0 then '✅ OK'
+         else '❌ FAIL — the mirror table is back; see defect 9' end as status
+from information_schema.tables
+where table_schema = 'public' and table_name = 'users';
+
+
+-- ---------------------------------------------------------------------------
 -- 1. Tables
 -- ---------------------------------------------------------------------------
 select
@@ -16,7 +34,6 @@ from (values
     ('crime_reports'),
     ('emergency_contacts'),
     ('sos_hot_words'),
-    ('users'),
     ('sos_incidents'),
     ('user_locations')
 ) as t(expected)
@@ -37,7 +54,7 @@ from pg_tables
 where schemaname = 'public'
   and tablename in (
       'profiles', 'crime_reports', 'emergency_contacts', 'sos_hot_words',
-      'users', 'sos_incidents', 'user_locations'
+      'sos_incidents', 'user_locations'
   )
 order by tablename;
 
@@ -69,7 +86,7 @@ select
          else '❌ FAIL — ' || count(*) || ' policy/policies found' end as status
 from pg_policies
 where schemaname = 'public'
-  and tablename in ('users', 'sos_incidents', 'user_locations');
+  and tablename in ('sos_incidents', 'user_locations');
 
 
 -- ---------------------------------------------------------------------------
@@ -136,7 +153,7 @@ where tc.constraint_type = 'FOREIGN KEY'
   and tc.table_schema = 'public'
   and tc.table_name in (
       'profiles', 'crime_reports', 'emergency_contacts', 'sos_hot_words',
-      'users', 'sos_incidents', 'user_locations'
+      'sos_incidents', 'user_locations'
   )
 order by tc.table_name;
 

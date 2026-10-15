@@ -7,9 +7,11 @@
  *
  * 1. It needed a stop button, a duration counter and a 30-second cap — all to
  *    bound a recording that only existed in order to be uploaded.
- * 2. The endpoint behind it does not work. `app/services/ai/speech_service.py`
- *    has its `pydub` import commented out and raises `NameError`; that is
- *    **defect 2**, still open, scheduled for B4.
+ * 2. The endpoint behind it did not work. `app/services/ai/speech_service.py`
+ *    had its `pydub` import commented out while still calling `AudioSegment`, so
+ *    it raised `NameError` on every request. That was **defect 2**, and it was
+ *    closed on 2026-10-15 by **deleting** the endpoint and the service rather
+ *    than repairing them — this file is why there was nothing left to repair.
  * 3. It sent a recording of somebody's voice to a server to fill in a text
  *    field. On the screen whose entire subject is a phrase you will shout in an
  *    emergency.

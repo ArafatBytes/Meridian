@@ -188,12 +188,32 @@ export const SOSFlow: React.FC<{ sos: SosController }> = ({ sos }) => {
                 value={String(result.contactsNotified)}
                 muted={result.contactsNotified === 0}
               />
+              {/*
+                This was "Police stations nearby", a count, and it read `0` on
+                every SOS ever sent — the app telling the user, at the most
+                frightening moment it has, that it had looked for police near
+                them and found none. It had not looked: police emailing was off.
+
+                It looks now, so the tile is back as a *name*. The server emails
+                the one Dhaka city thana whose jurisdiction the caller's
+                coordinates fall in — the same station `thana.py` would print on
+                their General Diary, which is the one they would walk into.
+
+                `null` outside Dhaka city, and the tile says "None in range"
+                rather than "0". A zero invites the reading "there are no police
+                near you"; the truth is that this list is Dhaka city only.
+              */}
               <Fact
-                icon="shield-checkmark"
-                label="Police stations nearby"
-                value={String(result.policeStationsFound)}
-                muted={result.policeStationsFound === 0}
+                icon="shield"
+                label="Police station"
+                value={result.policeStation ?? 'None in range'}
+                muted={!result.policeStation}
               />
+              {/*
+                Where police also appear is the General Diary: `thana.py` names
+                the station to file at, on the GD screen where the user can
+                correct it. Same function, same answer, by construction.
+              */}
               <Fact
                 icon="videocam"
                 label="Video"

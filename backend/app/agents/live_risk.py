@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import unicodedata
 from datetime import UTC, datetime, timedelta
 from itertools import zip_longest
 from pathlib import Path
@@ -111,8 +112,20 @@ EXCLUDED_SECTIONS: Final = frozenset(
         "business",
         "video",
         "photo",
-        "country",
-        "countries",
+        # `country` and `countries` were here until 2026-10-15 and should not come
+        # back. They read like "foreign" in English and are the opposite: in
+        # Bangladeshi news the দেশ desk is the *domestic national* desk. Excluding
+        # them cost real Dhaka-area incidents, measured on a labelled sample of
+        # 2,622 headlines (`scripts/measure_relevance_filter.py`): of 6 missed
+        # incidents, 3 were blocked here, and all 3 were the Tongi medicine factory
+        # fire and the Chawkbazar fire -- both inside the pilot box.
+        #
+        # **The worse cost was corroboration, which nothing was measuring.** A flag
+        # needs two or more *independent* publishers to reach `confirmed`. The Tongi
+        # fire was filed under `capital` by some publishers and `country` by others,
+        # so the pipeline saw one side of it and the event could never be confirmed
+        # however many papers carried it. A section filter that correlates with the
+        # publisher silently caps the corroboration ceiling.
     }
 )
 """
@@ -140,6 +153,13 @@ one. Three caveats worth knowing before adding to it:
 INCIDENT_WORDS_BN: Final = (
     "আগুন",
     "অগ্নি",
+    # Added 2026-10-15 from a measured miss. `নিয়ন্ত্রণে ফায়ার সার্ভিসের ১৯ ইউনিট
+    # যোগ দিয়েছে সেনাবাহিনী` -- 19 fire service units, with the army joining --
+    # names no fire. Follow-up copy on a large blaze often reports the *response*
+    # rather than repeating the word আগুন, and a nineteen-unit deployment is a
+    # road closure whatever the headline calls it.
+    "ফায়ার সার্ভিস",
+    "দমকল",
     "দুর্ঘটনা",
     "সংঘর্ষ",
     "চাপায়",
@@ -494,6 +514,26 @@ SYSTEM_PROMPT: Final = (
     "An arrest report or a charge-sheet report counts if it says where the crime "
     "itself happened; the place you give must be where the CRIME happened, never "
     "the police station, the court or the hospital. "
+    # B11a, 2026-10-15. Added with the DMP News source, and specific to how police
+    # copy is written rather than to how newspapers write.
+    #
+    # "never the police station" above is already the rule, and it is not enough
+    # here, because **a Dhaka thana is also a neighbourhood.** যাত্রাবাড়ী is a
+    # police station AND a place the gazetteer resolves at 1.2 km. So
+    # `যাত্রাবাড়ী থানার বিশেষ অভিযানে গ্রেফতার ১৭` -- seventeen arrests across a
+    # thana's whole area in one sweep -- would not self-discard the way
+    # `ডিএমপির অভিযানে গ্রেফতার ৫৩০` does. "DMP" resolves to nothing and falls out
+    # on its own; "Jatrabari" resolves, and a city-wide round-up would be pinned
+    # as though a crime had happened at a spot.
+    #
+    # The owner's decision on 15 Oct: only items naming a located incident. An
+    # Uttara mugging with the auto-rickshaw recovered qualifies; a thana-wide
+    # sweep does not.
+    "A police unit is not a place, even when it is named after one: a drive by "
+    "যাত্রাবাড়ী থানা or Uttara Police Station tells you which officers acted, not "
+    "where anything happened. If an article reports a round-up, a drive or a "
+    "24-hour total across an area rather than one crime at one place, return "
+    "nothing for it. "
     "Give the same kind of specific place name as above. "
     "summary_en is one short factual English sentence for an internal audit log. "
     "Do not name any person — not a suspect, a victim, a witness or an officer — "
@@ -605,11 +645,147 @@ at a locatable place in Dhaka; this list only decides whether it is worth readin
 _CRIME_PATTERN_EN: Final = boundary_pattern(CRIME_WORDS_EN)
 
 
+# ---------------------------------------------------------------------------
+# Bangla has two spellings of the same letter, and one of them never matched
+# ---------------------------------------------------------------------------
+# Found 2026-10-15 while measuring the filter, and it had been losing real Dhaka
+# road deaths silently the whole time.
+#
+# ড়, ঢ় and য় each exist twice in Unicode: as one precomposed codepoint (U+09DC,
+# U+09DD, U+09DF) and as a base letter plus nukta (U+09A1/U+09A2/U+09AF followed
+# by U+09BC). They render identically. They are not equal strings.
+#
+# **Both forms are live in this data.** 1,568 of 2,622 collected headlines used a
+# precomposed form, while 17 keywords in the lists below were written decomposed
+# -- including `চাপায়` (run over), `কুপিয়ে` (hacked), `ছিনিয়ে` (snatched),
+# `ধাওয়া` (chase). A `word in title` test between the two forms is always False,
+# so those keywords matched only the publishers that happened to agree with them.
+#
+# Measured cost on one sample: 17 headlines, among them
+# **`বারিধারায় গাড়িচাপায় নির্মাণশ্রমিকের মৃত্যু`** -- a construction worker
+# killed by a car in Baridhara, which is in Dhaka -- plus two truck fatalities
+# and a Dhaka-Sylhet highway death. Invisible. Not discarded with a reason, not
+# logged: never fetched, because the headline "did not name an incident".
+#
+# **NFC is the right target even though it looks like the wrong one.** Normally
+# NFC composes, but all three of these letters are on Unicode's composition
+# exclusion list, so NFC *decomposes* U+09DF to U+09AF U+09BC. Either canonical
+# form would work as long as it is applied to both sides; NFC is chosen because
+# it is the default everywhere else and needs no explanation at the call site.
+def _nfc(text: str) -> str:
+    """Canonical form, so two spellings of ড়/ঢ়/য় compare equal."""
+    return unicodedata.normalize("NFC", text)
+
+
+_INCIDENT_WORDS_BN_NFC: Final = frozenset(_nfc(word) for word in INCIDENT_WORDS_BN)
+_CRIME_WORDS_BN_NFC: Final = frozenset(_nfc(word) for word in CRIME_WORDS_BN)
+
+
 def names_a_crime(title: str) -> bool:
     """Does this headline name a crime at a place? Both scripts, as above."""
-    return any(word in title for word in CRIME_WORDS_BN) or bool(
+    normalised = _nfc(title)
+    return any(word in normalised for word in _CRIME_WORDS_BN_NFC) or bool(
         _CRIME_PATTERN_EN.search(title)
     )
+
+
+# ---------------------------------------------------------------------------
+# The geographic gate — D04, 2026-10-15
+# ---------------------------------------------------------------------------
+# Measured cause of nearly every false positive. On a labelled sample of 2,622
+# headlines the filter's precision was **0.31**: of 167 articles it passed, 115
+# were not Dhaka incidents. They were not borderline either -- a drone strike in
+# Ukraine, a Houthi attack on Saudi Aramco, a roof collapse in Rangpur, a road
+# blockade in Sajek, Rahul Gandhi in Delhi. The filter asked "does this headline
+# name an incident?" and never "is it here?", so every violent event on earth
+# matched.
+#
+# **Why a negative list and not a positive one.** Requiring a Dhaka place name
+# would be the obvious design and would be wrong: Dhaka copy routinely names the
+# locality and not the city -- `ফুটপাতে মারধর`, `বাড্ডায় গৃহবধূর মৃত্যু`,
+# `পল্লবীতে ইজিবাইক চালক হত্যা`. A positive requirement would reject those, and
+# a miss is the expensive error here because the article is never fetched and so
+# never leaves a trace. Naming the places it is *not* costs recall only when a
+# headline mentions somewhere else -- and then `DHAKA_MARKERS` overrides.
+#
+# **This list is deliberately conservative.** Gazipur, Tongi, Savar and
+# Keraniganj are NOT here: Tongi sits inside the pilot box at ~23.89 N, and the
+# others are close enough that the gazetteer should make the call rather than a
+# headline keyword. The entries are places far enough away that no incident there
+# can affect a journey across Dhaka.
+NOT_DHAKA: Final = frozenset(
+    {
+        # Bangladesh, outside the pilot box.
+        "চট্টগ্রাম", "সিলেট", "রাজশাহী", "খুলনা", "বরিশাল", "রংপুর", "ময়মনসিংহ",
+        "কুমিল্লা", "নোয়াখালী", "কক্সবাজার", "যশোর", "কুষ্টিয়া", "দিনাজপুর",
+        "বগুড়া", "পাবনা", "টাঙ্গাইল", "ফরিদপুর", "মাদারীপুর", "গোপালগঞ্জ",
+        "সাতক্ষীরা", "নেত্রকোনা", "কুড়িগ্রাম", "নীলফামারী", "চাঁদপুর",
+        "ব্রাহ্মণবাড়িয়া", "সাজেক", "খাগড়াছড়ি", "বান্দরবান", "রাঙামাটি",
+        "সুন্দরবন", "মুন্সিগঞ্জ", "নারায়ণগঞ্জ", "ঠাকুরগাঁও", "সিরাজগঞ্জ",
+        "মীরসরাই", "আড়াইহাজার", "চুয়েট", "পায়রা",
+        "Chattogram", "Chittagong", "Sylhet", "Rajshahi", "Khulna", "Barisal",
+        "Rangpur", "Mymensingh", "Cumilla", "Comilla", "Noakhali", "Jashore",
+        "Kushtia", "Bogura", "Tangail", "Faridpur", "Satkhira", "Chandpur",
+        "Brahmanbaria", "Sajek", "Khagrachhari", "Bandarban", "Narayanganj",
+        "Munshiganj", "Cuet", "Sirajganj",
+        # Abroad.
+        "রাশিয়া", "ইউক্রেন", "সৌদি", "ভারত", "পাকিস্তান", "ইরান", "ইরাক",
+        "ইসরায়েল", "যুক্তরাষ্ট্র", "আমেরিকা", "যুক্তরাজ্য", "ফ্রান্স", "জাপান",
+        "চীন", "ইয়েমেন", "হুথি", "হুতি", "আবুধাবি", "জর্ডান", "দিল্লি",
+        "করাচি", "পানামা", "আজারবাইজান", "তাইওয়ান", "গাজা", "ইউরোপ", "ওমান",
+        "নেদারল্যান্ডস", "কানাডা", "তুর্কি", "স্পেন", "মস্কো", "নিউ‌ দিল্লি",
+        "Russia", "Ukraine", "Saudi", "India", "Pakistan", "Iran", "Iraq",
+        "Israel", "Yemen", "Houthi", "Jordan", "Delhi", "Karachi", "Panama",
+        "Taiwan", "Gaza", "Oman", "Netherlands", "Canada", "Spain", "Moscow",
+        "France", "Japan", "China", "Europe",
+    }
+)
+"""Places far enough from Dhaka that an incident there cannot affect a journey in it."""
+
+# Overrides `NOT_DHAKA`. A headline naming both is about here: `ঢাকা ময়মনসিংহ
+# মহাসড়কে দীর্ঘ যানজট` is a jam on the Dhaka corridor, not news from Mymensingh.
+DHAKA_MARKERS: Final = frozenset(
+    {
+        "ঢাকা", "ঢাকার", "ঢাকায়", "রাজধানী", "রাজধানীর", "রাজধানীতে",
+        "ধানমন্ডি", "ধানমণ্ডি", "গুলশান", "মিরপুর", "উত্তরা", "মতিঝিল",
+        "যাত্রাবাড়ী", "বাড্ডা", "পল্লবী", "তেজগাঁও", "রামপুরা", "মোহাম্মদপুর",
+        "চকবাজার", "কারওয়ান", "ফার্মগেট", "শাহবাগ", "টঙ্গী", "মহাখালী",
+        "বিমানবন্দর", "গাবতলী", "সায়েদাবাদ", "কমলাপুর", "রূপনগর", "তুরাগ",
+        "কেরানীগঞ্জ", "ডেমরা", "খিলগাঁও", "বনানী", "কল্যাণপুর", "শ্যামলী",
+        "পুরান ঢাকা", "লালবাগ", "সূত্রাপুর", "ওয়ারী", "গেন্ডারিয়া",
+        "Dhaka", "capital", "Dhanmondi", "Gulshan", "Mirpur", "Uttara",
+        "Motijheel", "Jatrabari", "Badda", "Pallabi", "Tejgaon", "Rampura",
+        "Mohammadpur", "Chawkbazar", "Karwan", "Farmgate", "Shahbagh", "Tongi",
+        "Mohakhali", "Banani", "Keraniganj", "Demra",
+    }
+)
+
+
+_NOT_DHAKA_NFC: Final = frozenset(_nfc(place).casefold() for place in NOT_DHAKA) | frozenset(
+    _nfc(place) for place in NOT_DHAKA
+)
+_DHAKA_MARKERS_NFC: Final = frozenset(
+    _nfc(marker).casefold() for marker in DHAKA_MARKERS
+) | frozenset(_nfc(marker) for marker in DHAKA_MARKERS)
+
+
+def names_elsewhere(title: str) -> bool:
+    """
+    Is this headline about somewhere an incident cannot affect a Dhaka journey?
+
+    A Dhaka marker wins: a headline carrying both is read as being about here.
+    Bangla is matched as written (no case) and English casefolded, the same split
+    `names_an_incident` uses and for the same reason -- Dhaka copy mixes scripts.
+    """
+    # NFC on both sides, for the reason in `_nfc`'s comment. This gate is how the
+    # bug was found: `নোয়াখালীতে` stores য় precomposed, the list below spells it
+    # decomposed, and a Noakhali arrest sailed through a filter that names
+    # Noakhali explicitly.
+    normalised = _nfc(title)
+    folded = normalised.casefold()
+    if any(marker in normalised or marker in folded for marker in _DHAKA_MARKERS_NFC):
+        return False
+    return any(place in normalised or place in folded for place in _NOT_DHAKA_NFC)
 
 
 def names_an_incident(title: str) -> bool:
@@ -622,7 +798,9 @@ def names_an_incident(title: str) -> bool:
     carries English ones, and a headline is too short to language-detect reliably.
     Trying both costs one regex and removes a whole class of silent miss.
     """
-    return any(word in title for word in INCIDENT_WORDS_BN) or bool(_EN_PATTERN.search(title))
+    return any(word in _nfc(title) for word in _INCIDENT_WORDS_BN_NFC) or bool(
+        _EN_PATTERN.search(title)
+    )
 
 
 def interleave(batches: list[list[RawDocument]]) -> list[RawDocument]:
@@ -670,6 +848,8 @@ def is_relevant(ref: ArticleRef, now: datetime) -> bool:
     if ref.section in EXCLUDED_SECTIONS:
         return False
     if ref.published_at is not None and ref.published_at < now - LOOKBACK:
+        return False
+    if names_elsewhere(ref.title):
         return False
     return names_an_incident(ref.title) or names_a_crime(ref.title)
 
