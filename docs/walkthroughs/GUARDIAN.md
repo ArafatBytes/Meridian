@@ -1,9 +1,9 @@
 # Guardian — the app acts without being asked
 
 **Written for:** Arafat, running every step on his own phone, in front of judges.
-**Ran on:** Vivo V2344, Android 14, development build · **By:** Arafat · **Date:** 2026-10-11 · **Takes:** ~15 min once the build is installed
+**Ran on:** Vivo V2344, Android 14, development build · **By:** Arafat · **Date:** 2026-10-11, Parts 2–3 · **Part 1 (zone alerts):** 2026-10-15, steps 1–5 · **Takes:** ~15 min once the build is installed
 
-**Voice SOS and Shake SOS both verified end to end** — trigger, countdown, camera, location, email to contacts. **Zone alerts are unverified**: all risk flags are in Dhaka and testing happened from Jashore, 142 km away. See *Step 2*.
+**All three features are now verified on a device.** Voice SOS and Shake SOS end to end on 11 Oct — trigger, countdown, camera, location, email to contacts. **Zone alerts verified 15 Oct, steps 1–5**, against a flag seeded with `scripts/seed_flag_here.py` at the test location: every risk flag from the pipeline is in Dhaka and the testing happened from Jashore, 142 km away, so a seeded flag was the only way to run Part 1 at all. Android's `GeofencingClient` does the detection and cannot tell a seeded row from a pipeline one, so the app's whole path ran for real. **Step 6 — the outdoor pocket walk — is still unrun**, so the +250 m early-warning margin is unmeasured at walking pace. See *Step 2*.
 
 > **Everything in this walkthrough is done on the phone.** No terminal, no curl,
 > no Docker, no SQL. The only command you run is the one that builds and installs
@@ -409,6 +409,27 @@ would confirm this is one device rather than the code. Until then, the honest
 claim is: *location to emergency contacts in seconds, plus a video clip where
 the hardware supports it.*
 
+### ✅ Confirmed 2026-10-15: it is the device
+
+SOS was run on a **second Android phone** and video **captured, uploaded and
+arrived attached to the alert email**. That closes defect 53: the starvation above
+is **Unisoc `ums9230` driver behaviour**, upstream of this app.
+
+Everything in this section still describes the Vivo exactly and is kept as the
+record. Two things change:
+
+- **The `TEXTURE_VIEW` native patch will not be written.** Patching expo-camera to
+  work around one SoC buys one handset.
+- **The location-only degradation is the permanent design**, not a stopgap for an
+  open defect. It is what lets the alert go out on hardware that cannot record,
+  and it is the behaviour to demonstrate deliberately rather than apologise for.
+
+⚠️ **Keep the claim conditional and demo on the phone that works.** *"Location to
+emergency contacts in seconds, plus a video clip where the hardware supports it"*
+is still the accurate sentence — one confirmed handset in the fleet cannot record,
+so promising video unconditionally would be promising something this project has
+watched fail.
+
 ## Known limits — say these rather than be caught by them
 
 - **Voice and shake need the app open.** Android restriction, not a bug. Zone
@@ -435,9 +456,9 @@ the hardware supports it.*
 
 ## Sign-off
 
-- [ ] Steps 1–2 (zone alerts on; **Location permission green**, and either zones > 0 in Dhaka or "Idle — nothing nearby" elsewhere)
-- [ ] Steps 3–5 (test alert arrives, debounce suppresses, history shows both) — **needs a flag within ~19 km**
-- [ ] Step 6 (a real crossing in a pocket) — optional
+- [x] Steps 1–2 (zone alerts on; **Location permission green**, and either zones > 0 in Dhaka or "Idle — nothing nearby" elsewhere) — ✅ 15 Oct
+- [x] Steps 3–5 (test alert arrives, debounce suppresses, history shows both) — **needs a flag within ~19 km**; ✅ 15 Oct against a seeded flag
+- [ ] Step 6 (a real crossing in a pocket) — optional, **still unrun**; this is the only thing that measures the +250 m margin at walking pace
 - [ ] Steps 7–8 (listening, meter moves, threshold calibrated)
 - [ ] Step 9 (normal voice refused, shout triggers, SOS email arrives)
 - [ ] Step 10 (works from the Map tab)
@@ -445,7 +466,15 @@ the hardware supports it.*
 - [ ] Noted the handset, the Android version, and the two thresholds you settled on
 
 **Verified by:** Arafat
-**Date:** 2026-10-11
+**Date:** 2026-10-11 (Parts 2–3) · 2026-10-15 (Part 1, steps 1–5, seeded flag)
 **Phone / Android version:** Vivo V2344 / Android 14 (Unisoc ums9230)
 **Shout threshold:** _record yours_ **Shake threshold:** _record yours_
 **Video capture:** ❌ unavailable on this handset — SOS sends location only
+
+**Second handset, 2026-10-15 — defect 53 closed.** SOS run on another Android phone:
+**video captured, uploaded and delivered attached to the alert email.** Two devices is
+what it took to attribute the Vivo failure to the Unisoc `ums9230` rather than to this
+app. ⚠️ **The handset was not recorded here.** Fill in make / model / Android version
+the next time you have it to hand — a device-compatibility claim is only as good as the
+device list behind it, and right now that list is one phone that works and one that does
+not.

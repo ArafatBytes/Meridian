@@ -171,28 +171,27 @@ create index if not exists idx_sos_hot_words_user_id
 -- authenticated roles cannot touch them at all; the service role bypasses RLS.
 
 -- ---------------------------------------------------------------------------
--- 5.1 users  ***TRANSITIONAL — scheduled for deletion in S02 (ADR 0003)***
+-- 5.1 users  ***REMOVED 2026-10-15 — defect 9***
 -- ---------------------------------------------------------------------------
--- backend/app/api/v1/endpoints/sos.py auto-provisions a row here on first SOS,
--- duplicating data that already lives in auth.users + public.profiles.
--- It exists only so SOS runs today. Do not build anything new on it.
-
-create table if not exists public.users (
-    id            uuid primary key references auth.users (id) on delete cascade,
-    email         varchar not null unique,
-    full_name     varchar not null,
-    phone         varchar not null,
-    password_hash varchar not null,
-    hot_words     json    not null default '["help","bachao","save me","police"]'::json,
-    is_active     boolean not null default true,
-    is_verified   boolean not null default false,
-    created_at    timestamp not null default now(),
-    updated_at    timestamp not null default now()
-);
-
-comment on table public.users is
-    'TRANSITIONAL. Duplicates profiles. Deleted in S02 per docs/adr/0003. '
-    'password_hash is always the literal "supabase_managed" — Supabase owns auth.';
+-- There used to be a `public.users` table here: a mirror of auth.users +
+-- public.profiles, created on a user's first SOS by an auto-provisioning block
+-- in endpoints/sos.py. **A fresh project no longer gets one**, and existing
+-- projects drop it with
+-- `migrations/versions/20261015160000__drop_public_users_mirror.sql`.
+--
+-- It was never load-bearing. Every user_id column below references
+-- auth.users(id) directly and always has; the one real dependent,
+-- gd_drafts.user_id, was repointed in 20261010160000. What the mirror actually
+-- supplied was a display name for the SOS alert email, derived as
+-- `email.split("@")[0]` -- so an emergency contact was told to call
+-- `nakib1990saleh`. sos.py now reads `profiles.name`, which the user typed.
+--
+-- Its other columns were already dead: `hot_words` had no readers (B8 reads
+-- public.sos_hot_words), `password_hash` was always the literal
+-- 'supabase_managed', and `full_name`/`phone` moved to gd_profiles in October.
+--
+-- **Identity is auth.users. Display data is public.profiles.** There is no
+-- third user table, and nothing should add one.
 
 -- ---------------------------------------------------------------------------
 -- 5.2 sos_incidents
@@ -274,10 +273,7 @@ create trigger trg_emergency_contacts_updated_at
     before update on public.emergency_contacts
     for each row execute function public.set_updated_at();
 
-drop trigger if exists trg_users_updated_at on public.users;
-create trigger trg_users_updated_at
-    before update on public.users
-    for each row execute function public.set_updated_at();
+-- No trg_users_updated_at: public.users was removed in defect 9. See §5.1.
 
 
 -- ============================================================================

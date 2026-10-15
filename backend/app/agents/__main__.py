@@ -1,4 +1,5 @@
 """
+python -m app.agents status                   B9: is every agent running, late, or broken
 python -m app.agents run live_risk            one real run, recorded in agent_runs
 python -m app.agents run live_risk --dry-run  fetch and extract, write nothing
 python -m app.agents export-replay            capture the offline demo's news flags
@@ -17,15 +18,36 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from app.agents.health import fleet_health, format_fleet, worst_state
 from app.agents.live_risk import export_replay
 from app.agents.promote_demo import promote_one, reset
 from app.agents.registry import agents, run_agent
-from app.vision.replay import export_vision_replay
 from app.core.database import AsyncSessionLocal, engine
+from app.vision.replay import export_vision_replay
 
 
 async def _main(args: argparse.Namespace) -> int:
     try:
+        if args.command == "status":
+            # `database.py` sets `echo=settings.DEBUG`, so in a dev container every
+            # statement is logged twice and buries the table this command exists to
+            # print. For `status` the output *is* the deliverable, so the engine
+            # logger is quietened here only — `run` still echoes, where seeing the
+            # statements is the point.
+            #
+            # It has to be the flag, not the logger. `echo` installs an
+            # `sqlalchemy.log.InstanceLogger` that overrides `isEnabledFor` to
+            # consult the engine's own `echo` attribute, so it emits regardless of
+            # any level set on `sqlalchemy.engine` or `sqlalchemy.engine.Engine`.
+            # Setting those levels looks like it works and changes nothing.
+            engine.echo = False
+            async with AsyncSessionLocal() as db:
+                fleet = await fleet_health(db)
+            sys.stdout.write(format_fleet(fleet))
+            # Non-zero on `late` or `problem` so this is usable as a health check
+            # in a shell script. `never_run` and `unknown` stay zero — see
+            # `worst_state`, which explains why neither is a failure.
+            return 0 if worst_state(fleet) == "working" else 1
         if args.command == "run":
             result = await run_agent(args.agent, dry_run=args.dry_run)
             if result is None:
@@ -100,6 +122,12 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     parser = argparse.ArgumentParser(prog="python -m app.agents")
     sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser(
+        "status",
+        help="B9: fleet health — per agent, when it last ran, whether it is late, "
+        "stuck or failing, and what the last run reported. Exits 1 if any agent "
+        "is late or has a problem, so it can be used as a health check.",
+    )
     run = sub.add_parser("run", help="run one agent once")
     run.add_argument("agent", choices=sorted(agents()))
     run.add_argument("--dry-run", action="store_true", help="write nothing, not even agent_runs")

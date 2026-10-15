@@ -9,7 +9,17 @@ export type { CrimeAnalysisResult } from './crime.service';
 // hot-words screen could fill in a text field. Hot-word dictation is now
 // on-device (`features/voice/dictate.ts`), which left them with no callers --
 // and an unused path that uploads a recording of someone's voice is not the
-// kind of dead code to leave lying about. The backend's /ai/speech-to-text is
-// untouched (defect 2 still applies to it; that is B4).
+// kind of dead code to leave lying about. The backend's /ai/speech-to-text was
+// deleted on 2026-10-15 — that closed defect 2, and the reasoning was the same
+// one written here: it had no caller, and it raised NameError if it ever got one.
 export { riskService } from './risk.service';
 export type { RiskFlagsResult, MapRegion } from './risk.service';
+// Defect 16. `routeService` was the one service imported from its file while
+// every sibling came from here, so a reader could not tell from the barrel that
+// routing had a service at all.
+//
+// `Location` is deliberately NOT re-exported: route.service.ts declares one, so
+// does location.service.ts's domain, and `Location` is a global in the DOM lib.
+// A barrel is the worst place to make a name that generic ambiguous.
+export { routeService } from './route.service';
+export type { RouteRequest, RouteResponse } from './route.service';

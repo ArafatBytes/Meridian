@@ -434,7 +434,23 @@ class ReportCorroborationAgent(BaseAgent):
 
         db: AsyncSession = ctx.db
         errors: list[str] = []
-        since = ctx.now - CLUSTER_WINDOW
+        # Defect 57. `crime_reports.incident_date_time` is `timestamp without
+        # time zone`, and asyncpg refuses to encode an aware datetime into one —
+        # it raises before the statement is ever sent, so the whole run failed on
+        # its first query. This agent already handled the naive column on the way
+        # *out* (`_rows_to_candidates` reads it as UTC); the bound parameter on
+        # the way *in* was missed, and nothing noticed because a failed run
+        # writes an `agent_runs` row and no alert. 38 runs, 0 successes, found by
+        # B9's fleet status on 15 Oct.
+        #
+        # Naive-as-UTC is the same reading `_rows_to_candidates` uses, so the
+        # window boundary and the rows inside it are interpreted identically. The
+        # alternative — making the column `timestamptz` — is the correct fix and
+        # is NOT taken here: `crime_reports` is written Supabase-direct by the
+        # client (ADR 0001), so changing its type is a migration against a table
+        # another checkout is writing to, and that is not a change to bundle into
+        # a bug fix. Recorded as the real remedy in the defect entry.
+        since = (ctx.now - CLUSTER_WINDOW).astimezone(UTC).replace(tzinfo=None)
 
         rows = list((await db.execute(_CANDIDATES, {"since": since})).all())
         candidates = _rows_to_candidates(rows)

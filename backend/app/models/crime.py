@@ -1,8 +1,7 @@
 """
 Crime report model
 """
-from sqlalchemy import Column, String, DateTime, Text, ForeignKey, Enum as SQLEnum
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, DateTime, Text, Enum as SQLEnum
 from datetime import datetime
 import uuid
 import enum
@@ -32,7 +31,22 @@ class CrimeReport(Base):
     __tablename__ = "crime_reports"
     
     id = Column(UUIDStr, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(UUIDStr, ForeignKey("users.id"), nullable=False)
+    # Defect 9. No `ForeignKey` here, deliberately.
+    #
+    # This said `ForeignKey("users.id")` and that was **wrong about the
+    # database**: `migrations/supabase/SCHEMA.sql` points every user_id column
+    # at `auth.users(id)`, and has since the file was first committed. The
+    # mistake was not harmless -- it is what three separate documents read when
+    # they recorded that `sos_incidents` depended on the `public.users` mirror,
+    # and it is why dropping that mirror looked like it would break SOS.
+    #
+    # It cannot be corrected by retargeting: `auth.users` lives in Supabase's
+    # own schema, which this metadata does not and should not map. So the
+    # constraint is declared in SCHEMA.sql only, and this column is a plain
+    # value. `Base.metadata` is a client of that schema, not its source --
+    # `init_db()` runs `create_all` on every boot, which is exactly why a
+    # half-true model here is a liability.
+    user_id = Column(UUIDStr, nullable=False)
     # `values_callable` is load-bearing, not a style choice. Without it
     # SQLAlchemy maps this column by the enum's *member names* (THEFT, ASSAULT)
     # while every row in the database holds its *value* ('theft', 'assault') --
@@ -77,5 +91,6 @@ class CrimeReport(Base):
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationships
-    user = relationship("User", back_populates="crime_reports")
+    # No `user` relationship. It pointed at `models/user.py`'s `User`, the ORM
+    # half of the `public.users` mirror deleted in defect 9; nothing ever
+    # navigated it. The owner is `auth.users`, which this package does not map.

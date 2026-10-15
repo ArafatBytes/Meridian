@@ -140,6 +140,15 @@ fixture is both honest and deterministic. **Measure before deciding** — this i
 
 ## Decision 3 — §7.2 closes now: `POLICE_ROUTING_ENABLED` stays `false`
 
+> ⚠️ **PARTLY SUPERSEDED 2026-10-15 by the owner.** `POLICE_ROUTING_ENABLED=true`: an SOS now
+> emails the single nearest Dhaka city thana to the caller's live coordinates. The reasoning
+> below holds for **filing** — no API, no partnership, a cognizable offence needs the applicant
+> at the thana in person — but it was applied to *notifying*, which is a different act and needs
+> none of those things. "Nothing to transmit to" was true of case filing and false of an inbox.
+> The thana is still named on the GD by the same function that picks the address, so the two
+> cannot disagree. DEMO_PLAN §7.2's second addendum has the detail. Decisions 1, 2 and the rest
+> of this document are unaffected.
+
 §7.2 defers the police-routing position to D10. The research decides it: **there is nothing to
 transmit to.** No API, no partnership, and `backend/police_stations.csv` carries real coordinates
 for 606 stations behind a single placeholder email and phone repeated on every row.

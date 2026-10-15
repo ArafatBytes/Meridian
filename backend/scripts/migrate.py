@@ -7,6 +7,7 @@ Forward-only migration runner.
     python backend/scripts/migrate.py up --dry-run      say what would run, change nothing
     python backend/scripts/migrate.py sql               print pending SQL, paste-ready
     python backend/scripts/migrate.py sql --out f.sql   ... into a file instead
+    python backend/scripts/migrate.py mark VERSION      record one as applied, do not run it
 
 Why this exists and not Alembic
 ------------------------------
@@ -164,8 +165,16 @@ def ledger_insert(migration: Migration) -> str:
     The SQL that records a migration as applied.
 
     Included in `sql` output so that pasting into a SQL editor leaves the ledger
-    correct, rather than the database running ahead of its own records. It is why
-    there is no separate "mark this as applied" command.
+    correct, rather than the database running ahead of its own records.
+
+    **This used to say "it is why there is no separate 'mark this as applied'
+    command". That assumption cost us defect 55.** The paste is one step and the
+    ledger insert is the last line of it, so a hurried operator runs the DDL,
+    sees it succeed, and closes the tab. Two of D08's migrations were applied
+    that way on 10 Oct and sat in `status` as `pending` for five days. There is a
+    `mark` command now, because the recovery path has to exist for the moment the
+    convention is not followed -- and the alternative recovery, `up`, re-runs the
+    migration.
     """
     return (
         "insert into public.schema_migrations (version, name, checksum, applied_by)\n"
@@ -396,6 +405,75 @@ async def cmd_up(args: argparse.Namespace) -> int:
     return 0
 
 
+async def cmd_mark(args: argparse.Namespace) -> int:
+    """
+    Record a migration as applied without running it. **Defect 55.**
+
+    For exactly one situation: the DDL was run by hand -- usually pasted into the
+    Supabase SQL editor -- and the ledger insert at the end of that paste was not.
+    `status` then reports `pending` forever, and the only other recovery is `up`,
+    which would **re-run** it.
+
+    This is the one command here that can lie to the ledger, so it is deliberately
+    awkward:
+
+    * it refuses a version with no file on disk, because the checksum it would
+      record has to come from somewhere;
+    * it refuses a version already recorded, rather than quietly refreshing the
+      timestamp -- `up` and the `sql` paste own that path;
+    * it requires `--yes`, and without it prints what the migration would create
+      and exits non-zero.
+
+    **It cannot verify the migration really ran.** Nothing can, generically: a
+    migration is arbitrary SQL. Marking an *unapplied* migration is worse than
+    the false `pending` this fixes -- the schema change is then skipped forever
+    and the ledger says otherwise. Check the objects exist first. For D08 that
+    meant confirming `gd_drafts` and `gd_profiles` were present, with the columns
+    the *second* migration adds, before either row went in.
+    """
+    migrations = {m.version: m for m in load_migrations()}
+    migration = migrations.get(args.version)
+    if migration is None:
+        known = ", ".join(sorted(migrations)) or "none"
+        return die(f"no migration file for version {args.version!r}. Known: {known}")
+
+    # The report comes before the connection, not after. A test caught the other
+    # order: there is nothing to ask a database when all this prints is what the
+    # file says, and needing DATABASE_URL to be told what a command *would* do
+    # makes the safe path the harder one to take.
+    if not args.yes:
+        print(f"\n  would record {migration.label} as applied, WITHOUT running it.")
+        print("\n  Confirm the objects it defines already exist, then re-run with --yes:")
+        for line in migration.sql.splitlines():
+            stripped = line.strip().lower()
+            if stripped.startswith(("create table", "alter table", "create index")):
+                print(f"    {line.strip()}")
+        print()
+        return 1
+
+    conn = await connect()
+    try:
+        applied = await fetch_applied(conn)
+        if migration.version in applied:
+            print(f"\n  {migration.label} is already recorded — nothing to do\n")
+            return 0
+
+        await conn.execute(
+            "insert into public.schema_migrations"
+            " (version, name, checksum, applied_by)"
+            " values ($1, $2, $3, $4)",
+            migration.version,
+            migration.name,
+            migration.checksum,
+            "marked",
+        )
+        print(f"\n  recorded {migration.label} as applied (applied_by='marked')\n")
+    finally:
+        await conn.close()
+
+    return 0
+
+
 def cmd_sql(args: argparse.Namespace) -> int:
     """
     Emit pending SQL for manual application. No database connection.
@@ -474,12 +552,23 @@ def main() -> int:
     emit.add_argument("--out", metavar="PATH", help="write to a file instead of stdout")
     emit.add_argument("--version", metavar="VERSION", help="just this one migration")
 
+    mark = sub.add_parser(
+        "mark",
+        help="record an already-applied migration without running it (defect 55)",
+    )
+    mark.add_argument("version", metavar="VERSION", help="e.g. 20261010120000")
+    mark.add_argument(
+        "--yes",
+        action="store_true",
+        help="confirm the objects already exist; without it, this only reports",
+    )
+
     args = parser.parse_args()
 
     if args.command == "sql":
         return cmd_sql(args)
 
-    handlers = {"status": cmd_status, "up": cmd_up}
+    handlers = {"status": cmd_status, "up": cmd_up, "mark": cmd_mark}
     return asyncio.run(handlers[args.command](args))
 
 
