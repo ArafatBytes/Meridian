@@ -209,10 +209,32 @@ def main() -> int:
         action="store_true",
         help="do not delete existing seed- rows first",
     )
+    parser.add_argument(
+        "--fixture",
+        metavar="PATH",
+        help=(
+            "load a different fixture file instead of data/fixtures/risk_flags.json. "
+            "Relative paths resolve from the repository root. Used by the video "
+            "scenario, which is the standard fixture minus the flags that sit on one "
+            "route -- see docs/video/PLAN.md."
+        ),
+    )
     args = parser.parse_args()
 
+    fixture_path = None
+    if args.fixture:
+        candidate = Path(args.fixture)
+        if not candidate.is_absolute():
+            # The repository root, two levels up from backend/scripts/.
+            candidate = Path(__file__).resolve().parent.parent / args.fixture
+        if not candidate.is_file():
+            print(f"\n  no fixture at {candidate}\n", file=sys.stderr)
+            return 2
+        fixture_path = candidate
+        print(f"\n  fixture: {fixture_path}")
+
     try:
-        rows = fixture_rows(datetime.now(UTC))
+        rows = fixture_rows(datetime.now(UTC), fixture_path=fixture_path)
     except FixtureError as problem:
         print(f"\n  {problem}\n", file=sys.stderr)
         return 2

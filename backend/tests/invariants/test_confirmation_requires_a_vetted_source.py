@@ -466,23 +466,27 @@ async def test_no_row_in_the_database_is_confirmed_on_one_publisher() -> None:
             )
         ).mappings().all()
 
-    from app.policy.independence import independent_publishers
+    from app.core.config import settings
+    from app.policy.independence import independent_publishers, is_confirmable
 
     offenders: list[str] = []
     for row in rows:
         refs = json.loads(row["sources_json"] or "[]")
-        publishers = independent_publishers(
-            str(r.get("source_id", "")) for r in refs if r.get("source_id")
-        )
-        if len(publishers) < 2:
+        ids = [str(r.get("source_id", "")) for r in refs if r.get("source_id")]
+        # The 2026-10-16 rule, not the old one: confirmed means *either* a vetted
+        # newsroom published it *or* two independent publishers agreed. Asserting
+        # two publishers here contradicted the policy this file is named after,
+        # and only failed once live ingestion actually wrote a confirmed
+        # single-source flag -- so the test outlived the rule by a day.
+        if not is_confirmable(ids, minimum=settings.MIN_SOURCES_FOR_CONFIRMED):
             offenders.append(
                 f"{row['event_key']} claims source_count={row['source_count']} but cites "
-                f"publishers {sorted(publishers)}"
+                f"publishers {sorted(independent_publishers(ids))}, none of them vetted"
             )
 
     assert offenders == [], (
-        "confirmed flags in the database that are not corroborated by two independent "
-        "publishers:\n  " + "\n  ".join(offenders)
+        "confirmed flags in the database that neither cite a vetted publisher nor are "
+        "corroborated by two independent ones:\n  " + "\n  ".join(offenders)
     )
 
 

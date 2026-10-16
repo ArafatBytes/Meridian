@@ -74,9 +74,16 @@ both. JG4 is where this stops being one number: an 11pm ride through flagged
 corridors should not get the same allowance as a 2pm commute.
 """
 
-CHECK_IN_WINDOW: Final = timedelta(minutes=5)
+CHECK_IN_WINDOW: Final = timedelta(minutes=1)
 """
 How long a check-in waits for an answer before the non-response is recorded.
+
+⚠️ **SHORTENED ON THIS BRANCH FOR FILMING: 5 minutes → 1 minute.**
+`feature/test-v` exists to shoot the demo video. The real ladder is
+deadline → buzz → *5 min* → buzz → *5 min* → guardian emailed, which is about
+thirteen minutes of waiting and unfilmable in a 25-second segment. At one minute
+the whole ladder runs in roughly four. **Do not merge this value.** The product
+value is five minutes and the reasoning for it is below, unchanged.
 
 The check-in is a liveness test first and a question second -- a phone that has
 merely been in a coverage gap wakes on the push and answers in one tap, and Dhaka

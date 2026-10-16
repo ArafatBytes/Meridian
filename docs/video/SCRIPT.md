@@ -1,4 +1,13 @@
-# Meridian — the video
+# Meridian — the long-form video
+
+> ⚠️ **This is not what is being filmed.** The 3-minute feature reel is
+> **[`SCENARIOS.md`](SCENARIOS.md)** — six segments, with the staging commands and the real numbers
+> read off the running system.
+>
+> This page is the 14–18 minute version: twelve chapters, one evening, one person. It is kept
+> because the **21:00 judge demo is improvised from a longer narrative than the reel**, and the
+> chapter order here is that narrative. Where the two disagree on a number, `SCENARIOS.md` is
+> current.
 
 A shot-by-shot script for a *how to use it* video shaped like a problem, not a feature tour.
 
