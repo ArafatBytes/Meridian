@@ -412,21 +412,28 @@ if ($holder) {
 # -----------------------------------------------------------------------------
 # 5b. Build only when the native side has actually moved
 # -----------------------------------------------------------------------------
-# The stamp is a hash of app.json and package.json - between them, every input
-# that changes the APK: plugins, permissions, the bundle id, the native
-# dependency list. JS is deliberately not in it, because JS comes from Metro
-# and never needs a rebuild.
+# The stamp is a hash of the files that decide what goes into the APK: plugins,
+# permissions, the bundle id, the native dependency list. JS is deliberately not
+# in it, because JS comes from Metro and never needs a rebuild.
 #
 # It over-triggers slightly (editing a scripts entry in package.json counts),
 # and that is the right way round: a needless three-minute build is an
 # annoyance, a skipped one is half an hour spent debugging a native module that
 # was never in the APK.
+#
+# google-services.json is in the list for the opposite reason - it is gitignored,
+# so it never arrives with a pull, only by hand. app.config.js drops the FCM
+# pointer while it is absent, which means its arrival changes the APK without
+# changing a single tracked file. Hashing "absent" as a value is what makes
+# dropping that file in trigger the rebuild that embeds it; without this, push
+# would stay broken and nothing would say why.
 $stampFile = "$Root\frontend\android\.meridian-build-stamp"
 
 function Get-NativeStamp {
     $text = ''
-    foreach ($f in @('app.json', 'package.json')) {
-        $text += (Get-Content "$Root\frontend\$f" -Raw)
+    foreach ($f in @('app.json', 'app.config.js', 'package.json', 'google-services.json')) {
+        $p = "$Root\frontend\$f"
+        if (Test-Path $p) { $text += (Get-Content $p -Raw) } else { $text += "<absent:$f>" }
     }
     $sha = [System.Security.Cryptography.SHA256]::Create()
     $hash = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($text))
@@ -446,7 +453,7 @@ if ($Build) {
 } elseif (-not (Test-Path $stampFile)) {
     $needsBuild = $true; $reason = 'no build stamp, so what is installed is unknown'
 } elseif ((Get-Content $stampFile -Raw).Trim() -ne $stamp) {
-    $needsBuild = $true; $reason = 'app.json or package.json changed since the last build'
+    $needsBuild = $true; $reason = 'a native input changed since the last build (app.json, app.config.js, package.json or google-services.json)'
 }
 
 if ($needsBuild -and -not $device) {

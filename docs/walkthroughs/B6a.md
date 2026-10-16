@@ -452,22 +452,39 @@ EXPO_PROJECT_ID=<the id from app.json>
 Expo's push service hands Android notifications to FCM, so FCM has to know about
 the app.
 
+> ⚠️ **One Firebase project for the team, not one each.** Expo holds a single FCM
+> V1 service-account key per Expo project, and `app.json`'s `owner` is
+> `warfather0991` — so the key that sends is from **that** account's Firebase
+> project. A `google-services.json` downloaded from a second Firebase project
+> carries a different sender ID, and every send is then rejected per-device as
+> `MismatchSenderId`. If somebody on the team has already done section B, do not
+> repeat it: ask them for their `google-services.json` and skip to step 5.
+
 1. <https://console.firebase.google.com> → **Add project** (any name).
 2. Inside it: **Add app → Android**. Package name **must be exactly**
    `com.Meridian.app` — it is in `app.json` under `android.package`, and a
    mismatch here is the `MismatchSenderId` rejection.
 3. Download **`google-services.json`** and put it at
    `D:\Meridian\frontend\google-services.json`.
-4. Point `app.json` at it. Add this inside `expo.android`:
+4. Nothing to do: `app.json` already points at it, under `expo.android`:
 
    ```json
    "googleServicesFile": "./google-services.json"
    ```
 
-   > It is **not** already in `app.json`, on purpose: a `googleServicesFile`
-   > pointing at a file that does not exist makes the Android build fail
-   > outright, which would have broken a working app for everyone who pulled
-   > this branch before doing this step.
+   > This step used to say the opposite — "it is **not** already in `app.json`,
+   > on purpose" — because a pointer at a file that is not there does not
+   > degrade the Android build, it kills it (`ENOENT ... × Prebuild failed`). The
+   > pointer was committed anyway in JG2, and since the file itself is
+   > gitignored, that is exactly what happened on the second machine: a merged
+   > `develop` that could not build at all.
+   >
+   > `frontend/app.config.js` now resolves that tension instead of this
+   > instruction doing it: the pointer is kept when the file exists and dropped
+   > with a loud warning when it does not. So the build works before you do
+   > section B, picks FCM up the moment you finish it, and no longer depends on
+   > anyone editing `app.json` by hand. `frontend/app.config.test.js` pins both
+   > halves.
 
 5. Firebase Console → ⚙ **Project settings → Service accounts → Generate new
    private key**. Save the JSON somewhere outside the repo.

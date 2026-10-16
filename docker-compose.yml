@@ -106,6 +106,23 @@ services:
       # of agents, so coverage has to be asserted from here.
       - ./frontend/src/services/agents.service.ts:/frontend/src/services/agents.service.ts:ro
       - ./frontend/src/features/status/agentCatalogue.ts:/frontend/src/features/status/agentCatalogue.ts:ro
+      # JG2 (Journey Guardian), added 16 Oct. Same arrangement, and it is the
+      # paragraph at the top of this block coming true a second time.
+      #
+      # `tests/invariants/test_journey_deadline.py` has three checks on the three
+      # strings both sides must spell identically: the check-in notification's
+      # Android channel id, the action-button category and id, and the grace
+      # period the planner prints before the journey exists. Each failure is
+      # silent in the worst way — buttons that are absent, or a person told
+      # "check in by 10:40" and asked at 10:55.
+      #
+      # All three were skipping. Their `needs_client` guard keys off checkIn.ts,
+      # which was not mounted, so the channels check skipped too even though
+      # channels.ts is mounted above. And `scripts/check.sh` skips host pytest
+      # for want of a backend venv — so these never ran anywhere, in either
+      # environment, which is exactly what lines 76-79 warn about.
+      - ./frontend/src/features/journey/checkIn.ts:/frontend/src/features/journey/checkIn.ts:ro
+      - ./frontend/src/features/journey/deadline.ts:/frontend/src/features/journey/deadline.ts:ro
       # Was ~700 MB of model weights (YOLOv9c 82 MB, CLIP ~600 MB), downloaded
       # on the first AI request. D07 deleted both: nothing in the image loads
       # local weights any more. Kept only because HF_HOME/TORCH_HOME still point

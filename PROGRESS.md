@@ -69,7 +69,7 @@ Full write-up, indicators of compromise and the remediation checklist:
 
 ## 📍 CURRENT STATE
 
-*Last updated: 2026-10-15 · by: Arafat · after: **B9 (fleet status — and defects 57 & 58), B20/B3/B6 skipped by the owner, B1 (four ADRs — and defect 56, an auth bypass), B2, B6b declined, police routing on, B6a closed***
+*Last updated: 2026-10-16 · by: Arafat · after: **Journey Guardian merged into `develop` with the backlog sweep — and the two things that stopped it building (`app.config.js`, a stale `npm install`)**. Before that: **B9 (fleet status — and defects 57 & 58), B20/B3/B6 skipped by the owner, B1 (four ADRs — and defect 56, an auth bypass), B2, B6b declined, police routing on, B6a closed***
 
 > ⚠️ **One test is red, deliberately. Do not "fix" it in code.**
 > `test_retention_is_declared.py::test_every_table_in_the_database_is_classified` reports
@@ -84,8 +84,19 @@ Full write-up, indicators of compromise and the remediation checklist:
 > make the suite green and the problem invisible, which is the one thing the tripwire exists to
 > prevent.
 >
-> So: **799 of 800 passing is the expected state right now.** A second red test is news; this
-> one is not.
+> **16 Oct — the checkout is now named, and the merge has already closed half of it.** It was
+> `fad2a74`, Journey Guardian's tip and the merge's second parent: `git cat-file -e
+> fad2a74:backend/app/models/user.py` succeeds, and on `d239b8c` it does not. The branch was cut
+> before `0491822` deleted that model, both machines point at one Supabase instance, and so every
+> API start on that branch ran `create_all` and put the table back. `develop` resolved the merge
+> with the model **deleted**, so once Nakib's checkout is on `develop` nothing can recreate it and
+> a single `drop table public.users;` finishes defect 9 for good. **Order matters — pull first,
+> then drop.** Note the migration is recorded `applied_by='marked'`, correctly (it *was* applied,
+> by paste, on 15 Oct), so `migrate.py up` will never re-run it: the drop has to be run by hand.
+>
+> So: **961 of 962 passing, 1 red, 0 skipped is the expected state right now.** A second red test
+> is news; this one is not. **A skip is news too** — there were three on 16 Oct and there are now
+> none; see the merge entry below.
 
 | | |
 |---|---|
@@ -93,7 +104,7 @@ Full write-up, indicators of compromise and the remediation checklist:
 | **NEXT SPRINT** | 🎉 **THE DEFECT LIST IS EMPTY.** All 55 are closed or consciously superseded. Closed 15 Oct: **9** (the SOS email said `mdarafat1661`, now says `Arafat Ullah`; `public.users` dropped, ledger marked, retention entry retired), **53** (video works on a second phone — it was the Unisoc SoC, not our code), **17** (closed by noticing §7.2 had cancelled its deliverable five days earlier; the thana lookup is now Dhaka-city-scoped and refuses rather than guessing), **2 / 16 / 55**, plus **6 / 8 / 29+5 / 30** found already fixed with their boxes never ticked, and **B0** by the owner. ✅ **B6a closed 15 Oct too:** zone alerts — the last unexercised Guardian claim and the only headline feature that works from a pocket — are **verified on a device** against a seeded flag, GUARDIAN.md Part 1 steps 1–5. Step 6 (the outdoor walk) stays optional, so the +250 m ring and the battery figure are still unmeasured; both are measurements, not code. ⏳ **Still needs the owner, not a sprint:** **sign off the 4 PROPOSED retention windows**, since nothing has been purged, and fill in GUARDIAN.md's blank handset and threshold fields. Then it is backlog rows only, consent asked per item, then D10 (Oct 23).<br><br>**🏁 THE BACKLOG SWEEP IS COMPLETE, 15 Oct — every row offered one at a time as accept or skip.** ✅ **B9 built** — `python -m app.agents status` plus a System Status screen under Profile → Safety. **It found two defects on its first run.** ⏭️ **Thirteen rows skipped and left untouched** (B3, B6, B10, B11, B11a's remainder, B12, B15, B16, B17, B18, B19, B20, B21, B22), **each annotated with what reading it found** so the next person starts from measurements, not from the row's original guess — see the sweep's handoff entry for the table. 🔴 **The defect list is no longer empty: 57 (fixed) and 58 (open, needs an owner decision).** 🛑 **One finding is a hard blocker on ever publishing and should not be lost: the Android `applicationId` is `com.Meridian.app` with a capital M, and it cannot be changed after the first Play release.** Deliberately not fixed before D10 — it needs a prebuild regeneration that would make the handset build a separate install. **Next up is D10 (Oct 23), not another sprint.** |
 | **Baton holder** | **free** |
 | **Trunk** | **`backlogs-fix`** — branched for the Track B defect sweep. **S30 and B7 are committed** (`9024718`, merged from `news-ingestion-pipeline` in PR #19, `a16e3b1`), as are the Android blur crash fix (`6b3e2f8`), dynamic routing (`945683b`) and B13 (`d5e4371`). The defect sweep itself is uncommitted — **the owner commits their own work; do not commit for them.** `android/` was regenerated by `expo prebuild --clean`, which relocated the Java package from `com/nirapodpoint/` to `com/meridian/` and bumped the Gradle wrapper to 9.3.1 |
-| **Build status** | 🟢 **800 pytest collected — 799 passing, 1 deliberately red** (the `public.users` tripwire above). **454 jest**, `tsc` clean, ruff clean on every touched file, mypy unchanged at its pre-existing 7. B9 added **+63 backend** and **+27 jest**. Earlier in the day: 737 → 800. The historical note below is kept because its warnings about reading the suite are still the ones that matter.<br><br>Previously: **680 pytest, 0 skipped** (643 + 16 for defect 9's `test_sos_alert_names_the_person.py`, + 20 for defect 17's `test_thana_lookup_is_dhaka_city.py`, + 1 that had been **silently skipping itself**: `test_single_source_never_confirmed.py:376`, the live-database corroboration invariant, was failing to connect because the module-level async engine was pinned to a dead event loop and a broad `except` reported that as "database unreachable". The B14 handoff's "643 exit 0" was really 643 passed **and 1 skipped** — read the skip line, not just the exit code.) Earlier steps: (601 → 600 when defect 2 deleted the dead speech test, → 603 with defect 55's `mark` tests, → 609 with D04's filter tests, → 631 with B11a's institutional-source and authority tests, → 643 with B14's retention registry; 559 before B7), **427 jest**, `tsc` clean, `eslint` 1 error — pre-existing (`MapScreen.tsx`, `react-hooks/purity`, `Date.now` in render). Backend suite runs only in Docker: `docker exec meridian-api python -m pytest tests/`. ⚠️ **Do not read the test count off `\| tail`** — progress dots wrap at 72 per line and `addopts = "-q"` means the `N passed` line does not survive the pipe, so the last line shows a remainder. Count the dots, or run with `-rs` and read the summary — **`exit=0` is not enough**, because a test that skips itself exits 0 and that is exactly how the corroboration invariant above went unnoticed. **Two `NameError`s were found by `ruff check --select F` on 14 Oct, on branches no test reaches** — one in committed code. A green suite is not a clean one; point the linter at what you touch |
+| **Build status** | 🟢 **962 pytest collected — 961 passing, 1 deliberately red** (the `public.users` tripwire above), **0 skipped** — the three `test_journey_deadline.py` skips were closed on 16 Oct with two compose mounts. **550 jest**, `tsc` clean, `eslint .` **1 error — the pre-existing `MapScreen.tsx` `react-hooks/purity`**, ruff clean on every touched file, mypy unchanged at its pre-existing 7. The Journey Guardian merge added **+162 backend** and **+96 jest**; `app.config.test.js` added **+6 jest**. ⚠️ **`eslint .` is worth running after any merge**: `expo-battery` and `expo-intent-launcher` arrived in `package.json` uninstalled, and two `import/no-unresolved` errors were the only thing in the repo that said so — `tsc` and both suites were green. Before the merge: 800 pytest / 454 jest. B9 added **+63 backend** and **+27 jest**. Earlier that day: 737 → 800. The historical note below is kept because its warnings about reading the suite are still the ones that matter.<br><br>Previously: **680 pytest, 0 skipped** (643 + 16 for defect 9's `test_sos_alert_names_the_person.py`, + 20 for defect 17's `test_thana_lookup_is_dhaka_city.py`, + 1 that had been **silently skipping itself**: `test_single_source_never_confirmed.py:376`, the live-database corroboration invariant, was failing to connect because the module-level async engine was pinned to a dead event loop and a broad `except` reported that as "database unreachable". The B14 handoff's "643 exit 0" was really 643 passed **and 1 skipped** — read the skip line, not just the exit code.) Earlier steps: (601 → 600 when defect 2 deleted the dead speech test, → 603 with defect 55's `mark` tests, → 609 with D04's filter tests, → 631 with B11a's institutional-source and authority tests, → 643 with B14's retention registry; 559 before B7), **427 jest**, `tsc` clean, `eslint` 1 error — pre-existing (`MapScreen.tsx`, `react-hooks/purity`, `Date.now` in render). Backend suite runs only in Docker: `docker exec meridian-api python -m pytest tests/`. ⚠️ **Do not read the test count off `\| tail`** — progress dots wrap at 72 per line and `addopts = "-q"` means the `N passed` line does not survive the pipe, so the last line shows a remainder. Count the dots, or run with `-rs` and read the summary — **`exit=0` is not enough**, because a test that skips itself exits 0 and that is exactly how the corroboration invariant above went unnoticed. **Two `NameError`s were found by `ruff check --select F` on 14 Oct, on branches no test reaches** — one in committed code. A green suite is not a clean one; point the linter at what you touch |
 | **Gazetteer** | **6,054 entries** (was 1,022), **3,241 of them roads** (was 0). Held-out accuracy **95.6%** (was 93.3%), **0 fabrications, 0 wrong pins**. Coverage of 193 real Dhaka references **84%** (was 71%); named roads **61%** (was 15%). Box now covers both city corporations, `90.30,23.66,90.54,23.94` |
 | **Slack** | D09 was scheduled Oct 22 and built Oct 10 — **twelve days ahead**, which is what paid for Guardian, B13, navigation, S30 and B7 |
 | **Phase** | 2 → **Track B.** D10 is still hardening-only and still scheduled Oct 23 |
@@ -502,6 +513,89 @@ migration plus its own idempotent ledger insert. Whoever owns D08 should record 
 | **Bangla on-device voice** | ❓ **unknown, and do not promise it.** `bn-BD`/`bn-IN` are in the preferred-locale list and the *matcher* handles Bangla correctly, but whether Google ships an on-device Bengali pack for a given handset is the phone's business. GUARDIAN.md step 7 is where you find out |
 | **Record the phone and both thresholds** | On-device recognition needs **Android 13+**, and the shout/shake thresholds are per-handset. GUARDIAN.md has fields for all three at the bottom, because "it works" is not portable here |
 
+### 🔀 16 Oct: `develop` holds both halves — and it could not build at all
+
+Journey Guardian (Nakib, JG1–JG3) and the backlog sweep (B9 and the skips) are merged into
+`develop`. The merge itself is clean and both test suites pass. **Building it on the second
+machine was impossible, for two unrelated reasons, and neither of them shows up in a diff.**
+
+**1. A pointer to a gitignored file.** JG2 added `"googleServicesFile": "./google-services.json"`
+to `app.json`. `google-services.json` is gitignored (`.gitignore`, "# Firebase"), so the pointer
+travels and the file does not. Expo does not warn about a missing target — it aborts:
+
+```
+Error: ENOENT: no such file or directory, open 'D:\Meridian\frontend\google-services.json'
+[android.dangerous]: withAndroidDangerousBaseMod: Cannot copy google-services.json ...
+× Prebuild failed
+```
+
+`docs/walkthroughs/B6a.md` step 4 **predicted this in writing** — it told the reader to add the
+pointer only after downloading the file, "which would have broken a working app for everyone who
+pulled this branch before doing this step." The warning was in the repo and the pointer was
+committed anyway. A doc cannot enforce anything.
+
+So it is enforced now. `frontend/app.config.js` is a dynamic config that changes exactly one
+value: it keeps the pointer when the file exists and drops it, with a warning naming the
+consequence, when it does not. Everything else still lives in `app.json`. `app.config.test.js`
+pins both halves plus the warning's once-per-process behaviour (6 tests), and its last test fails
+if anyone ever "fixes" a future ENOENT by deleting the pointer — which would turn a loud build
+failure into push silently off even for the person holding the file.
+
+`scripts/run.ps1`'s build stamp now hashes `app.config.js` and `google-services.json` too,
+including the string `<absent:...>` when a file is missing. That is the only reason dropping the
+file in later triggers the rebuild that embeds it: its arrival changes the APK without changing a
+single tracked file, so without this, push would stay broken and nothing would say why.
+
+**2. `node_modules` was stale.** The merge added `expo-battery` and `expo-intent-launcher` to
+`package.json`; they were not installed. `eslint .` showed it as two `import/no-unresolved`
+errors in `src/features/alerts/background.ts`, which reads like a code error and is not one.
+`npm install` plus a prebuild fixed it — both are native modules, so the APK has to be
+regenerated for autolinking to see them. This is now the first ⚠️ in `docs/RUNNING.md` §8.
+
+**What this costs, until Nakib hands over one file:** remote push does not reach this handset.
+`getExpoPushTokenAsync` needs FCM on Android, `notification.service.ts` catches the throw and
+returns null, so nothing crashes — the handset simply never registers a token. **Journey
+Guardian's "told if you did not arrive" is server-initiated, so that is the feature it costs.**
+Guardian **zone alerts are unaffected**: they are local notifications posted by the OS on the
+phone and need no Firebase project.
+
+**It must be Nakib's exact file, not a new one.** `app.json`'s `owner` is `warfather0991`, so the
+FCM V1 service-account key uploaded to Expo project `e6d4c6f9…` is from **his** Firebase project.
+A `google-services.json` from a different project carries a different sender ID and every send is
+rejected per-device as `MismatchSenderId` — the failure B6a §B names at step 2. That warning is
+now at the head of that section, because "just download one from Firebase" is the obvious wrong
+move and it fails at send time, silently, not at build time.
+
+**3. Three invariants that never ran, in either environment.** `scripts/check.sh` reported
+`3 skipped` from `test_journey_deadline.py` — the three checks on the strings both halves must
+spell identically: the check-in notification's Android **channel id**, the action-button
+**category and id**, and the **grace period** the planner prints before the journey exists. Each
+failure is silent in the worst way: buttons that are simply absent, or a person told "check in by
+10:40" and asked at 10:55.
+
+Their `needs_client` guard keys off `frontend/src/features/journey/checkIn.ts`, which was not
+mounted into the api container — so all three skipped, including the channel check, whose own file
+*is* mounted. And the skip reason says "checked at the repo root", where `check.sh` **skips host
+pytest for want of a backend venv**. So they ran nowhere, while the suite counted them.
+
+That is the paragraph at the top of the compose mount block coming true a second time, word for
+word: *"a contract test that never runs is worse than none, because the suite still counts it."*
+Two more read-only mounts (`checkIn.ts`, `deadline.ts`) and all three run and pass. **Backend
+skips are now zero — treat a new one as a finding, not as noise.**
+
+**Verified after all three fixes:** `expo prebuild --clean -p android` finishes, `gradlew
+assembleDebug` is **BUILD SUCCESSFUL** (5m 3s, a 212 MB debug APK), both new native modules
+autolink, `tsc` is clean, **550 jest** pass, and **961 of 962 pytest** pass with **0 skipped** —
+the one red being the `public.users` tripwire above, which the merge has now explained rather than
+changed. **Not yet run on the handset**: the phone was unplugged, so `expo run:android` and the
+app itself are the one step still unexercised. Everything up to the install is proven.
+
+**A trap this walked into, already documented at line 96 and still worth repeating:** piping
+pytest through `| tail` reports **`tail`'s** exit code, not pytest's, and `addopts = "-q"` means
+the `N passed` line does not survive the pipe either. The run looked like `exit code 0` with no
+failures listed, while pytest had actually exited **1**. Redirect to a file and read `$?` on the
+unpiped command — or count the progress dots, which is what gave 962.
+
 ### ▶️ RESUME HERE
 
 **Both phone items are now closed.** They were:
@@ -548,6 +642,17 @@ is falsely confirmed — corroboration from commonly-owned outlets is just silen
 remedies are written up under defect 58 and they differ in what the flag sheet claims, which is
 why it was not picked unilaterally. Worth noting the most truthful option would let the sheet say
 **"3 articles from 2 independent outlets"**, which is better than what it says today.
+
+**One thing to collect from Nakib, and only he can supply it:** his
+`frontend/google-services.json`. Drop it in and `app.config.js` wires FCM back up with no edit,
+and `run.ps1` rebuilds by itself because the file is in the build stamp. Until then remote push
+has no route to this handset, which is **Journey Guardian's overdue alert** — zone alerts are
+local and unaffected. **Do not create a second Firebase project to work around it**: the sender
+ID would not match the key uploaded to Expo and every send would be rejected as
+`MismatchSenderId`, at send time, silently. Decide too whether it should simply be committed —
+the `.env` reasoning applies exactly (private repo, and the alternative is this same hour lost on
+every machine and every clean checkout), and unlike a key, `google-services.json` ships inside
+every APK that leaves the building.
 
 **And run this before the rehearsal:** `docker exec meridian-api python -m app.agents status`.
 One command says whether the five scheduled agents are healthy, and it exits 1 if any is late or
