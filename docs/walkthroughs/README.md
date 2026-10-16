@@ -22,6 +22,7 @@ something else.
 | `JG1.md` | Signed off 15 Oct 2026 |
 | `JG2.md` | Signed off 15 Oct 2026, **with step 9 recorded as failing** — the lock-screen button is usually not drawn, and the journey card answers instead |
 | `JG3.md` | Signed off 16 Oct 2026 — guardian email reaches a real inbox. Steps B10–B11 were retired after the run: the rung that mailed every contact was removed |
+| [`JG-DEMO.md`](JG-DEMO.md) | **Not a proof — a performance.** JG1+JG2+JG3 end to end with a phone and an inbox and **no database access at all**, at real speed (~13 minutes for the escalation). The per-phase pages prove the machinery; this one shows the product |
 
 **A walkthrough is a play-script you run on a phone, as the user, with no knowledge of the code.**
 It is written by the sprint owner, at the end of the sprint, in the same commit as the work, and the
