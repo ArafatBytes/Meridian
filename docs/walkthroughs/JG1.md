@@ -1,14 +1,14 @@
 # JG1 — the journey that survives: start one, kill the app, find it waiting
 
-> ## ⚠️ NOT YET SIGNED OFF ON A DEVICE
+> ## ✅ SIGNED OFF — reported passing on a device, 15 Oct 2026
 >
-> Written with the work, in the same commit, as the rules require — but step 0
-> below needs a database change that only the owner can make, so nobody has run
-> this on a phone yet. Fill in the **Ran on** line and delete this box once it
-> has passed. If a step does not work, it moves to **Rough edges**; it does not
-> get softened.
+> Signed off by the owner rather than written up from a run: the steps were
+> exercised on the phone during JG2's and JG3's sessions, which start a journey,
+> kill the app and resume it as a matter of course, and nothing on this page has
+> failed. There is no per-step transcript, so if a later run finds a step that
+> does not work, it moves to **Rough edges** — it does not get softened.
 
-**Ran on:** _(not yet)_ · **By:** _(not yet)_ · **Date:** _(not yet)_ · **Takes:** 7 minutes
+**Ran on:** Android (Pixel 7 Pro) · **By:** nakib · **Date:** 2026-10-15 · **Takes:** 7 minutes
 
 ## What this proves
 

@@ -79,23 +79,79 @@ PROFILES = ("driving", "foot")
 
 ESCALATION_NORMAL = "normal"
 ESCALATION_CHECK_IN_SENT = "check_in_sent"
+ESCALATION_CHECK_IN_REPEATED = "check_in_repeated"
+ESCALATION_CONTACTS_NOTIFIED = "contacts_notified"
+ESCALATION_FULL_SOS = "full_sos"
 
 #: Every escalation state. Mirrors `journeys_escalation_check`.
 #:
-#: JG3 adds `contacts_notified` and `full_sos` here and in that CHECK, and the
-#: concept document's rule applies to each: no step may be skipped, and every
-#: step past the first requires a recorded non-response with a timestamp --
-#: which is `journeys.unanswered_at`.
-ESCALATION_STATES = (ESCALATION_NORMAL, ESCALATION_CHECK_IN_SENT)
+#: Ordered, and the order is the escalation: each name widens the circle by
+#: exactly one ring. `ESCALATION_LADDER` below depends on that, and a state
+#: inserted in the wrong place here would silently reorder the chain.
+ESCALATION_STATES = (
+    ESCALATION_NORMAL,
+    ESCALATION_CHECK_IN_SENT,
+    ESCALATION_CHECK_IN_REPEATED,
+    ESCALATION_CONTACTS_NOTIFIED,
+    ESCALATION_FULL_SOS,
+)
 
-#: The only escalation edges in JG2. It is a cycle on purpose: answering returns
-#: the journey to `normal`, and a journey that runs long enough is asked again.
-#: A terminal `check_in_sent` would mean the question could only ever be asked
-#: once per journey, which is not what "the trip goes quiet again" means.
+#: The escalation path, in order, excluding `normal`.
+#:
+#: Derived from `ESCALATION_STATES` rather than written out again: two lists of
+#: the same thing are two lists free to disagree, and the disagreement here
+#: would be a skipped ring.
+ESCALATION_LADDER = ESCALATION_STATES[1:]
+
+#: Every escalation edge. Mirrors the CHECKs in
+#: `20261015180000__journey_guardian.sql`.
+#:
+#: Two kinds of edge, and the asymmetry is the design:
+#:
+#: * **One step forward**, never two. `JOURNEY_GUARDIAN.md` §7 -- *"escalate in
+#:   steps, and never skip one"* -- and the migration enforces it with three
+#:   ordering CHECKs so a bug here is an IntegrityError rather than an email to
+#:   somebody's mother.
+#: * **Back to `normal` from anywhere.** Answering ends it, whatever ring the
+#:   journey had reached, which is what "the trip goes quiet again" means. It
+#:   makes the machine a cycle, so a journey that runs long is asked again --
+#:   deliberate, and a terminal state would mean one question per journey.
 ESCALATION_TRANSITIONS: dict[str, tuple[str, ...]] = {
     ESCALATION_NORMAL: (ESCALATION_CHECK_IN_SENT,),
-    ESCALATION_CHECK_IN_SENT: (ESCALATION_NORMAL,),
+    ESCALATION_CHECK_IN_SENT: (ESCALATION_NORMAL, ESCALATION_CHECK_IN_REPEATED),
+    ESCALATION_CHECK_IN_REPEATED: (ESCALATION_NORMAL, ESCALATION_CONTACTS_NOTIFIED),
+    ESCALATION_CONTACTS_NOTIFIED: (ESCALATION_NORMAL, ESCALATION_FULL_SOS),
+    #: Terminal except for an answer. There is no sixth ring in this product:
+    #: JG7's witnesses are fired by a *confirmed* emergency, never by an
+    #: unanswered check-in, so they are not an edge out of here.
+    ESCALATION_FULL_SOS: (ESCALATION_NORMAL,),
 }
+
+#: The timestamp column that records each escalation step, by state.
+#:
+#: The sweep gates every forward step on the *previous* state's column, so this
+#: mapping is what makes "no step without a recorded non-response" expressible
+#: in one place instead of repeated in three SQL statements.
+ESCALATION_RECORDED_AT: dict[str, str] = {
+    ESCALATION_CHECK_IN_SENT: "check_in_sent_at",
+    ESCALATION_CHECK_IN_REPEATED: "check_in_repeated_at",
+    ESCALATION_CONTACTS_NOTIFIED: "contacts_notified_at",
+    ESCALATION_FULL_SOS: "full_sos_at",
+}
+
+
+def next_escalation(current: str) -> str | None:
+    """
+    The one state `current` may escalate to, or None at the end of the ladder.
+
+    Reads `ESCALATION_TRANSITIONS` rather than indexing the ladder, so a state
+    whose edges are later restricted cannot be escalated past by this helper
+    while still looking reachable in the table.
+    """
+    for target in ESCALATION_TRANSITIONS.get(current, ()):
+        if target != ESCALATION_NORMAL:
+            return target
+    return None
 
 
 def may_transition(current: str, target: str) -> bool:

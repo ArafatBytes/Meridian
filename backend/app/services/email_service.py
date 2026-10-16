@@ -292,7 +292,9 @@ class EmailService:
             # without HTML had nothing to fall back to.
             msg = MIMEMultipart('mixed')
             msg['From'] = self.from_email
-            msg['To'] = ', '.join(to_emails)
+            # Was `msg['To'] = ', '.join(to_emails)`, which showed every
+            # emergency contact's address to every other one. See `_address`.
+            self._address(msg, to_emails)
             msg['Subject'] = f'EMERGENCY: {user_name} needs help - {when}'
 
             alternative = MIMEMultipart('alternative')
@@ -338,6 +340,94 @@ class EmailService:
         except Exception as e:
             logger.error(f"Failed to send SOS email: {e}")
             return False
+
+    async def send_guardian_message(
+        self,
+        to_emails: list[str],
+        subject: str,
+        body: str,
+        html: str | None = None,
+    ) -> bool:
+        """
+        One of JG3's journey messages, to a guardian or to every contact.
+
+        Deliberately not `send_sos_alert` with different words. That method is
+        subject-lined `EMERGENCY: {name} needs help`, builds its own template
+        styled for an emergency, and carries an attachment -- all correct for
+        somebody pressing the button, all wrong for *"Rina started her journey
+        home"*. A guardian who gets two emergency-shaped emails a night filters
+        them, and then the one that matters lands in a folder nobody opens.
+
+        `multipart/alternative`, and the plain part is not a formality: a client
+        that cannot render HTML shows the markup instead of the message, and
+        some of the cheapest handsets in the country are exactly that client.
+        The two parts carry the same sentences.
+
+        The wording is not decided here -- `app/journeys/guardian.py` owns both
+        halves and is unit-tested to the character, including the rule that only
+        the escalation may carry a location. This takes rendered strings because
+        a transport that knew which message it was carrying would be a second
+        place for that rule to live.
+        """
+        try:
+            msg = MIMEMultipart("alternative")
+            msg["From"] = self.from_email
+            # One line, always. `guardian.py` already collapses the names it
+            # renders, and this is the second half of the same rule, here
+            # because this is where a header is actually written: a newline in a
+            # header value makes Python raise `HeaderParseError` when the
+            # message is flattened, which this method would catch and report as
+            # a failed send -- after the caller had already marked the notice as
+            # sent. One stray newline in a display name would mean a guardian
+            # silently never hears anything again.
+            msg["Subject"] = " ".join(subject.split())
+            self._address(msg, to_emails)
+            # Plain first, then HTML. `multipart/alternative` is ordered
+            # least-preferred to most, and a client that gets it the other way
+            # round shows the text part to somebody whose phone could have
+            # rendered the other one.
+            msg.attach(MIMEText(body, "plain", "utf-8"))
+            if html:
+                msg.attach(MIMEText(html, "html", "utf-8"))
+
+            # Off the event loop, for the reason `send_sos_alert` documents at
+            # length: `smtplib` is synchronous and blocking it blocks every
+            # request, not just this one.
+            await asyncio.to_thread(self._send_blocking, msg)
+            logger.info("Journey message sent to %d recipient(s)", len(to_emails))
+            return True
+        except Exception as e:
+            # Returned, not raised. The caller is the minute sweep, and an
+            # agent that dies on a bad address stops escalating every other
+            # journey in the same run.
+            logger.error(f"Failed to send journey message: {e}")
+            return False
+
+    def _address(self, msg: MIMEMultipart, to_emails: list[str]) -> None:
+        """
+        Put the recipients on the message without showing them to each other.
+
+        One recipient goes in `To` -- it is their own address, and a message
+        addressed to nobody looks like bulk mail to both the reader and the
+        filter.
+
+        **More than one goes in `Bcc`.** `send_sos_alert` has always done
+        `msg['To'] = ', '.join(to_emails)`, which shows every emergency contact's
+        address to every other one. It did not matter much while the only caller
+        was an SOS to people who mostly know each other; it matters at JG3's
+        `full_sos`, which mails somebody's whole contact list -- a brother, an
+        employer and a neighbour learning each other's addresses because she was
+        late home.
+
+        `smtplib.send_message` reads `Bcc` to decide the envelope and strips the
+        header before transmission, so this is sufficient and needs no separate
+        recipient list.
+        """
+        if len(to_emails) == 1:
+            msg["To"] = to_emails[0]
+            return
+        msg["To"] = self.from_email
+        msg["Bcc"] = ", ".join(to_emails)
 
     def _build_video_part(self, video_path: str) -> MIMEBase | None:
         """

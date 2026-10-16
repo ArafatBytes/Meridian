@@ -19,6 +19,7 @@
  * server's number, and a client that recomputed it would be a second definition
  * of the grace period that could drift from the first without anything noticing.
  */
+import { ESCALATION_LADDER } from './escalation';
 
 /**
  * The server's grace period, in minutes, **for display only**.
@@ -119,10 +120,24 @@ export const HEARTBEAT_INTERVAL_MS = 60_000;
  * not just the state: `answered_at` survives the return to `normal`, and JG3
  * adds states after `check_in_sent` that are also "outstanding". One definition
  * means the card and the tests cannot disagree about what "waiting" means.
+ *
+ * JG3 is that widening, and it is the reason the note above was written. A
+ * journey in `check_in_repeated` has been asked a *second* time -- that rung
+ * exists to push the traveller again -- so reading only the first state would
+ * have taken the answer button away from the one person pressing it hardest,
+ * while the ladder went on to email their contacts. The same oversight was in
+ * the server's check-in endpoint, in the same words, and was found there first.
+ *
+ * `full_sos` is included deliberately. Nothing further happens after it, so the
+ * only thing left for the button to do is stop the climb and tell the person
+ * the journey heard them -- and the server accepts an answer from that state.
  */
 export function isAwaitingAnswer(journey: {
   state: string;
   escalation_state: string;
 }): boolean {
-  return journey.state === 'active' && journey.escalation_state === 'check_in_sent';
+  return (
+    journey.state === 'active' &&
+    (ESCALATION_LADDER as readonly string[]).includes(journey.escalation_state)
+  );
 }

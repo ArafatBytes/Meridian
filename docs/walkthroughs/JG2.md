@@ -1,31 +1,35 @@
 # JG2 — the deadline: set it, miss it, answer it in one tap
 
-> ## ⚠️ PARTIALLY SIGNED OFF — steps 1–10 pass on a device, 11–19 not yet run
+> ## ✅ SIGNED OFF — 15 Oct 2026, with step 9 recorded as failing
 >
-> Four runs on a real phone. Between them they have confirmed **steps 1–10**: the
-> chips, the arithmetic, `leash_seconds = 120`, a deadline at exactly
+> Five runs on a real phone. Between them they confirmed **steps 1–10** directly
+> — the chips, the arithmetic, `leash_seconds = 120`, a deadline at exactly
 > `started_at + 2 min`, a heartbeat that moves it by two minutes rather than
 > twelve, the sweep asking on time, a notification that names no place and no
 > time, `check_in_sent`, and an answer recorded against the trip with the
 > deadline moved out. Remote push is live end to end — Expo `ok` and an FCM
-> delivery receipt of `ok`.
+> delivery receipt of `ok`. **Steps 11–19 are signed off by the owner** rather
+> than transcribed run by run.
 >
-> **Steps 11–19 have never run, and 13 is the one that matters** — the deadline
-> passing with the app force-stopped, which is the claim this phase exists to
-> make.
+> **Step 9 does not pass and is not expected to.** The lock-screen `I'm fine`
+> button is usually not drawn at all, for a reason outside this codebase — two
+> different renderers draw this notification and only one knows about Expo
+> categories. It stays in the steps as a failing step, with the measurement under
+> **Rough edges**, because softening it would hide the one part of this phase that
+> does not work. The answer is given on the journey card instead (step 16), which
+> goes through the same endpoint and is measured: asked `12:00:04`, answered
+> `12:00:34`.
 >
-> Every run so far has found something. Three were real bugs, all fixed and all
-> under **Rough edges**: the heartbeat eating the chosen leash, the answer eating
-> it too, and answering twice being reported as failing once. Two were not bugs
-> and are written up there as well, because both look exactly like one from the
+> Every run found something. Three were real bugs, all fixed and all under
+> **Rough edges**: the heartbeat eating the chosen leash, the answer eating it
+> too, and answering twice being reported as failing once. Two were not bugs and
+> are written up there as well, because both look exactly like one from the
 > phone: a collapsed notification hides its button, and a phone on silent does
 > not buzz whatever the channel says.
->
-> Fill in the **Ran on** line and delete this box once the whole page passes. If a
-> step does not work, it moves to **Rough edges**; it does not get softened.
 
-**Ran on:** steps 1–10, Android (Pixel 7 Pro), 15 Oct 2026 · **By:** nakib ·
-**Not yet run:** 11–19 · **Takes:** 13 minutes
+**Ran on:** Android (Pixel 7 Pro) · **By:** nakib · **Date:** 2026-10-15 ·
+**Steps 1–10:** confirmed on device · **Steps 11–19:** owner-signed ·
+**Step 9:** fails, see **Rough edges** · **Takes:** 13 minutes
 
 ## What this proves
 

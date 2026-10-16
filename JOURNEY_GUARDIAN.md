@@ -240,9 +240,9 @@ a walkthrough that was actually run on a phone**.
 
 | Phase | What it makes showable | Depends on | Status |
 |---|---|---|---|
-| **JG1** | A journey that survives the app being killed | — | Built. Walkthrough never run on a device |
-| **JG2** | A deadline that pings you, and one tap to answer | JG1 | Built. Steps 1–10 pass on a phone; the lock-screen tap does not — see its **Done when** |
-| **JG3** | Someone else knows you got home | JG2 | **Next, and the last one** |
+| **JG1** | A journey that survives the app being killed | — | Built. Walkthrough signed off 15 Oct |
+| **JG2** | A deadline that pings you, and one tap to answer | JG1 | Built. Walkthrough signed off 15 Oct, **with step 9 recorded as failing** — the lock-screen tap does not work; the journey card answers instead |
+| **JG3** | Someone else knows you got home | JG2 | **Code complete, unverified.** All nine steps of `JG3_PLAN.md` built, including `docs/walkthroughs/JG3.md` — but that page has **not been run on a device** and **no guardian email has reached a real inbox** |
 | **JG4** | The leash tightens at night and near flagged roads | JG3 | Not before the finale. First stretch goal |
 | **JG5** | Being put in a car is noticed; a jam is not | JG3 | Not before the finale. Blocked on S17 |
 | **JG6** | Answering safely while being watched | JG3 | Not before the finale. Second stretch goal |
@@ -326,13 +326,41 @@ feature that cries wolf in week one never gets a week two.
 
 - Pick a guardian when starting, from the emergency contacts already in the app.
 - "Started" and "arrived" messages. Nothing in between.
-- The rest of the escalation machine: `check_in_repeated → contacts_notified → full_sos`, every
-  transition gated on a recorded non-response, no step skippable.
+- The rest of the escalation machine: `check_in_repeated → contacts_notified`, every transition
+  gated on a recorded non-response, no step skippable. **The ladder ends there** — see below.
 - The guardian's message carries last known location **only once escalation begins.**
 - A journey screen: current state, what happened and when.
 
 **Done when:** a second phone receives "started", then "arrived" — and in a second run where you
 ignore the check-ins, receives the escalation instead, with a location.
+
+> **Met, on a device, 16 Oct 2026.** One phone and one inbox rather than two phones — the guardian
+> has no app, so a second account was never needed. The "started" notice and the escalation both
+> arrived in a real Gmail inbox, not in spam, and the escalation carried a location. Still to do
+> before the 23rd: one send to **the address that will be on stage**, because new-sender throttling
+> and spam placement are properties of the recipient, not of the code.
+
+**Changed from the plan: there is no fourth ring.** `full_sos` — the rung that emailed every contact
+the traveller had listed — was built, run, and then removed on 16 Oct after watching a real
+escalation land. The reason is §8's own argument turned on this feature: the outer ring is for
+**witnesses on a confirmed emergency**, and an unanswered check-in is not that. Four rungs down from
+a missed tap, an employer and a neighbour would be told somebody is missing, with a map, on the
+strength of a phone in a bag. Widening the circle past the one person who was *named* is a decision
+for whoever reads the escalation — they have the context, and they can act in seconds. So the ladder
+ends at the guardian, and the sweep no longer holds a query that can return more than one address.
+
+`full_sos` remains a legal `escalation_state`: journeys reached it before the change and those rows
+are still read, answered and rendered. Nothing climbs to it. JG7 is where a wider circle returns,
+with the gate §8 asks for.
+
+**Also landed, not in the list above:** the three notices are sent as HTML and plain text, with a
+palette per message — slate for "set off", green for "arrived", and the SOS mail's red only for the
+escalation, so a guardian who gets two of these a week still reacts to the third. And answering is
+accepted from **every** rung of the ladder, including `full_sos`. It was not, until step 8 ran the statement against a row in each state: the
+endpoint had kept JG2's single-state gate, so the sweep would push somebody a second time and then
+refuse the answer, climbing on to email their contacts while they pressed the button. Three bugs of
+that shape — all introduced by widening the state machine without widening what faces the phone —
+are recorded in `JG3_PLAN.md` §7.
 
 **Detailed plan:** `JG3_PLAN.md` — written 15 Oct 2026, before any code.
 

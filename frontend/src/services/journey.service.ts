@@ -9,8 +9,11 @@
  * when it passes. `heartbeat` is the only thing that moves that deadline without
  * a person pressing anything, and `checkIn` is the answer.
  *
- * **Nothing here tells anybody else anything.** No guardian, no contact, no
- * message leaving the account -- that is JG3.
+ * JG3 is where something finally leaves the account: a journey can name one
+ * emergency contact as its guardian, and the server emails them when it starts,
+ * when it ends, and -- if nobody answers -- that nobody answered. The app's
+ * share of that is three things: offering the choice with **Nobody** selected,
+ * carrying a position once somebody is chosen, and showing what has been sent.
  *
  * Through the backend rather than straight to Supabase, like `casework`: the
  * state machine lives there, the `journeys` table has RLS on with no policies,
@@ -24,12 +27,21 @@ import { messageOf } from './casework.service';
 export type JourneyState = 'active' | 'arrived' | 'cancelled';
 
 /**
- * How worried the server is. JG2 has two; JG3 adds the rest of the chain.
+ * How worried the server is. Five states since JG3.
  *
  * A second axis, not more values on `JourneyState`: a journey being asked a
  * question is still `active`.
+ *
+ * The order is the ladder's own, and `ESCALATION_LADDER` below depends on it.
+ * It matches `backend/app/models/journey.py`; the server is the only thing that
+ * ever writes one, so this type exists to be read, not to be chosen from.
  */
-export type EscalationState = 'normal' | 'check_in_sent';
+export type EscalationState =
+  | 'normal'
+  | 'check_in_sent'
+  | 'check_in_repeated'
+  | 'contacts_notified'
+  | 'full_sos';
 
 /** What `Start` sends. Everything comes from state the map screen already has. */
 export interface JourneyStart {
@@ -54,6 +66,16 @@ export interface JourneyStart {
    * lands.
    */
   deadline_minutes?: number | null;
+
+  /**
+   * The one person told about this journey, as an `emergency_contacts` id. JG3.
+   *
+   * Omitted or null means nobody, and that is the default the picker starts on.
+   * Emailing somebody because they happened to be first in a contact list is
+   * not a mistake that can be taken back -- the message has already arrived --
+   * so the safe option is the one that needs no explanation.
+   */
+  guardian_contact_id?: string | null;
 }
 
 export interface Journey {
@@ -99,6 +121,53 @@ export interface Journey {
   unanswered_at: string | null;
 
   last_heartbeat_at: string | null;
+
+  // ---- JG3 -------------------------------------------------------------
+
+  /**
+   * The other three rungs, stamped as each fires.
+   *
+   * With the three above, these are the entire history of the outstanding
+   * question -- there is no events table, by choice -- so the journey screen's
+   * timeline is built from exactly these seven fields and nothing else.
+   *
+   * They describe **the current question, not the trip**: asking a new one
+   * clears all three. A journey that escalated, was answered and is being
+   * asked again has nothing left from the first round.
+   */
+  check_in_repeated_at: string | null;
+  contacts_notified_at: string | null;
+  full_sos_at: string | null;
+
+  /**
+   * Who is being told, and their name for the one line on the card.
+   *
+   * Both null when nobody is. The name comes down with the journey rather than
+   * being looked up in the contacts list, because the journey this feature
+   * exists for is the one the app was force-stopped out of -- on that cold
+   * start the card renders from one request and the contacts are not loaded
+   * yet, so a locally resolved name would be blank exactly when it matters.
+   */
+  guardian_contact_id: string | null;
+  guardian_name: string | null;
+
+  /**
+   * When the guardian was actually emailed, which is not when the journey
+   * started: the sweep sends it, so there is a minute or so in between, and a
+   * failed send leaves this null on purpose so the next sweep retries.
+   *
+   * The journey screen says "Ammu was told" only once this is set. Claiming it
+   * from `started_at` would be the app vouching for a message that may never
+   * have left the building.
+   */
+  started_notice_at: string | null;
+  arrived_notice_at: string | null;
+}
+
+/** A fix from the navigator, for the heartbeat to carry. JG3. */
+export interface JourneyPosition {
+  latitude: number;
+  longitude: number;
 }
 
 class JourneyService {
@@ -177,10 +246,24 @@ class JourneyService {
    * deadline does not move. Silence never buys an extension, and a phone that
    * cannot reach the server is indistinguishable from one that is not trying.
    */
-  async heartbeat(journeyId: string, remainingSeconds: number): Promise<Journey | null> {
+  async heartbeat(
+    journeyId: string,
+    remainingSeconds: number,
+    position?: JourneyPosition | null,
+  ): Promise<Journey | null> {
     try {
       const response = await apiService.post<any>(`/journeys/${journeyId}/heartbeat`, {
         remaining_seconds: Math.max(0, Math.round(remainingSeconds)),
+        // Sent only when the caller has one to send, and `useJourney` only has
+        // one when the journey has a guardian. JG3's privacy rule is enforced
+        // twice -- here, where the position is collected, and again in the
+        // server's own UPDATE, which refuses to store a point on a journey
+        // nobody is watching. Two enforcements because either one alone can be
+        // outlived: a stale build is the app's half failing, and a future
+        // client is the server's half earning its keep.
+        ...(position
+          ? { latitude: position.latitude, longitude: position.longitude }
+          : {}),
       });
       return response as unknown as Journey;
     } catch {

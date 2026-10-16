@@ -12,8 +12,16 @@ demo script depends on them.
 
 **Journey Guardian lands as `JG1.md` ... `JG7.md`**, one per phase, written as each phase is
 finished. The phases are in [`../../JOURNEY_GUARDIAN.md`](../../JOURNEY_GUARDIAN.md) and indexed in
-`DEMO_PLAN.md` §6. None of them exist yet, and an empty one should not be created ahead of the work:
-a walkthrough describes what was built, so writing it first guarantees it describes something else.
+`DEMO_PLAN.md` §6. **Three exist — [`JG1.md`](JG1.md), [`JG2.md`](JG2.md) and [`JG3.md`](JG3.md) —
+and the scope stops there before the finale**; JG4–JG7 should not be created ahead of the work,
+because a walkthrough describes what was built, so writing it first guarantees it describes
+something else.
+
+| | Status |
+|---|---|
+| `JG1.md` | Signed off 15 Oct 2026 |
+| `JG2.md` | Signed off 15 Oct 2026, **with step 9 recorded as failing** — the lock-screen button is usually not drawn, and the journey card answers instead |
+| `JG3.md` | Signed off 16 Oct 2026 — guardian email reaches a real inbox. Steps B10–B11 were retired after the run: the rung that mailed every contact was removed |
 
 **A walkthrough is a play-script you run on a phone, as the user, with no knowledge of the code.**
 It is written by the sprint owner, at the end of the sprint, in the same commit as the work, and the

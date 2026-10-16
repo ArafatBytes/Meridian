@@ -119,9 +119,22 @@ def _endpoint_sql() -> str:
 # ---------------------------------------------------------------------------
 
 
-def test_two_escalation_states_and_no_more():
-    """JG3 adds `contacts_notified` and `full_sos`. JG2 must not have guessed them."""
-    assert ESCALATION_STATES == (ESCALATION_NORMAL, ESCALATION_CHECK_IN_SENT)
+def test_jg2s_two_states_are_still_the_first_two():
+    """
+    This was `test_two_escalation_states_and_no_more`, asserting the tuple had
+    exactly two entries so JG2 could not guess at JG3's vocabulary. JG3 has now
+    landed and added three, so the scope boundary it guarded is gone.
+
+    What survives is the part that is still load-bearing: `normal` and
+    `check_in_sent` are the *first two*, in that order. `ESCALATION_LADDER` is a
+    slice of this tuple and the sweep escalates along it, so an insertion before
+    `check_in_sent` would silently reorder the chain and put a ring before the
+    first question.
+
+    The five-state assertion lives in `test_journey_guardian.py`, next to the
+    migration that now defines the CHECK.
+    """
+    assert ESCALATION_STATES[:2] == (ESCALATION_NORMAL, ESCALATION_CHECK_IN_SENT)
 
 
 def test_answering_returns_the_journey_to_normal():
@@ -138,17 +151,39 @@ def test_every_escalation_state_has_a_transition_entry():
 
 
 def test_unknown_escalation_states_have_no_edges():
-    assert not may_escalate("full_sos", ESCALATION_NORMAL)
+    """
+    `may_escalate` must refuse a name it does not know rather than raise, so a
+    stale value read from the database cannot take the sweep down.
+
+    The examples used to be `full_sos` and `contacts_notified`, which JG3 made
+    real -- so they now test the opposite of what they were written for. Replaced
+    with a name no phase will ever add.
+    """
+    assert not may_escalate("panic", ESCALATION_NORMAL)
+    assert not may_escalate(ESCALATION_NORMAL, "panic")
+    # And the one that matters: `normal` still cannot reach past the first ring.
     assert not may_escalate(ESCALATION_NORMAL, "contacts_notified")
 
 
-def test_the_escalation_check_lists_exactly_the_python_states():
+def test_this_migration_created_the_escalation_check():
+    """
+    This used to assert the CHECK listed exactly `ESCALATION_STATES`. It cannot
+    any more, and the reason is worth keeping: JG3's migration **replaces** this
+    constraint with a five-name version, so a JG2 file comparing its own
+    migration against today's Python tuple is comparing against a constraint
+    that no longer exists in the database.
+
+    So the equality moved to `test_journey_guardian.py`, beside the migration
+    that currently defines it, and what is checked here is the narrower fact
+    that remains true for ever: this migration is where the constraint was
+    introduced, with the two states JG2 knew about.
+    """
     match = re.search(
         r"check \(escalation_state in \(([^)]*)\)\)", _sql(), re.IGNORECASE
     )
     assert match, "journeys_escalation_check not found in the migration"
     in_sql = tuple(re.findall(r"'([a-z_]+)'", match.group(1)))
-    assert in_sql == ESCALATION_STATES, f"SQL says {in_sql}, Python says {ESCALATION_STATES}"
+    assert in_sql == (ESCALATION_NORMAL, ESCALATION_CHECK_IN_SENT)
 
 
 def test_an_answer_requires_a_question():
@@ -269,12 +304,32 @@ def test_a_heartbeat_does_not_move_a_deadline_once_a_question_is_outstanding():
 
 
 def test_an_answer_is_only_accepted_against_an_outstanding_question():
+    """
+    The rule JG2 wrote, with the state it named taken out of it.
+
+    This asserted `escalation_state = 'check_in_sent'` -- the only state a
+    question could be outstanding in when it was written. JG3 added three more,
+    and that exact string then became a bug rather than an invariant: the
+    endpoint refused an answer from a journey the sweep had already escalated,
+    which is the journey whose owner is being pushed hardest to answer. See
+    `test_journey_guardian.py::test_an_answer_is_accepted_from_every_rung_of_the_ladder`.
+
+    What survives is the half this test was really for, and it is unchanged:
+    there must be a question. An answer accepted on a journey in `normal` is a
+    deadline extension bought by replaying a notification action.
+    """
     sql = _endpoint()
     # To the end of the statement, not to the next name: `_SELECT_ONE` is
     # declared above `_CHECK_IN` in this module, so slicing to it ran backwards
     # and silently searched an empty string.
     check_in = sql[sql.index("_CHECK_IN") : sql.index("def _response")]
-    assert "and escalation_state = 'check_in_sent'" in check_in
+    assert "and escalation_state in ({_ANSWERABLE})" in check_in, (
+        "the answer path no longer filters on escalation_state at all, so an "
+        "answer out of nowhere would buy an extension"
+    )
+    from app.api.v1.endpoints.journeys import _ANSWERABLE
+
+    assert "'normal'" not in _ANSWERABLE
 
 
 def test_nothing_but_a_heartbeat_or_an_answer_writes_deadline_at():
@@ -324,13 +379,25 @@ def test_the_sweep_is_discovered_by_the_registry():
     assert "journey_watch" in agents()
 
 
-def test_the_non_response_branch_sends_nothing():
+def test_recording_a_non_response_is_separate_from_acting_on_it():
     """
-    JG2's second branch records and stops. JG3 is what acts on the record.
+    This was `test_the_non_response_branch_sends_nothing`, and its docstring
+    said: *"the moment the sweep can notify somebody about a non-response, JG2
+    has become JG3"*. JG3 has arrived and the sweep now does exactly that, so
+    that framing is spent -- `JG3_PLAN.md` predicted this test would be deleted.
 
-    This is the test that keeps the phase honest: the moment the sweep can notify
-    somebody about a non-response, JG2 has become JG3 and the scope line has
-    moved without anybody deciding to move it.
+    It is kept instead, because what it actually asserts turns out to be
+    narrower and still true: **`_RECORD_NON_RESPONSE` itself writes a timestamp
+    and nothing else.** The acting lives in separate statements
+    (`_REPEAT_THE_QUESTION` and the two above it) with their own gates, and that
+    separation is the reason the escalation can be reasoned about at all -- the
+    record is made by one statement that cannot send, and consumed by others
+    that cannot record.
+
+    Folding a send into this statement would mean a non-response and the
+    reaction to it became the same event, and "every step past the first
+    requires a recorded non-response" would no longer be checkable by looking
+    at a row.
     """
     source = AGENT.read_text(encoding="utf-8")
     record = source[source.index("_RECORD_NON_RESPONSE") : source.index("_DEVICES")]
@@ -511,35 +578,66 @@ def test_the_migration_backfill_uses_the_same_grace_period():
 # ---------------------------------------------------------------------------
 
 
-def test_no_guardian_or_contact_anywhere_in_this_phase():
+def test_the_check_in_itself_still_involves_no_guardian():
     """
-    JG2's own entry: the check-in goes to the person's own phone and the answer
-    comes back to this table. A guardian column, or a contact lookup in the
-    sweep, would mean the scope line moved without anybody deciding to move it.
+    This was `test_no_guardian_or_contact_anywhere_in_this_phase`, and it
+    covered the sweep too -- deliberately, as JG2's scope line. JG3 crossed that
+    line on purpose: `journey_watch` now joins `emergency_contacts` to send the
+    started and arrived notices, so the sweep is no longer in scope for this
+    rule and asserting otherwise would just block the phase it was written to
+    announce.
+
+    What is still true, and still worth a test, is the narrower claim:
+
+    * **JG2's migration is frozen.** It is forward-only and applied; a guardian
+      column appearing in it now would mean somebody edited a file that other
+      databases have already run, which is the one thing `migrate.py`'s
+      checksum exists to catch.
+    * **The check-in message has no guardian in it.** The push goes to the
+      traveller's own phone and asks them a question. That is as true in JG3 as
+      it was in JG2 -- the guardian is told by email, from the sweep, in a
+      different message composed in a different module. If a guardian ever
+      appears in `checkin.py`, the thing that arrives on a lock screen has
+      started naming a second person, and `JOURNEY_GUARDIAN.md` §5 is explicit
+      that a lock screen is visible to whoever is standing next to you.
     """
-    for path in (MIGRATION, AGENT, BACKEND / "app" / "journeys" / "checkin.py"):
+    for path in (MIGRATION, BACKEND / "app" / "journeys" / "checkin.py"):
         source = path.read_text(encoding="utf-8").lower()
         statements = re.sub(r"--[^\n]*", "", source)
         statements = re.sub(r'"""', "", statements)
-        for forbidden in ("guardian_id", "emergency_contact", "contacts_notified"):
+        # Identifiers, not the word. `guardian` on its own matches the prose
+        # reference to `JOURNEY_GUARDIAN.md §5` in `checkin.py` -- which is the
+        # reason the original version of this test said `guardian_id` and not
+        # `guardian`, and the reason broadening it was a mistake.
+        for forbidden in ("guardian_contact", "guardian_id", "emergency_contact", "contacts_notified"):
             assert forbidden not in statements, f"{forbidden!r} in {path.name} is JG3"
 
 
-def test_the_heartbeat_carries_no_position():
+def test_this_migration_still_stores_no_position():
     """
-    JG2 has no reader for a location: the check-in goes to this person's own
-    phone. The only message that needs a last known position is the escalation
-    JG3 sends to somebody else, and a location written before there is anything
-    to do with it is the privacy surface JG1 refused for the same reason.
+    This was `test_the_heartbeat_carries_no_position`, and it asserted
+    `JourneyHeartbeat.model_fields == {"remaining_seconds"}`. Its own docstring
+    named the condition under which it should go:
+
+        The only message that needs a last known position is the escalation JG3
+        sends to somebody else, and a location written before there is anything
+        to do with it is the privacy surface JG1 refused for the same reason.
+
+    JG3 is now that reader, so the heartbeat carries an optional position and
+    this file's claim over the schema has ended. The replacement invariant lives
+    in `test_journey_guardian.py`, and it is narrower but still real: a position
+    is stored **only for a journey that has a guardian**, which is the privacy
+    rule applied at the point of collection rather than at the point of use.
+
+    What is still checked here is that **JG2's migration** never grew one. It is
+    forward-only and already applied to databases other than this one; a
+    position column appearing in it now would mean the file was edited after the
+    fact, which is what `migrate.py`'s checksum exists to catch.
     """
-    from app.schemas.journey import JourneyHeartbeat
-
-    assert set(JourneyHeartbeat.model_fields) == {"remaining_seconds"}
-
     statements = re.sub(r"--[^\n]*", "", _sql())
     for forbidden in ("latitude", "longitude", "last_position", "st_makepoint"):
         assert forbidden not in statements.lower(), (
-            f"{forbidden!r} in the JG2 migration: this phase stores no position"
+            f"{forbidden!r} in the JG2 migration: this phase stored no position"
         )
 
 

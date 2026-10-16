@@ -183,7 +183,7 @@ The sweep grows from two branches to five, in one pass, ordered:
 2. `check_in_sent` unanswered past the window → record `unanswered_at` *(exists)*
 3. `unanswered_at` past the window → `check_in_repeated`, push the traveller **again**
 4. `check_in_repeated_at` past the window → `contacts_notified`, email the guardian with location
-5. `contacts_notified_at` past the window → `full_sos`, email every contact with location
+5. ~~`contacts_notified_at` past the window → `full_sos`, email every contact with location~~ **— removed.** The ladder ends at the guardian; see JG3.md *Rough edges*
 
 Each branch: `limit 500`, re-check the state inside the `UPDATE`, mark **before** sending (JG2's
 `_ask` does this deliberately — a crash after marking sends nothing, a crash before marking sends
@@ -242,10 +242,62 @@ Each step ends somewhere verifiable, so a day that runs out does not leave the t
 | 6 | Heartbeat carries optional position; replace the no-position test | Row shows `last_position` |
 | 7 | Sweep branches 3, 4, 5 with metrics | `agent_runs` metrics per branch |
 | 8 | Journey screen + guardian picker | On a phone |
-| 9 | `docs/walkthroughs/JG3.md`, **run on two phones** | The walkthrough rule |
+| 9 | `docs/walkthroughs/JG3.md`, **run on a phone with the guardian's inbox open somewhere** | The walkthrough rule |
 
 Steps 1–7 are the feature. Step 8 is what a judge sees. Step 9 is what makes it finished — a phase
 with working code and no run walkthrough is not finished.
+
+### Status, 15 Oct
+
+All nine steps are built. 743 backend tests, 508 frontend tests, both green; `ruff` clean on every
+file this phase touched; `tsc` clean. `docs/walkthroughs/JG3.md` is written — four runs (the happy
+path, the escalation, the private case, and the things that should be refused), with a clock
+fast-forward so the twenty-minute ladder can be demonstrated in two.
+
+This plan said "run on two phones", and that was wrong about its own design: the guardian has no
+app, no login and no screen (§6), so their half is an **address**, and a browser tab reads it. One
+phone and one inbox. A second Meridian account would prove nothing, because a guardian never signs
+in — the only step that wants another account is the foreign-contact 404, and the database already
+holds three accounts, two of them with a contact.
+
+**It has not been run on a device, so JG3 is not finished.** The walkthrough rule is that a page
+describes what somebody did, not what should happen, and this one still carries its "not yet run"
+box. In particular **no guardian email has reached a real inbox**: every proof so far is a
+rolled-back transaction, SMTP deliverability is untested, and a first message from a new sender to a
+Gmail address is the single likeliest way the demo of this phase fails.
+
+**Step 8 found three bugs that steps 1–7 had shipped**, all of them invisible to the test suite and
+all of them found by running something against the real database or the real renderer:
+
+| Bug | What it did | Found by |
+|---|---|---|
+| `JourneyResponse.escalation_state` still listed two states | Pydantic validates responses, so `GET /journeys/active` **500**ed on any escalated journey — the app would lose the card, the deadline and the answer button at the exact moment the feature started working | Constructing one response per state |
+| `_CHECK_IN` gated on `escalation_state = 'check_in_sent'` | A journey the sweep had escalated **could not be answered at all**. Ring 3 pushes the traveller a second time, so the person pressing hardest got a 409 while the ladder went on to email their contacts | Running the statement against a row in each of the four states; three answered nothing |
+| `journeys_notice_needs_guardian` | `on delete set null` plus a CHECK requiring a live guardian meant **deleting a contact who had ever been a guardian failed** with an IntegrityError. The contacts screen could only report "Failed to delete contact" | Running the `DELETE` in a rolled-back transaction |
+
+The third needed a new migration — `20261015190000__guardian_notice_outlives_the_contact.sql` —
+because the file that added the CHECK is applied and checksummed. The first two are the same
+mistake in two languages: a state machine widened in the model and the migration, while the two
+places that face the phone went on naming one state. The app had it too (`isAwaitingAnswer`).
+
+**Three more came out of the first real guardian journey**, and none of them was reachable from a
+fixture:
+
+| Bug | What it did | Found by |
+|---|---|---|
+| The escalation had no location to give | A journey heartbeated for twenty minutes and stored no position — the navigator drops fixes worse than 100 m accuracy, which indoors is all of them — so the most important email this product sends had no point in it | Running a journey on a tethered phone at a desk |
+| A multi-line POI label | `destination_label` from a map tap contained four lines in two scripts, which broke the escalation email's first sentence into four | Rendering the message from the real row |
+| A newline in a display name would have silenced a guardian for ever | Not an injection — Python raises instead of flattening — but the transport catches, reports a failed send, and the notice is **already marked sent**, so it is never retried | Testing what the header assignment does with the string the body had |
+
+The first was fixed by the traveller's own suggestion, which turned out to need no new data at all:
+`journeys.origin` is `not null` on every journey because the route was planned from it, so the
+escalation falls back to **where they set off from** — never dressed as a sighting, because a start
+point under the heading "where was she last" sends a searcher to the wrong end of a route.
+
+A fourth, smaller one came out of writing the journey screen's copy: a journey with **no** guardian
+still climbs the ladder, and the first version of the screen told its owner that "your guardian has
+been emailed" when nothing had been sent to anybody. The sweep also counted those climbs as
+`notices_failed`, which would have made a healthy run look broken; they are `nobody_to_tell` now.
 
 ---
 

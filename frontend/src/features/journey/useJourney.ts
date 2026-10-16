@@ -29,9 +29,11 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { isAwaitingAnswer } from './deadline';
 import {
   journeyService,
   type Journey,
+  type JourneyPosition,
   type JourneyStart,
 } from '../../services/journey.service';
 
@@ -75,7 +77,7 @@ export interface UseJourney {
    * once a minute, and a heartbeat that failed would silently leave the old one
    * showing -- so the card reads the journey it was given and nothing else.
    */
-  heartbeat: (remainingSeconds: number) => Promise<void>;
+  heartbeat: (remainingSeconds: number, position?: JourneyPosition | null) => Promise<void>;
 
   /** "I'm fine." Returns false when there was nothing to answer. */
   checkIn: () => Promise<boolean>;
@@ -174,13 +176,30 @@ export function useJourney(): UseJourney {
     [end],
   );
 
-  const heartbeat = useCallback(async (remainingSeconds: number) => {
-    const open = current.current;
-    if (!open) return;
-    // The result is discarded on purpose -- see the interface note. `heartbeat`
-    // in the service already swallows its own errors.
-    await journeyService.heartbeat(open.journey_id, remainingSeconds);
-  }, []);
+  const heartbeat = useCallback(
+    async (remainingSeconds: number, position?: JourneyPosition | null) => {
+      const open = current.current;
+      if (!open) return;
+
+      // JG3's privacy rule, at the point of collection: **no guardian, no
+      // position.** The caller passes whatever fix the navigator has, and this
+      // is where it is dropped, because the decision belongs to the journey
+      // rather than to the screen -- a journey with nobody to show a position
+      // to has no reason to send one, and the rule should not have to be
+      // remembered at each call site.
+      //
+      // The server enforces the same thing in the `UPDATE` that writes the
+      // heartbeat. Both halves on purpose: this one is what stops the position
+      // ever leaving the phone, and that one is what holds when a stale build
+      // or a future client sends it anyway.
+      const share = open.guardian_contact_id ? position ?? null : null;
+
+      // The result is discarded on purpose -- see the interface note. `heartbeat`
+      // in the service already swallows its own errors.
+      await journeyService.heartbeat(open.journey_id, remainingSeconds, share);
+    },
+    [],
+  );
 
   const refresh = useCallback(async () => {
     const open = await journeyService.active();
@@ -221,7 +240,11 @@ export function useJourney(): UseJourney {
       // available way to be wrong in this feature.
       await refresh();
       const after = current.current;
-      return !(after && after.escalation_state === 'check_in_sent');
+      // `isAwaitingAnswer` rather than a comparison, for the reason written in
+      // that function: JG3 added three more states a question can be
+      // outstanding in, and the one definition is what keeps this agreeing
+      // with the card that renders the button.
+      return !(after && isAwaitingAnswer(after));
     }
   }, [remember, refresh]);
 

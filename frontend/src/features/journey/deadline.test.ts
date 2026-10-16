@@ -149,7 +149,11 @@ describe('MapScreen wires the clock the way JG2 requires', () => {
     // not walking. Reporting progress for it would be the app vouching for
     // somebody standing still -- and vouching is exactly what a heartbeat does,
     // since it is the only thing that extends a deadline without a button press.
-    const effect = mapScreen.indexOf('journey.heartbeat(left)');
+    // `heartbeat(left` rather than the whole call: JG3 gave it a second
+    // argument -- the navigator's own fix, which `useJourney` drops when the
+    // journey has no guardian -- and the rule being checked here is about when
+    // the beat fires, not what it carries.
+    const effect = mapScreen.indexOf('journey.heartbeat(left');
     expect(effect).toBeGreaterThan(-1);
     const guard = mapScreen.lastIndexOf('if (!follow.active || !journey.journey) return;', effect);
     expect(guard).toBeGreaterThan(-1);
@@ -213,7 +217,13 @@ describe('answering twice is not a failure', () => {
     // stop sending.
     const body = hook.slice(hook.indexOf('const checkIn'), hook.indexOf('return { journey, loading'));
     expect(body).toContain('await refresh()');
-    expect(body).toContain("escalation_state === 'check_in_sent'");
+    // `isAwaitingAnswer` since JG3, which is the same question asked once
+    // rather than twice. The literal comparison this used to assert became a
+    // bug when the ladder grew: a journey the sweep had escalated past
+    // `check_in_sent` would have been read as "nobody is waiting", so a
+    // genuinely failed answer on an escalating journey would have been reported
+    // as success -- the opposite of the mistake this test was written for.
+    expect(body).toContain('isAwaitingAnswer(after)');
   });
 
   it('reports a failure only while the question is outstanding', () => {
@@ -221,7 +231,7 @@ describe('answering twice is not a failure', () => {
     // question is closed *or* the journey is gone; `return after && ...` would
     // invert it and warn on every successful answer.
     const body = hook.slice(hook.indexOf('const checkIn'), hook.indexOf('return { journey, loading'));
-    expect(body).toContain("return !(after && after.escalation_state === 'check_in_sent')");
+    expect(body).toContain('return !(after && isAwaitingAnswer(after))');
   });
 
   it('does not tell somebody their check-in failed in the words of a failed journey start', () => {

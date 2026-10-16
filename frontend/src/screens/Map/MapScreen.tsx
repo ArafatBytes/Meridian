@@ -59,6 +59,9 @@ import { NavigationBanner } from '../../features/navigation/NavigationBanner';
 import { FollowMarker } from '../../features/navigation/FollowMarker';
 import { useJourney } from '../../features/journey/useJourney';
 import { goesTo, startedAtLabel } from '../../features/journey/resume';
+import { guardianLine } from '../../features/journey/escalation';
+import { useGuardians } from '../../features/journey/useGuardians';
+import { shouldSuggest } from '../../features/search/suggest';
 import {
   DEADLINE_CHOICES,
   HEARTBEAT_INTERVAL_MS,
@@ -432,6 +435,25 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
    */
   const [deadlineChoice, setDeadlineChoice] = useState(0);
 
+  /**
+   * Who this journey will be told to, or null for nobody. JG3.
+   *
+   * **Null is the initial value and it is reset to null when route mode is
+   * left**, for the same reason `deadlineChoice` goes back to 0: a guardian
+   * chosen for a walk home at 11pm must not be inherited by tomorrow's trip to
+   * the shop. Emailing the wrong person is not recoverable -- the message has
+   * already arrived -- so the sticky version of this control would be a
+   * convenience bought with somebody else's trust.
+   */
+  const [guardianId, setGuardianId] = useState<string | null>(null);
+
+  /**
+   * The contacts the picker offers. Read once, from the table the contacts
+   * screen writes. See `useGuardians` for why it is read directly and why a
+   * contact with no email is shown rather than hidden.
+   */
+  const guardians = useGuardians();
+
   // Search State
   const [sourceLocation, setSourceLocation] = useState<Location | null>(null);
   const [sourceQuery, setSourceQuery] = useState('My Location');
@@ -440,6 +462,44 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [activeSearch, setActiveSearch] = useState<'source' | 'destination' | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+
+  /**
+   * Whether the text in the active field was typed by a person.
+   *
+   * The suggestion list is driven by the *contents* of the two fields, and the
+   * code writes to those fields too: a map tap puts "Selected Location" in the
+   * destination, a POI tap puts the place's name there, Resume puts the stored
+   * destination label there. Without this flag every one of those is treated as
+   * a search, and the geocoder answers the string it was handed -- which is how
+   * a tap on open ground in Dhaka produced a suggestion for *"A location
+   * selected by Seoul for its scenic views"*. It was not a wrong geocode; it was
+   * an honest answer to a question nobody asked.
+   *
+   * `activeSearch` cannot carry this on its own. The destination field has
+   * `autoFocus`, so on Resume its `onFocus` fires *after* the label is written
+   * and sets `activeSearch` back to 'destination' by itself.
+   */
+  const [typedQuery, setTypedQuery] = useState(false);
+
+  /**
+   * Answers already in flight are abandoned by bumping this, not cancelled.
+   * A request fired while someone was still typing can land after they have
+   * tapped the map, and the list it populates is the same unasked-for list.
+   */
+  const searchRun = useRef(0);
+
+  /**
+   * "The field now holds a choice, not a question." Called from every place that
+   * writes a destination into the box on the person's behalf.
+   */
+  const stopSuggesting = () => {
+    searchRun.current += 1;
+    setTypedQuery(false);
+    setSuggestions([]);
+    // The abandoned answer will not clear this on its way out, and a spinner
+    // that never stops is worse than one that stops a moment early.
+    setIsSearching(false);
+  };
 
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -458,23 +518,29 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       setSuggestions([]);
       return;
     }
+    const run = ++searchRun.current;
     setIsSearching(true);
     try {
       // D06, defect 10: through our own proxy, not nominatim.openstreetmap.org direct.
       // One identifying User-Agent, one shared Redis cache, and traffic the server can
       // see — rather than every phone spending the per-IP rate limit separately with
       // React Native's default agent.
-      setSuggestions(await geoService.search(query));
+      const results = await geoService.search(query);
+      // Superseded while this was in flight: either a newer keystroke, or a
+      // choice that means there is no longer a question to answer.
+      if (run === searchRun.current) setSuggestions(results);
     } finally {
-      setIsSearching(false);
+      if (run === searchRun.current) setIsSearching(false);
     }
   };
 
   useEffect(() => {
     const query = activeSearch === 'source' ? sourceQuery : destQuery;
     const timeoutId = setTimeout(() => {
-      // Don't search if it's "My Location" or empty
-      if (activeSearch && query.trim().length >= 3 && query !== 'My Location') {
+      // Only text a person typed is a search. Everything else in these fields was
+      // put there by the code, and already knows its own coordinates. See
+      // `shouldSuggest` for the Seoul viewpoint this is named after.
+      if (shouldSuggest({ typed: typedQuery, active: activeSearch, query })) {
         fetchSuggestions(query);
       } else {
         setSuggestions([]);
@@ -482,7 +548,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [sourceQuery, destQuery, activeSearch]);
+  }, [sourceQuery, destQuery, activeSearch, typedQuery]);
 
   const handleSuggestionSelect = (suggestion: any) => {
     const loc = {
@@ -514,7 +580,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       }
     }
 
-    setSuggestions([]);
+    stopSuggesting();
     setActiveSearch(null);
     Keyboard.dismiss();
   };
@@ -873,8 +939,18 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       // not be silently inherited by the next one -- that is a setting the person
       // made about a journey, not a preference about themselves.
       setDeadlineChoice(0);
+      stopSuggesting();
+      // And back to Nobody, which is the stronger version of the same argument:
+      // a deadline inherited by the wrong trip is a nuisance, a guardian
+      // inherited by the wrong trip is an email somebody did not mean to send.
+      setGuardianId(null);
     } else {
       setRouteMode(true);
+      // Re-read the contacts as the picker comes into view. Somebody who
+      // notices they have nobody to pick will go and add a contact, and the
+      // list was read once at mount -- so without this the person who just
+      // fixed the problem is the one who still sees it.
+      void guardians.reload();
     }
   };
 
@@ -910,6 +986,9 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     setRouteProfile(profile);
     setDestination(dest);
     setDestQuery(open.destination_label);
+    // The stored label is a record of where they were already going, not a
+    // search for somewhere new -- and the field it lands in takes focus by itself.
+    stopSuggesting();
 
     const here = currentLocation ?? (await getCurrentLocation());
     if (!here) {
@@ -943,6 +1022,10 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     const dest = { latitude: coord.latitude, longitude: coord.longitude };
     setDestination(dest);
     setDestQuery(label);
+    // A tap on the map is a choice, exactly like picking a suggestion: the
+    // coordinate is already known, so the label is a caption, not a query.
+    stopSuggesting();
+    Keyboard.dismiss();
     calculateRouteTo(sourceLocation || currentLocation, dest);
   };
 
@@ -1052,7 +1135,12 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     const beat = () => {
       const left = follow.remainingSeconds;
       if (typeof left !== 'number' || !Number.isFinite(left)) return;
-      void journey.heartbeat(left);
+      // The navigator's own last fix, which costs nothing: it is already
+      // subscribed for the progress line, so there is no second location
+      // watcher and no extra battery. `useJourney` drops it when the journey
+      // has no guardian -- JG3's privacy rule lives there rather than here,
+      // because it is a property of the journey and not of this screen.
+      void journey.heartbeat(left, follow.position);
     };
 
     // Not fired immediately: the deadline was set seconds ago from this same
@@ -1580,7 +1668,19 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
             opaque
             elevated
           >
-            <View style={styles.resumeRow}>
+            {/* The card itself opens the journey screen. JG3.
+
+                Not a button: by JG3 this card carries five possible states and
+                a history behind each, and the one thing a person wants when
+                they see "Ammu has been emailed" is to know when that happened
+                and what happens next. A chevron on the row would be a third
+                control beside two that already matter more. */}
+            <TouchableOpacity
+              style={styles.resumeRow}
+              onPress={() => navigation.navigate('Journey')}
+              accessibilityRole="button"
+              accessibilityLabel="Open this journey"
+            >
               <Ionicons
                 name={
                   awaitingAnswer
@@ -1608,8 +1708,20 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                     ? ` · check in by ${startedAtLabel(journey.journey.deadline_at)}`
                     : ''}
                 </Text>
+                {/* One line, and only when there is somebody to name. JG3.
+
+                    It is on the card rather than only on the journey screen
+                    because this is the card somebody sees at a glance while
+                    walking, and "is Ammu being told about this?" is a question
+                    with a real consequence attached -- the answer being
+                    invisible is how a feature like this surprises people. */}
+                {guardianLine(journey.journey) && (
+                  <Text style={styles.resumeGuardian} numberOfLines={1}>
+                    {guardianLine(journey.journey)}
+                  </Text>
+                )}
               </View>
-            </View>
+            </TouchableOpacity>
             <View style={styles.resumeActions}>
               {/* The same answer as the lock-screen button, through the same
                   endpoint. It is here because the notification is the part of
@@ -1725,6 +1837,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                 onChangeText={(text) => {
                   setSourceQuery(text);
                   setActiveSearch('source');
+                  setTypedQuery(true);
                 }}
                 onFocus={() => setActiveSearch('source')}
                 placeholder="Start location"
@@ -1755,6 +1868,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                 onChangeText={(text) => {
                   setDestQuery(text);
                   setActiveSearch('destination');
+                  setTypedQuery(true);
                 }}
                 onFocus={() => setActiveSearch('destination')}
                 placeholderTextColor={t.textSoft}
@@ -1859,6 +1973,111 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                     );
                   })}
                 </View>
+              </View>
+            )}
+
+            {/* Who gets told. JG3.
+
+                Under the deadline because it reads in that order: how long I am
+                giving myself, and who hears about it if I go past that.
+
+                **Nobody is selected until somebody picks a person**, and it goes
+                back to Nobody when route mode is left. Defaulting to the first
+                contact would be the app sending an email on somebody's behalf
+                because of a list order they never saw -- and unlike almost every
+                other default in this app, that one cannot be undone after the
+                fact. The whole feature is worth less if people stop trusting it
+                to stay quiet.
+
+                Contacts with no email address are shown and disabled rather than
+                hidden: JG3 sends email and nothing else, so one of those cannot
+                be a guardian (the server answers 422), but a contact somebody
+                deliberately saved should not silently vanish from a list of
+                their contacts. */}
+            {calculatedRoutes.length > 0 && (
+              <View style={styles.guardianBlock}>
+                <Text style={styles.deadlineLead}>
+                  {'If you go quiet, tell '}
+                  <Text style={styles.deadlineTime}>
+                    {guardianId
+                      ? guardians.options.find(o => o.id === guardianId)?.name ?? 'nobody'
+                      : 'nobody'}
+                  </Text>
+                </Text>
+                <View style={styles.guardianRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.guardianChip,
+                      guardianId === null && styles.deadlineChipActive,
+                    ]}
+                    onPress={() => setGuardianId(null)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: guardianId === null }}
+                    accessibilityLabel="Tell nobody about this journey"
+                  >
+                    <Text
+                      style={[
+                        styles.deadlineChipText,
+                        guardianId === null && styles.deadlineChipTextActive,
+                      ]}
+                    >
+                      Nobody
+                    </Text>
+                  </TouchableOpacity>
+
+                  {guardians.options.map(option => {
+                    const chosen = option.id === guardianId;
+                    return (
+                      <TouchableOpacity
+                        key={option.id}
+                        style={[
+                          styles.guardianChip,
+                          chosen && styles.deadlineChipActive,
+                          !option.usable && styles.guardianChipUnusable,
+                        ]}
+                        disabled={!option.usable}
+                        onPress={() => setGuardianId(option.id)}
+                        accessibilityRole="button"
+                        accessibilityState={{
+                          selected: chosen,
+                          disabled: !option.usable,
+                        }}
+                        accessibilityLabel={
+                          option.usable
+                            ? `Tell ${option.name} about this journey`
+                            : `${option.name} has no email address and cannot be told`
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.deadlineChipText,
+                            chosen && styles.deadlineChipTextActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {option.usable ? option.name : `${option.name} · no email`}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* What picking somebody actually does, in one line, before it
+                    happens rather than after. Three emails is the entire extent
+                    of it, and saying so is what makes the choice informed --
+                    "share my journey" could mean live tracking, and this is not
+                    that. */}
+                {guardianId !== null && (
+                  <Text style={styles.guardianNote}>
+                    They get an email when you set off, when you arrive, and if you
+                    stop answering check-ins.
+                  </Text>
+                )}
+                {guardianId === null && !guardians.loading && guardians.options.length === 0 && (
+                  <Text style={styles.guardianNote}>
+                    Add an emergency contact with an email address to use this.
+                  </Text>
+                )}
               </View>
             )}
           </Glass>
@@ -2013,6 +2232,12 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                   // sum, and a second copy of it on the client is a second
                   // definition free to drift from the first.
                   deadline_minutes: DEADLINE_CHOICES[deadlineChoice].minutes,
+                  // JG3. Null unless somebody was picked, which is the default.
+                  // The server checks that this contact belongs to the caller
+                  // before it writes it -- an id from another account would have
+                  // Meridian email a stranger about a trip they know nothing
+                  // about -- so this is a choice being sent, not a fact.
+                  guardian_contact_id: guardianId,
                 });
                 // Here, and not in an effect watching the hook: a failure message
                 // held in state is the same string every time, so the second
@@ -2488,6 +2713,10 @@ StyleSheet.create({
     resumeText: { flex: 1 },
     resumeTitle: { ...type.label, color: t.text },
     resumeDetail: { ...type.caption, color: t.textSoft },
+    // "Telling Ammu". JG3. In the brand colour rather than caption-grey: it is
+    // the one line on this card that says something is leaving the phone, and a
+    // person scanning it should not have to read the third line to notice.
+    resumeGuardian: { ...type.caption, color: t.brand },
     resumeActions: {
       flexDirection: 'row',
       justifyContent: 'flex-end',
@@ -2832,6 +3061,37 @@ StyleSheet.create({
     deadlineChipActive: { backgroundColor: t.brandStrong },
     deadlineChipText: { ...type.caption, color: t.textSoft },
     deadlineChipTextActive: { color: t.onBrand },
+
+    // The guardian picker. JG3.
+    guardianBlock: {
+      paddingTop: space.sm,
+      marginTop: space.sm,
+      borderTopWidth: 1,
+      borderTopColor: t.lineSoft,
+      gap: space.sm,
+    },
+    // Wraps, unlike the deadline row. That row is always four fixed chips; this
+    // one is however many contacts somebody has, with names of any length, so
+    // `flex: 1` across a row would squeeze five contacts into unreadable
+    // slivers. Wrapping grows the card downwards instead, which is the
+    // direction it has room in.
+    guardianRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
+    guardianChip: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: 32,
+      paddingHorizontal: space.md,
+      // Wide enough that a one-letter nickname is still a target rather than a
+      // dot, and capped so one long name cannot push the row off the card.
+      minWidth: 72,
+      maxWidth: 200,
+      borderRadius: radius.md,
+      backgroundColor: t.fillSoft,
+    },
+    // Visibly present and visibly not available. The label says why, so this is
+    // the signal rather than the explanation.
+    guardianChipUnusable: { opacity: 0.45 },
+    guardianNote: { ...type.caption, color: t.textSoft },
     connectorLine: {
       width: 2,
       // Purely decorative -- it says "these two fields are the ends of one

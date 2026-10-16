@@ -291,6 +291,11 @@ export type MapStackParamList = {
   // map, not a section of its own. `CrimeReport` and `ReportDetails` above have
   // been declared since D01 with no screen behind either; see MapNavigator.
   News: undefined;
+  // JG3. The open journey: what state it is in, what has been sent, and the
+  // answer button. Takes no parameter -- there is at most one open journey and
+  // `useJourney` is the one definition of which, so passing an id would create
+  // a second way for this screen to disagree with the card that opened it.
+  Journey: undefined;
 };
 
 export type ReportsStackParamList = {
