@@ -1777,9 +1777,22 @@ read, and establishing that is most of the deliverable.**
       `tests/invariants/test_single_source_never_confirmed.py` asserts it from the *original*
       migration's text and would keep passing over the hole; or `source_count = 2` for one
       source, which `risk_flags_sources_match_count` permits and which is false data.
-      **Resolved as weight:** `AUTHORITATIVE_PUBLISHERS` makes `confidence()` return 1.0
-      instead of `UNCONFIRMED_WEIGHT`, so an official report is not discounted as a rumour and
-      `confirmed` keeps meaning two independent publishers at every layer.
+      **Resolved as weight on 15 Oct:** `AUTHORITATIVE_PUBLISHERS` makes `confidence()` return
+      1.0 instead of `UNCONFIRMED_WEIGHT`, so an official report is not discounted as a rumour.
+- [x] **Reopened and decided the other way on 16 Oct, for every publisher, with a
+      measurement.** Of 19 flags built from live news, **15 had a single source** — so the
+      two-publisher rule left 79% of the surface drawn as a hollow pin and scored at 0.6,
+      including a Prothom Alo report of a fire. The owner's position: all ten publishers were
+      hand-picked against stated criteria and a national newsroom does not invent a fire, so
+      treating one as an anonymous claimant is the thing that is wrong.
+      `confirmed` now means **"a vetted newsroom or institution published this, or two
+      independent publishers agreed"** (`VETTED_PUBLISHERS`), and
+      `20261016150000__a_vetted_newsroom_is_confirmation.sql` replaces the CHECK.
+      **The cost, recorded:** corroboration was also the only independent check on *our own
+      extraction* — two newsrooms read separately landing on the same kind, place and six-hour
+      window. What remains against a mis-extraction is `MIN_CONFIDENCE`, the gazetteer's
+      refusal to guess, and the mobility filter. `unconfirmed` now means a **community
+      report**, which is the distinction users most need drawn.
 - [x] **The authoritative set has a tripwire, because it is dangerous in the direction
       `_SAME_OWNER` is not.** An ownership entry can only *reduce* what we confirm; an
       authority entry *increases* a single source's weight, with no permissive default. One

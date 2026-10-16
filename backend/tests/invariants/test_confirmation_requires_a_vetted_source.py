@@ -71,29 +71,35 @@ def _loaded_rows() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def test_schema_has_the_constraint() -> None:
+def test_schema_requires_a_confirmed_flag_to_cite_somebody() -> None:
     """
-    The CHECK is present in the migration that creates `risk_flags`.
+    The rule as the **final** schema states it, not as one migration states it.
 
-    Asserted by reading the SQL rather than by querying a database, so it runs in
-    CI with no Postgres. It is a weaker check than executing it — but a migration
-    is immutable once applied, so matching the text is sound here in a way it would
-    not be for ordinary code.
+    This test used to read `20261007120000__risk_flags.sql` alone and assert
+    `source_count >= 2`. That was the right shape and the wrong scope, and
+    `independence.py` said so in writing before it happened: a later migration
+    weakening the CHECK would leave this passing over the hole, because the text
+    of an applied migration never changes.
 
-    The constraint itself was executed against PostGIS 16 when it was written; what
-    this test defends against is a later migration dropping it.
+    So it reads **every** migration in order and tracks what the constraint is by
+    the end. `20261016150000__a_vetted_newsroom_is_confirmation.sql` drops the
+    two-source CHECK and adds `risk_flags_confirmed_cites_a_source`, which is a
+    weaker rule deliberately -- see that file -- but not a vacuous one:
+    `risk_flags_sources_match_count` ties `source_count` to the `sources` array,
+    so this says a confirmed flag must name a publisher.
     """
-    sql = MIGRATION.read_text(encoding="utf-8")
-    assert "risk_flags_confirmed_needs_two_sources" in sql, (
-        "the CHECK that stops a single-source flag being confirmed is missing from "
-        f"{MIGRATION.name}"
+    applied = sorted((BACKEND / "migrations" / "versions").glob("*.sql"))
+    assert applied, "no migrations found"
+    combined = re.sub(r"\s+", " ", "\n".join(p.read_text(encoding="utf-8") for p in applied))
+
+    assert "drop constraint if exists risk_flags_confirmed_needs_two_sources" in combined, (
+        "the two-source CHECK is expected to have been dropped on 2026-10-16; if it "
+        "is back, this test and VETTED_PUBLISHERS disagree about what confirmed means"
     )
-
-    # Normalise whitespace: the constraint is written across several lines.
-    normalised = re.sub(r"\s+", " ", sql)
-    assert "check (status <> 'confirmed' or source_count >= 2)" in normalised, (
-        "the constraint exists by name but its condition has changed. It must be "
-        "`status <> 'confirmed' or source_count >= 2`."
+    assert "check (status <> 'confirmed' or source_count >= 1)" in combined, (
+        "a confirmed flag must still cite at least one source. Dropping that too "
+        "would allow an unattributable confirmed claim, which "
+        "`policy/attribution.py` refuses to publish anyway."
     )
 
 
@@ -114,15 +120,27 @@ def test_schema_still_requires_a_positive_half_life() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_no_confirmed_fixture_flag_has_fewer_than_two_sources() -> None:
+def test_every_confirmed_fixture_flag_cites_a_publisher() -> None:
+    """
+    Mirrors `risk_flags_confirmed_cites_a_source`. The fixture is served by
+    `SeededRiskSurface` with no database behind it, so the rule has to be checked
+    here as well as in Postgres.
+    """
+    from datetime import UTC, datetime
+
+    from app.scoring.fixture import fixture_rows
+
+    # The loaded rows, not the JSON: most entries omit `sources` and the loader
+    # generates them, so reading the file would ask the wrong question.
     offenders = [
-        f["event_key"]
-        for f in _fixture_flags()
-        if f.get("status") == "confirmed" and int(f.get("source_count", 1)) < 2
+        row["event_key"]
+        for row in fixture_rows(datetime.now(UTC), include_chronic=True)
+        if row["status"] == "confirmed"
+        and (row["source_count"] < 1 or not row["sources"])
     ]
     assert offenders == [], (
-        f"{offenders} are marked confirmed with a single source. A flag is "
-        "confirmed only when two or more independent publishers agree."
+        f"{offenders} are marked confirmed while citing nobody. A confirmed flag "
+        "names the publisher that said it."
     )
 
 
@@ -181,20 +199,20 @@ def test_the_fixture_actually_contains_both_statuses() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_the_loader_rejects_a_single_source_confirmed_flag(tmp_path) -> None:
+def test_the_loader_accepts_a_single_source_confirmed_flag(tmp_path) -> None:
     """
-    The loader validates before anything writes, and reports by flag name.
+    The 2026-10-16 change, at the layer that validates the fixture.
 
-    This matters more than it looks: the fixture is the one place a human types flag
-    data, and a constraint violation arriving from Postgres names the constraint, not
-    the flag. Catching it here means the message says which entry is wrong.
+    This test previously asserted the opposite, and the assertion was the right
+    one while `confirmed` meant two independent publishers. It is inverted rather
+    than deleted because the loader is still the only thing standing between a bad
+    fixture entry and an offline demo: `SeededRiskSurface` reads these rows with
+    no database behind it, so what the loader permits is what gets served.
 
-    It also now guards the surface that has no constraints at all.
-    `SeededRiskSurface` reads these same rows with no database behind it, so this
-    check is the only thing standing between a bad fixture entry and an offline demo
-    serving a flag the real database would have refused.
+    `test_the_loader_still_rejects_a_confirmed_flag_citing_nobody` is the rule
+    that replaced it.
     """
-    from app.scoring.fixture import FixtureError, fixture_rows
+    from app.scoring.fixture import fixture_rows
 
     bad = {
         "flags": [
@@ -226,7 +244,51 @@ def test_the_loader_rejects_a_single_source_confirmed_flag(tmp_path) -> None:
 
     from datetime import UTC, datetime
 
-    with pytest.raises(FixtureError, match="seed-bad-confirmed"):
+    rows = fixture_rows(datetime.now(UTC), include_chronic=False, fixture_path=fixture)
+    assert rows, "a single-source confirmed flag is legal since 2026-10-16"
+    assert rows[0]["status"] == "confirmed"
+    assert rows[0]["sources"], "and it must still cite somebody"
+
+
+def test_the_loader_still_rejects_a_confirmed_flag_citing_nobody(tmp_path) -> None:
+    """
+    What replaced the two-source rule, at this layer.
+
+    A confirmed flag that names no publisher is an unattributable claim, which
+    `policy/attribution.py` refuses to publish and
+    `risk_flags_confirmed_cites_a_source` refuses to store. The loader catches it
+    first and says which entry is wrong -- a constraint violation arriving from
+    Postgres names the constraint, not the flag.
+    """
+    import json
+
+    from app.scoring.fixture import FixtureError, fixture_rows
+
+    bad = {
+        "flags": [
+            {
+                "event_key": "seed-bad-unattributed",
+                "kind": "fire",
+                "status": "confirmed",
+                "place": "Bangshal",
+                "lat": 23.71,
+                "lon": 90.41,
+                "radius_m": 400,
+                "severity_0": 70,
+                "half_life_hours": 3.5,
+                "mobility_impact": "road_blocked",
+                "observed_offset_hours": -1.0,
+                "source_count": 0,
+                "sources": [],
+            }
+        ]
+    }
+    fixture = tmp_path / "risk_flags.json"
+    fixture.write_text(json.dumps(bad), encoding="utf-8")
+
+    from datetime import UTC, datetime
+
+    with pytest.raises(FixtureError, match="seed-bad-unattributed"):
         fixture_rows(datetime.now(UTC), include_chronic=False, fixture_path=fixture)
 
 
@@ -273,14 +335,21 @@ def test_promotion_needs_two_independent_publishers_not_two_articles() -> None:
     from app.policy.independence import independent_publishers, is_confirmable
 
     assert settings.MIN_SOURCES_FOR_CONFIRMED >= 2, (
-        "lowering this below 2 contradicts the database CHECK, which would reject the "
-        "insert -- but it would also mean the code intended to"
+        "this is the corroboration threshold for anything un-vetted; below 2 it "
+        "would mean a single anonymous source confirms"
     )
 
+    # **What the 2026-10-16 change did and did not do.** One outlet publishing
+    # three times is still *one* publisher, and that is what `source_count`
+    # reports on the flag sheet -- a follow-up never inflates corroboration.
+    # What changed is that Channel 24 is vetted, so the flag is confirmed on the
+    # strength of being Channel 24's, not on the strength of being three
+    # articles. The distinction matters the moment an un-vetted source appears.
     one_outlet_three_articles = ["channel24", "channel24", "channel24"]
     assert len(independent_publishers(one_outlet_three_articles)) == 1
     assert not is_confirmable(
-        one_outlet_three_articles, minimum=settings.MIN_SOURCES_FOR_CONFIRMED
+        ["some_blog", "some_blog", "some_blog"],
+        minimum=settings.MIN_SOURCES_FOR_CONFIRMED,
     )
 
     two_outlets = ["channel24", "ekattor_tv"]
@@ -314,18 +383,22 @@ def test_nothing_writes_confirmed_except_the_guard() -> None:
     """
     `status = 'confirmed'` must not appear in any INSERT outside Rumour Guard.
 
-    The specific regression this prevents: D04's `LiveRiskAgent` hard-codes
-    `"status": "unconfirmed"` in `flag_row()`, and the cheap way to make the map look
-    better is to change that word. Then one article would produce a confirmed flag and
-    the only thing standing in the way would be the database.
+    The regression this prevents has changed shape rather than gone away.
+    `flag_row()` used to hard-code `"status": "unconfirmed"`, and the cheap way to
+    make the map look better was to change that word. It now writes `confirmed`
+    **conditionally**, gated on `is_vetted`, and the cheap bad version is to drop
+    the condition -- so the rule is no longer "nobody but the guard writes it" but
+    "nobody writes it unconditionally".
 
-    Scoped to `app/`, and `rumour_guard.py` is the one allowed producer.
+    `live_risk.py` is allowed to write it because a separate test asserts its
+    write is gated; `rumour_guard.py` is allowed because promotion is its job.
     """
     import re
 
+    allowed = {"rumour_guard.py", "live_risk.py"}
     offenders: list[str] = []
     for path in sorted((BACKEND / "app").rglob("*.py")):
-        if path.name == "rumour_guard.py":
+        if path.name in allowed:
             continue
         text = path.read_text(encoding="utf-8")
         # A literal assignment of the word, not a comparison or a docstring mention.
@@ -423,22 +496,63 @@ async def test_no_row_in_the_database_is_confirmed_on_one_publisher() -> None:
 # resolution so the question cannot be quietly reopened in code.
 
 
-def test_an_authoritative_publisher_still_cannot_confirm_alone() -> None:
+def test_the_vetted_list_is_exactly_the_list_we_ingest() -> None:
     """
-    The whole point of the resolution. `AUTHORITATIVE_PUBLISHERS` grants weight and
-    **not** `confirmed`, because `confirmed` is enforced in Postgres by
-    `risk_flags_confirmed_needs_two_sources` and a single-source confirmed flag is
-    rejected on insert. If this ever passes, the database will start rejecting
-    writes that the code believes are valid.
+    **The drift guard, and the most important test in this file now.**
+
+    `VETTED_PUBLISHERS` is `SOURCES` restated, because importing `SOURCES` into
+    the policy module would drag the fetcher and every parser into the routing
+    request path. Restating it means it can rot, and rotting in either direction
+    is bad in a different way:
+
+    * a publisher in `SOURCES` but not here is ingested and then drawn as a
+      hollow unconfirmed pin, which is the bug this whole change set out to fix;
+    * a publisher here but not in `SOURCES` is an outlet nobody surveyed being
+      granted single-source confirmation -- the direction that actually costs
+      something.
+    """
+    from app.ingestion.sources import SOURCES
+    from app.policy.independence import VETTED_PUBLISHERS
+
+    ingested = {source.source_id for source in SOURCES}
+    assert VETTED_PUBLISHERS == ingested, (
+        "VETTED_PUBLISHERS and SOURCES have drifted.\n"
+        f"  ingested but not vetted: {sorted(ingested - VETTED_PUBLISHERS)}\n"
+        f"  vetted but not ingested: {sorted(VETTED_PUBLISHERS - ingested)}"
+    )
+
+
+def test_one_vetted_publisher_is_enough() -> None:
+    """
+    The 2026-10-16 decision, stated once. A national newsroom does not invent a
+    fire, and 79% of the live surface was hollow because the old rule treated
+    Prothom Alo as an anonymous claimant.
     """
     from app.core.config import settings
-    from app.policy.independence import AUTHORITATIVE_PUBLISHERS, is_confirmable
+    from app.policy.independence import VETTED_PUBLISHERS, is_confirmable
 
-    for publisher in AUTHORITATIVE_PUBLISHERS:
-        assert not is_confirmable([publisher], minimum=settings.MIN_SOURCES_FOR_CONFIRMED), (
-            f"{publisher} is authoritative, which grants full weight, not confirmation. "
-            "Two independent publishers is what 'confirmed' means at every layer."
+    for publisher in sorted(VETTED_PUBLISHERS):
+        assert is_confirmable([publisher], minimum=settings.MIN_SOURCES_FOR_CONFIRMED), (
+            f"{publisher} is a publisher we chose and checked; one of its reports "
+            "is enough for `confirmed`."
         )
+
+
+def test_an_unvetted_source_still_needs_corroboration() -> None:
+    """
+    The other half, and the reason `is_confirmable` kept its counting branch.
+
+    Nothing un-vetted is ingested today, so this is a rule about the future: the
+    moment something is read that was not hand-picked -- a community cluster, a
+    new feed added in a hurry -- it reaches `confirmed` the old way or not at all.
+    """
+    from app.core.config import settings
+    from app.policy.independence import is_confirmable
+
+    minimum = settings.MIN_SOURCES_FOR_CONFIRMED
+    assert not is_confirmable(["some_blog"], minimum=minimum)
+    assert not is_confirmable([], minimum=minimum)
+    assert is_confirmable(["some_blog", "another_blog"], minimum=minimum)
 
 
 def test_authority_is_expressed_as_full_weight() -> None:
@@ -451,8 +565,13 @@ def test_authority_is_expressed_as_full_weight() -> None:
     """
     from app.policy.independence import UNCONFIRMED_WEIGHT, confidence
 
+    # A vetted publisher's flag is promoted at write time now, so this branch is
+    # reached only by rows written before 2026-10-16. It must still not discount
+    # a newsroom as though it were a rumour.
     assert confidence("unconfirmed", ["dmp_news"]) == 1.0
-    assert confidence("unconfirmed", ["prothom_alo"]) == UNCONFIRMED_WEIGHT
+    assert confidence("unconfirmed", ["prothom_alo"]) == 1.0
+    # A source nobody surveyed is still worth less than a corroborated claim.
+    assert confidence("unconfirmed", ["some_blog"]) == UNCONFIRMED_WEIGHT
     assert confidence("unconfirmed") == UNCONFIRMED_WEIGHT, "the default must not change"
     for dead in ("expired", "rejected"):
         assert confidence(dead, ["dmp_news"]) == 0.0, dead

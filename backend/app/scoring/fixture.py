@@ -254,10 +254,13 @@ def check_rows(rows: list[dict[str, Any]]) -> None:
             problems.append(f"{key}: radius_m must be 1-20000")
         if not -90 <= row["lat"] <= 90 or not -180 <= row["lon"] <= 180:
             problems.append(f"{key}: coordinates out of range")
-        if row["status"] == "confirmed" and row["source_count"] < 2:
+        # Mirrors `risk_flags_confirmed_cites_a_source`, which replaced
+        # `risk_flags_confirmed_needs_two_sources` on 2026-10-16 when one vetted
+        # newsroom became enough. A confirmed flag must still cite *somebody*: an
+        # unattributable claim is what `policy/attribution.py` refuses to publish.
+        if row["status"] == "confirmed" and row["source_count"] < 1:
             problems.append(
-                f"{key}: status 'confirmed' needs source_count >= 2 "
-                "(verification before publication)"
+                f"{key}: status 'confirmed' must cite at least one source"
             )
         if len(row["sources"]) > row["source_count"]:
             problems.append(
