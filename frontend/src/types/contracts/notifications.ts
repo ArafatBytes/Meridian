@@ -109,6 +109,15 @@ export interface PushDiagnosis {
   lastRejection: string | null;
   maxAlertsPerHour: number | null;
   alertRadiusM: number | null;
+  /**
+   * Whether Android may freeze the app in the background, or null where the
+   * question does not apply — off Android, or when the query failed.
+   *
+   * Unlike every other field here, this one does not stop a notification being
+   * *delivered*; it stops it being delivered *on time*, which for a journey
+   * check-in is the same thing. See `features/alerts/background.ts`.
+   */
+  batteryOptimized: boolean | null;
 }
 
 /**
@@ -148,11 +157,27 @@ export function blockingPushProblem(diagnosis: PushDiagnosis): string | null {
   if (diagnosis.registeredDevices === 0) {
     return 'This device is not registered for alerts yet. Reopen the app to register it.';
   }
-  // A rejection is reported last: push is configured, and this is the only
-  // signal that FCM credentials are missing on the EAS project — the one
-  // prerequisite the server cannot check directly.
+  // A rejection is reported last among the hard failures: push is configured,
+  // and this is the only signal that FCM credentials are missing on the EAS
+  // project — the one prerequisite the server cannot check directly.
   if (diagnosis.lastRejection) {
     return `The last alert was rejected: ${diagnosis.lastRejection}`;
+  }
+  // Last of all, and deliberately after `lastRejection`: everything above this
+  // means no notification arrives at all, while this one means it arrives and
+  // then waits for the phone to be woken. It is the least wrong state to be in
+  // and the only one the user can fix in two taps, so it is the thing to say
+  // once nothing else is broken.
+  if (diagnosis.batteryOptimized === true) {
+    // Names the symptom before the cause, because the symptom is what the
+    // person has noticed: notifications that turn up when they pick the phone
+    // up. A sentence opening with "battery optimisation" is about Android
+    // rather than about them.
+    return (
+      'Check-ins may not arrive until you wake the phone. Android is allowed ' +
+      'to pause Meridian in the background — allow it to run unrestricted so ' +
+      'a journey check-in reaches you while the phone is in your pocket.'
+    );
   }
   return null;
 }

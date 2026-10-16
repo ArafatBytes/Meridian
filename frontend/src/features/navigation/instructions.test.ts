@@ -57,6 +57,25 @@ describe('a named manoeuvre', () => {
   });
 });
 
+describe('a manoeuvre with no modifier', () => {
+  it('still says it is a turn', () => {
+    // OSRM sends `type: turn` without a modifier at some junctions. The phrasing
+    // fell through to "Continue", so the banner read "Continue onto Mirpur Road"
+    // at a corner the user had to turn at -- the one wrong answer available,
+    // because it is confidently the opposite of what to do. "Turn" names the
+    // manoeuvre without inventing a side.
+    expect(
+      stepInstruction(hint({ name: 'Mirpur Road', maneuver_type: 'turn', modifier: '' })),
+    ).toBe('Turn onto Mirpur Road in 120 m');
+  });
+
+  it('still says continue for a manoeuvre that is one', () => {
+    expect(
+      stepInstruction(hint({ name: 'Mirpur Road', maneuver_type: 'new name', modifier: '' })),
+    ).toBe('Continue onto Mirpur Road in 120 m');
+  });
+});
+
 describe('an unnamed manoeuvre', () => {
   it('never says "onto" with nothing after it', () => {
     const instruction = stepInstruction(hint({ name: '', modifier: 'left' }));

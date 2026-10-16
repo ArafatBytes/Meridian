@@ -187,6 +187,9 @@ export const RouteComparisonCard: React.FC<RouteComparisonCardProps> = ({
       // view it blurs, and overflows the render thread's stack. The process dies
       // with no redbox. See `BlurTarget.tsx`.
       blur={false}
+      // And `opaque`, because this card is dense with numbers and sits directly
+      // on top of the map's own labels. See `Glass.tsx`.
+      opaque
       elevated
     >
       {/* Ranked tabs. The recommended route is index 0 by composite score, and saying so

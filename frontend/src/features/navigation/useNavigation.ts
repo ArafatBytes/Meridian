@@ -23,20 +23,31 @@
  * removes it on stop and on unmount. Nothing else in the app is affected either
  * way.
  *
- * ## What it refuses to do
+ * ## It re-routes on its own, slowly and on purpose
  *
- * **It never re-routes on its own.** Off-route raises a flag and the UI offers a
- * button. That is not laziness; it is this product's central claim. The route the
- * user is following was *chosen* — they were shown a comparison, a safety score and
- * a sentence explaining what it avoids. Silently swapping it for another one
- * discards the only thing that makes this app different from a maps app, and does
- * it at the moment the user is least able to look at the screen. A recalculation
- * also costs an OSRM call plus flag and cluster scoring, which on a venue network
- * can take seconds and fail.
+ * It did not, once, and the argument against was this product's central claim: the
+ * route being followed was *chosen*, from a comparison with a safety score and a
+ * sentence explaining what it avoids, and silently swapping it discards the only
+ * thing separating this from a maps app — at the moment the user is least able to
+ * look at the screen. A recalculation also costs an OSRM call plus flag and cluster
+ * scoring, which on a venue network can take seconds and fail.
  *
- * **It does not announce streets.** See `nextTurn` in `progress.ts`: the backend
- * does not ask OSRM for `steps`, so nothing here knows a road's name. A side and a
- * distance is what the geometry supports, so a side and a distance is what it says.
+ * The owner asked for it anyway, and the delay and the cooldown now carry that
+ * argument instead of a refusal: `AUTO_REROUTE_AFTER_MS` on top of
+ * `OFF_ROUTE_STRIKES` fixes is roughly fourteen seconds of genuinely being
+ * elsewhere before anything is replaced, and `AUTO_REROUTE_COOLDOWN_MS` keeps a
+ * disagreement between the GPS and the road geometry from becoming a request loop.
+ * The banner says what is happening before it happens, and the user can tap the
+ * button rather than wait.
+ *
+ * ## It does announce streets, where OSM has a name
+ *
+ * The backend asks OSRM for `steps`, so a manoeuvre arrives with a type, a
+ * modifier and a road name. `instructions.ts` is where that becomes a sentence, and
+ * the part worth knowing is what happens when the name is missing — which on a
+ * Dhaka lane is most of the time. The phrasing degrades in two stages, named
+ * manoeuvre to unnamed manoeuvre to pure geometry, and never says "onto" with
+ * nothing after it.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -342,7 +353,22 @@ export function useNavigation({
           // Fire and forget: the new route arrives as a `path` change, which resets
           // progress through the effect below. Awaiting here would block the fix
           // handler on a network call.
-          void Promise.resolve(rerouteRef.current(position)).catch(() => {});
+          //
+          // `finally` is what makes a FAILED attempt recoverable, and without it
+          // this was a trap. `rerouting` is sticky, and the only thing that cleared
+          // it was a new path arriving -- so when the recalculation came back with
+          // nothing (no signal, the router down, no route found), the route list
+          // never changed, the flag never cleared, and the banner read "Finding a
+          // new route..." for the rest of the walk. The manual button is disabled
+          // while that flag is set, so the user could not retry by hand either, at
+          // the one moment they most needed to.
+          //
+          // It fires on success too, where it is redundant: the path change has
+          // already cleared the flag. Both paths agree on false, so the order they
+          // run in does not matter.
+          void Promise.resolve(rerouteRef.current(position))
+            .catch(() => {})
+            .finally(() => setState(current => ({ ...current, rerouting: false })));
         }
       } else {
         offRouteSince.current = null;

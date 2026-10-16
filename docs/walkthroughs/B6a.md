@@ -484,23 +484,34 @@ the app.
 ## C. Build and install the development build
 
 ```powershell
-cd D:\Meridian\frontend
-npx expo prebuild --clean       # regenerates android/ from app.json
-npx expo run:android            # builds and installs on the attached phone
+.\scripts\run.ps1
 ```
 
-Needs Android Studio's SDK and a phone in USB-debugging mode. If you would rather
-not build locally:
+That is the whole step. `run.ps1` keeps a stamp of `sha256(app.json +
+package.json)` at `frontend/android/.meridian-build-stamp`, and A and B above both
+change `app.json` -- so it will report *"app.json or package.json changed since
+the last build"* and run `expo prebuild` then `expo run:android` itself, in that
+order. The order is the point: `expo run:android` only prebuilds when `android/`
+is **missing**, so running it alone against an existing folder compiles the old
+manifest and leaves you with a stamp claiming the phone matches an `app.json` it
+does not. Needs the phone in USB-debugging mode; 2-6 minutes cold.
+
+If you would rather not build locally:
 
 ```powershell
 npx eas-cli@latest build --platform android --profile development
 ```
 
-That produces an installable APK in the cloud (slower, no Android SDK needed).
+That produces an installable APK in the cloud, and needs an `eas.json` with a
+`development` profile, which this project does not have yet.
 
-> `prebuild --clean` **regenerates `android/`**. That directory is committed on
-> this project, so check `git diff --stat android/` afterwards and make sure
-> nothing hand-edited was lost.
+> **`android/` is gitignored, not committed** -- `git ls-files frontend/android`
+> returns nothing. An earlier version of this page said the opposite and told you
+> to check `git diff --stat android/` afterwards for lost hand edits; there is
+> nothing there to lose, and `run.ps1` says as much in its own comments. The two
+> things in that folder that look hand-made are not: `debugOptimized/` is a build
+> variant Expo's own template generates, and `.meridian-build-stamp` is written
+> by `run.ps1` at the end of a build that succeeded.
 
 ## D. Switch delivery on
 

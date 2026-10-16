@@ -137,8 +137,33 @@ class PushMessage:
 
     title: str
     body: str
-    category: AlertCategory
+
+    #: Which *risk alert* category this is, or `None` for a notification that is
+    #: not a risk alert at all.
+    #:
+    #: `None` arrived with JG2's journey check-in, which is a question about the
+    #: sender's own trip rather than a claim about a road. It goes on its own
+    #: channel, carries no flag, is recorded against `journeys` rather than
+    #: `sent_alerts`, and is deliberately exempt from the hourly rate cap -- a
+    #: safety question that a person misses because they had already read five
+    #: traffic notifications is the feature working backwards. None of that is
+    #: expressible as another `AlertCategory`, so it is not one.
+    category: AlertCategory | None = None
+
     data: dict[str, Any] = field(default_factory=dict)
+
+    #: Overrides the channel the category would pick. Required when `category`
+    #: is None, since there is then nothing to derive it from.
+    channel: str | None = None
+
+    #: The Expo *notification category* — the lock-screen action buttons.
+    #:
+    #: Not the same thing as `category` above and the clash of names is Expo's,
+    #: not ours. The client registers a category id with
+    #: `setNotificationCategoryAsync` and Android draws its actions under the
+    #: notification; the id has to be a string both sides agree on, the same kind
+    #: of silent cross-codebase contract as `channel_id`.
+    action_category: str | None = None
 
     @property
     def channel_id(self) -> str:
@@ -146,12 +171,18 @@ class PushMessage:
         The Android channel. Must match a channel the app has created, or Android
         files the notification under a default channel with no sound.
 
-        `NOTIFICATION_CHANNELS` in `frontend/src/constants/app.constants.ts` is
-        the other half of this, and `test_channel_ids_match_the_client` reads that
-        file to assert the two agree — a mismatch is silent on both sides and
-        shows up only as a notification that arrives without the importance it
-        was supposed to have.
+        `frontend/src/features/alerts/channels.ts` is the other half of this, and
+        `test_alert_channels_match_the_client.py` reads that file to assert the
+        two agree — a mismatch is silent on both sides and shows up only as a
+        notification that arrives without the importance it was supposed to have.
+
+        That test reads the string literals out of this function's body, so the
+        explicit `channel` branch is invisible to it. The channel it carries is
+        pinned by the phase that introduced it instead:
+        `test_journey_deadline.py::test_the_check_in_channel_exists_on_the_client`.
         """
+        if self.channel is not None:
+            return self.channel
         return "risk_alert" if self.category != AlertCategory.TEST else "system"
 
 

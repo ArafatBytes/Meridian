@@ -101,6 +101,9 @@ export const NavigationBanner: React.FC<NavigationBannerProps> = ({
       // also the one surface on screen while the user is walking, so the per-frame
       // GPU cost would be the least affordable here of anywhere in the app.
       blur={false}
+      // Opaque for the same reason, and it matters most here: this is the one
+      // surface being read at walking pace, at arm's length, outdoors.
+      opaque
       elevated
     >
       {phase === 'locating' && (

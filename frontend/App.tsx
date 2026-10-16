@@ -18,6 +18,8 @@ import './src/features/geofence/task';
 import { GuardianProvider } from './src/features/guardian/GuardianProvider';
 import { refreshZonesIfEnabled } from './src/features/geofence/service';
 import { NotificationService, LocationService } from './src/services';
+import { registerCheckInCategory } from './src/features/journey/checkIn';
+import { answerFromNotification } from './src/features/journey/answerFromNotification';
 import {
   registerForAlerts,
   watchForegroundRegistration,
@@ -104,6 +106,22 @@ function App(): React.JSX.Element {
         // SDK 53). `diagnose()` says so in those words rather than letting it
         // look like a server problem.
         await NotificationService.initialize();
+
+        // JG2. The lock-screen answer, in two halves.
+        //
+        // The category is the set of action buttons Android draws under a
+        // check-in; the handler is what posts the answer when one is pressed.
+        // Both have to exist before any notification arrives, and neither can
+        // live in a screen -- the whole point is that no screen is mounted when
+        // somebody answers from a lock screen.
+        //
+        // Registered unconditionally, including where push is unavailable. A
+        // category nobody sends to costs nothing, and a handler that never fires
+        // costs less than discovering at JG3 that it was never wired.
+        await registerCheckInCategory();
+        NotificationService.onAlertTap(tap => {
+          void answerFromNotification(tap);
+        });
 
         // Request location permission
         await LocationService.requestPermission();

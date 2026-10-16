@@ -61,6 +61,19 @@ export const AGENT_CATALOGUE: Readonly<Record<string, AgentDescription>> = {
       'Files away warnings whose time has passed. Your map already stops showing them on its own, so nothing is out of date while this is behind.',
     affectsWhatYouSee: false,
   },
+  journey_watch: {
+    title: 'Watching your journeys',
+    // Written from `agents/journey_watch.py`, and `affectsWhatYouSee` is `true`
+    // for a reason worth stating: this is the only agent whose failure is
+    // silent *by design*. Nothing on the map changes, no error is shown, and
+    // the journey screen still says "on your way" — because the question it
+    // asks is asked by this sweep and nothing else. A person who picked a
+    // guardian believes somebody is watching, and while this is down, nobody
+    // is. That is the single most important red card on this screen.
+    blurb:
+      'Asks if you are okay when a journey deadline passes, and emails the person you chose if you do not answer. While this is down, nothing asks and nobody is told.',
+    affectsWhatYouSee: true,
+  },
 };
 
 /**

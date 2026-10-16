@@ -193,6 +193,15 @@ class HttpPushTransport:
                 "data": message.data,
                 "sound": "default",
                 "channelId": message.channel_id,
+                # Expo's notification *category*, which is the lock-screen action
+                # buttons -- not `AlertCategory`. Omitted entirely when there is
+                # none: Expo treats an unknown category id as no actions, so
+                # sending `None` would be indistinguishable from a typo.
+                **(
+                    {"categoryId": message.action_category}
+                    if message.action_category
+                    else {}
+                ),
                 # `high` rather than `max`. `max` asks Android to interrupt
                 # whatever the user is doing with a full-screen heads-up, and it
                 # is reserved for the SOS path, where somebody has pressed a

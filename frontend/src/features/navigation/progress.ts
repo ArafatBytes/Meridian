@@ -122,6 +122,23 @@ export const TURN_ANGLE_DEGREES = 25;
 export const TURN_LOOKAHEAD_M = 500;
 /** How far ahead to look for the next turn before answering "straight on". */
 
+export const TURN_NOISE_DEGREES = 5;
+/**
+ * A bend smaller than this is not a change of direction.
+ *
+ * Only used to decide whether an *opposing* bend interrupts an accumulating turn.
+ * Without a floor the test was `Math.sign(delta) !== Math.sign(accumulated)`, and
+ * `Math.sign` of a tiny negative number is `-1` — so a segment that is straight to
+ * within a ten-thousandth of a degree counted as a reversal and discarded
+ * everything accumulated before it. A bend measured across a dead-straight stretch
+ * of arranged geometry comes out as -4.8e-5°, which is how that was found.
+ *
+ * Real data is noisier than that, not cleaner: an `overview=full` polyline is
+ * quantised to about a metre, so a 5 m segment carries over a degree of apparent
+ * jitter from the rounding alone. Five degrees sits above all of it and far below
+ * any corner — a slight turn starts at `TURN_ANGLE_DEGREES`, five times this.
+ */
+
 /**
  * The perpendicular distance at which to call this position off-route, widened for
  * a poor fix.
@@ -415,10 +432,11 @@ export function travelledPath(path: LatLng[], progress: RouteProgress): LatLng[]
 /**
  * Seconds left, from the route's own average pace.
  *
- * **Not** from live GPS speed, and that is a deliberate choice. Instantaneous speed
- * from a phone is extremely noisy — it reads zero at every traffic light and spikes
- * on a bad fix — so an ETA derived from it swings by minutes between updates, and a
- * number that jumps around is one nobody can plan with.
+ * **The fallback half of the ETA, not the whole of it.** `etaSeconds` below is what
+ * the hook calls; it prefers the live smoothed speed and lands here whenever that
+ * speed is unusable, which is every traffic light. Raw instantaneous speed from a
+ * phone reads zero at a standstill and spikes on a bad fix, and `remaining / 0` is
+ * infinity, so something has to answer when it cannot.
  *
  * The route's own duration is already corrected for the profile by the backend
  * (`_ASSUMED_WALK_KMH` for walking, a traffic factor for driving), so scaling it by
@@ -463,13 +481,17 @@ function describeTurn(delta: number): TurnDirection {
 /**
  * The next turn worth mentioning, and the direction to head right now.
  *
- * Derived from the route **geometry**, not from routing instructions — the backend
- * asks OSRM for a geometry and does not request `steps`, so there is nothing that
- * knows the name of the road you are about to turn into. That shapes what this is
- * allowed to say: a side and a distance, never a street name and never "turn onto".
- * Claiming more than the data supports is the thing this codebase keeps refusing to
- * do, and a fabricated street name in a navigation instruction is about the worst
- * version of it.
+ * Derived from the route **geometry**, not from routing instructions, and that is
+ * what makes it the fallback rather than the main narration: the backend does ask
+ * OSRM for `steps` now, so a manoeuvre usually arrives with a road name attached —
+ * see `stepAt` below and `instructions.ts`. But a route can still have no steps at
+ * all. The straight-line estimate has none, and a malformed manoeuvre is skipped
+ * rather than raising.
+ *
+ * So this says only what a polyline can support: a side and a distance, never a
+ * street name and never "turn onto". Claiming more than the data supports is the
+ * thing this codebase keeps refusing to do, and a fabricated street name in a
+ * navigation instruction is about the worst version of it.
  *
  * Turns are accumulated across vertices so a sweeping bend reads as one turn. The
  * bearing returned is from the snapped position toward a point far enough ahead to
@@ -507,7 +529,19 @@ export function nextTurn(
 
     // Same-signed deltas accumulate into one turn; a sign change restarts the
     // accumulation, because a left then a right is not one 0° turn.
-    if (accumulated !== 0 && Math.sign(delta) !== Math.sign(accumulated)) {
+    //
+    // The noise floor is load-bearing, and `delta !== 0` is not enough: a
+    // straight stretch does not produce a delta of exactly zero, it produces
+    // -4.8e-5, and `Math.sign` of that is -1. So a bend interrupted by a segment
+    // that runs true -- a flyover approach, a road straightening briefly between
+    // two curves -- counted as a reversal and threw away everything accumulated
+    // before it. The curve then came out as "straight" and the turn was never
+    // announced. See `TURN_NOISE_DEGREES`.
+    if (
+      accumulated !== 0 &&
+      Math.abs(delta) > TURN_NOISE_DEGREES &&
+      Math.sign(delta) !== Math.sign(accumulated)
+    ) {
       accumulated = delta;
     } else {
       accumulated += delta;

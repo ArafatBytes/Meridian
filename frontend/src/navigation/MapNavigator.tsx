@@ -17,6 +17,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { MapStackParamList } from '../types';
 import MapScreen from '../screens/Map/MapScreen';
 import NewsScreen from '../screens/Map/NewsScreen';
+import JourneyScreen from '../screens/Map/JourneyScreen';
 
 const Stack = createNativeStackNavigator<MapStackParamList>();
 
@@ -24,6 +25,11 @@ const MapNavigator: React.FC = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="MapView" component={MapScreen} />
     <Stack.Screen name="News" component={NewsScreen} />
+    {/* JG3. The journey behind the card -- its state in a sentence, the answer
+        button, and what has already been sent. A drill-down from the map for
+        the same reason the news page is one: it is about the thing currently on
+        screen, not a section of its own. */}
+    <Stack.Screen name="Journey" component={JourneyScreen} />
   </Stack.Navigator>
 );
 
