@@ -16,7 +16,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -31,6 +30,8 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Dialog from '../../components/Dialog';
+import { useDialog } from '../../components/useDialog';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
@@ -87,6 +88,8 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
   // empty: we cannot fill the form from it either way.
   const profileIncomplete = !profile || !profile.is_complete;
 
+  const { show: showDialog, props: dialogProps } = useDialog();
+
   const load = useCallback(async () => {
     // Settled, not all. These three are independent, and the profile in
     // particular is only needed to *print* — a draft can be generated, read,
@@ -110,13 +113,17 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
 
     // Only the draft failing is worth interrupting for; the rest degrade.
     if (draftResult.status === 'rejected') {
-      Alert.alert(
-        'Could not load',
-        draftResult.reason?.message ?? 'Something went wrong loading this draft.',
-      );
+      showDialog({
+        title: 'Could not load this draft',
+        message:
+          draftResult.reason?.message
+          ?? 'The server did not answer. Check your connection and try again.',
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     }
     setLoading(false);
-  }, [reportId]);
+  }, [reportId, showDialog]);
 
   useEffect(() => {
     load();
@@ -144,7 +151,12 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
       setNarrative(fresh.narrative_bn);
       setReadToEnd(false);
     } catch (error: any) {
-      Alert.alert('Could not write it', error.message);
+      showDialog({
+        title: 'Could not write the narrative',
+        message: error.message,
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     } finally {
       setWorking(null);
     }
@@ -163,7 +175,12 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
       // what would be approved now.
       setReadToEnd(false);
     } catch (error: any) {
-      Alert.alert('Could not save', error.message);
+      showDialog({
+        title: 'Could not save your change',
+        message: error.message,
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     } finally {
       setWorking(null);
     }
@@ -177,7 +194,12 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
       const updated = await caseworkService.editDraft(draft.id, { thana_name: name });
       setDraft(updated);
     } catch (error: any) {
-      Alert.alert('Could not save', error.message);
+      showDialog({
+        title: 'Could not save your change',
+        message: error.message,
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     } finally {
       setWorking(null);
     }
@@ -190,7 +212,12 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
       const updated = await caseworkService.approve(draft.id, draft.narrative_sha256);
       setDraft(updated);
     } catch (error: any) {
-      Alert.alert('Not approved', error.message);
+      showDialog({
+        title: 'Could not approve it',
+        message: error.message,
+        tone: 'danger',
+        icon: 'alert-circle-outline',
+      });
       await load();
     } finally {
       setWorking(null);
@@ -200,30 +227,46 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
   const print = async () => {
     if (!draft) return;
     if (!profile || !profile.is_complete) {
-      Alert.alert(
-        'Your GD details are missing',
-        'The form needs your name, mobile, NID, parents’ names and both addresses before it can be printed.',
-        [
-          { text: 'Not now', style: 'cancel' },
-          { text: 'Add them', onPress: () => navigation.navigate('GdProfile') },
+      showDialog({
+        title: 'Your GD details are missing',
+        message:
+          'The form needs your name, mobile, NID, parents’ names and both addresses '
+          + 'before it can be printed.',
+        tone: 'warn',
+        icon: 'document-text-outline',
+        actions: [
+          { label: 'Not now' },
+          {
+            label: 'Add them',
+            primary: true,
+            onPress: () => navigation.navigate('GdProfile'),
+          },
         ],
-      );
+      });
       return;
     }
     try {
       await Print.printAsync({ html: buildGdHtml({ draft, profile }) });
     } catch (error: any) {
-      Alert.alert('Could not print', error?.message ?? 'Printing is unavailable.');
+      showDialog({
+        title: 'Could not print',
+        message: error?.message ?? 'Printing is not available on this phone.',
+        tone: 'danger',
+        icon: 'print-outline',
+      });
     }
   };
 
   const copyNarrative = async () => {
     if (!draft) return;
     await Clipboard.setStringAsync(narrativeForOnlineGd(draft));
-    Alert.alert(
-      'Copied',
-      'In the Online GD app choose অন্যান্য আবেদন, then সাধারন ডায়রী করার আবেদন, and paste this into বিবরণ.',
-    );
+    showDialog({
+      title: 'Copied',
+      message:
+        'In the Online GD app choose অন্যান্য আবেদন, then সাধারন ডায়রী করার আবেদন, '
+        + 'and paste this into বিবরণ.',
+      icon: 'clipboard-outline',
+    });
   };
 
   const saveGdNumber = async () => {
@@ -233,7 +276,12 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
       const updated = await caseworkService.recordGdNumber(draft.id, gdNumber.trim());
       setDraft(updated);
     } catch (error: any) {
-      Alert.alert('Could not save', error.message);
+      showDialog({
+        title: 'Could not save your change',
+        message: error.message,
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     } finally {
       setWorking(null);
     }
@@ -555,6 +603,8 @@ const GdDraftScreen: React.FC<Props> = ({ navigation, route }) => {
           <Text style={styles.overlayText}>{working}</Text>
         </View>
       )}
+
+      <Dialog {...dialogProps} />
     </View>
   );
 };

@@ -52,12 +52,14 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import Dialog from '../../components/Dialog';
+import { useDialog } from '../../components/useDialog';
 import { useTheme } from '../../theme/ThemeProvider';
 import { onGradient } from '../../theme/type';
 import {
@@ -99,21 +101,40 @@ const ProfileScreen: React.FC<Props> = ({ navigation }) => {
   const { user, logout } = useAuthStore();
   const insets = useSafeAreaInsets();
 
+  const dialog = useDialog();
+
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await logout();
-          } catch {
-            Alert.alert('Error', 'Failed to logout');
-          }
+    dialog.show({
+      title: 'Sign out?',
+      // Says what it costs, which "Are you sure?" does not. The journey part
+      // matters: somebody with a guardian watching a trip should know that
+      // signing out is not the way to end it.
+      message:
+        'You will need your email and password to get back in. Any journey you '
+        + 'are on keeps running.',
+      tone: 'warn',
+      icon: 'log-out-outline',
+      actions: [
+        { label: 'Stay signed in' },
+        {
+          label: 'Sign out',
+          primary: true,
+          onPress: async () => {
+            try {
+              await logout();
+            } catch {
+              dialog.show({
+                title: 'Could not sign out',
+                message:
+                  'The server did not answer. Check your connection and try again.',
+                tone: 'danger',
+                icon: 'cloud-offline',
+              });
+            }
+          },
         },
-      },
-    ]);
+      ],
+    });
   };
 
   const account: MenuItem[] = [
@@ -285,6 +306,7 @@ const ProfileScreen: React.FC<Props> = ({ navigation }) => {
           </Reveal>
         </View>
       </ScrollView>
+      <Dialog {...dialog.props} />
     </Aurora>
   );
 };

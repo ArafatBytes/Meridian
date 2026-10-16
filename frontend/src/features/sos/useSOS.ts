@@ -20,7 +20,6 @@
  *     <SOSFlow sos={sos} />
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert } from 'react-native';
 import { useLocationStore } from '../../store';
 import AuthService from '../../services/auth.service';
 import { API_BASE_URL } from '../../constants/app.constants';
@@ -97,6 +96,16 @@ export interface SosController {
   /** Close the outcome sheet. */
   dismissResult: () => void;
   /**
+   * What the camera could not do, while the alert goes out anyway — or null.
+   *
+   * Not an outcome: the SOS may still be in flight when this appears, and
+   * folding it into `result` would make a camera failure look like a finished
+   * alert at the one moment that distinction matters most.
+   */
+  cameraNotice: string | null;
+  /** Close that notice. */
+  dismissCameraNotice: () => void;
+  /**
    * Open the camera. Safe to call from a button, the shake listener, or the
    * hot-word listener.
    *
@@ -122,6 +131,14 @@ export function useSOS(): SosController {
   const [progress, setProgress] = useState(0);
   const [stage, setStage] = useState<SosStage>('uploading');
   const [result, setResult] = useState<SosResult | null>(null);
+  /**
+   * What the camera could not do, when the alert went out anyway.
+   *
+   * Separate from `result` because it is not the outcome of the SOS -- the
+   * SOS may still be in flight -- and conflating them would mean a camera
+   * failure reading as a finished alert.
+   */
+  const [cameraNotice, setCameraNotice] = useState<string | null>(null);
   const [minimized, setMinimized] = useState(false);
 
   // A ref, not state: it is read inside `onVideoRecorded`, which was created on
@@ -315,6 +332,7 @@ export function useSOS(): SosController {
   const cancel = useCallback(() => setCameraVisible(false), []);
 
   const dismissResult = useCallback(() => setResult(null), []);
+  const dismissCameraNotice = useCallback(() => setCameraNotice(null), []);
 
   const minimize = useCallback(() => setMinimized(true), []);
   const expand = useCallback(() => setMinimized(false), []);
@@ -330,10 +348,13 @@ export function useSOS(): SosController {
   const onCameraError = useCallback(
     (message: string) => {
       setCameraVisible(false);
-      Alert.alert(
-        'Sending without video',
-        `The camera could not record on this phone, so your location is being sent ` +
-          `to your emergency contacts without a video.
+      // State, not `Alert.alert`, for the reason this hook already gives about
+      // the result panel: the OS dialog is the one piece of this flow that is
+      // not the app's own, and it appears at the worst possible moment to look
+      // like something else. `SOSFlow` renders it.
+      setCameraNotice(
+        `The camera could not record on this phone, so your location is being sent `
+          + `to your emergency contacts without a video.
 
 ${message}`,
       );
@@ -368,6 +389,8 @@ ${message}`,
     expand,
     result,
     dismissResult,
+    cameraNotice,
+    dismissCameraNotice,
     start,
     cancel,
     onVideoRecorded,

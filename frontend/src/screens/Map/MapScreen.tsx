@@ -6,7 +6,6 @@ import {
   Pressable,
   TouchableOpacity,
   Text,
-  Alert,
   ScrollView,
   ActivityIndicator,
   TextInput,
@@ -46,6 +45,7 @@ import RiskFlagSheet, { riskBand } from '../../components/RiskFlagSheet';
 import { RiskFlagMarker, isConfirmedFlag } from '../../components/RiskFlagMarker';
 import RouteComparisonCard, { safetyColour } from '../../components/RouteComparisonCard';
 import Dialog from '../../components/Dialog';
+import { useDialog } from '../../components/useDialog';
 import { TAB_BAR_CLEARANCE } from '../../navigation/metrics';
 import PlaceSearch from '../../components/PlaceSearch';
 import { AS_OF_PRESETS, asOfSummary } from '../../features/risk/scheduled';
@@ -231,6 +231,18 @@ interface Props {
   navigation: MapScreenNavigationProp;
 }
 
+/**
+ * An ISO instant `days` ago.
+ *
+ * At module scope rather than inline, because the React compiler analyses every
+ * expression in a component body and cannot tell that this one runs inside an
+ * async callback rather than during render -- it reads `Date.now()` as an impure
+ * call and says so. Out here it is simply a function, and the call site says
+ * what it means instead of doing arithmetic on milliseconds.
+ */
+const isoDaysAgo = (days: number): string =>
+  new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
 const MapScreen: React.FC<Props> = ({ navigation }) => {
   const { t, mode } = useTheme();
   const styles = useStyles(makeStyles);
@@ -386,7 +398,13 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     if (!destination) return;
     const here = from ?? currentLocation ?? (await getCurrentLocation());
     if (!here) {
-      Alert.alert('Location unavailable', 'Could not work out where you are.');
+      showDialog({
+        title: 'Cannot find you',
+        message:
+          'Your phone did not report a location. Check that location is on, then try again.',
+        tone: 'warn',
+        icon: 'location-outline',
+      });
       return;
     }
     setSourceLocation(here);
@@ -454,6 +472,16 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
    */
   const guardians = useGuardians();
 
+  /**
+   * Everything this screen has to say, in the app's own material rather
+   * than the operating system's. See `components/Dialog.tsx` for why that
+   * is worth a hook: `Alert.alert` draws a Material 3 box that has never
+   * seen `palette.ts`, and on some Android skins ignores dark mode — a
+   * white card over a dark map, at the moment the app most needs to look
+   * deliberate.
+   */
+  const { show: showDialog, props: dialogProps } = useDialog();
+
   // Search State
   const [sourceLocation, setSourceLocation] = useState<Location | null>(null);
   const [sourceQuery, setSourceQuery] = useState('My Location');
@@ -507,8 +535,14 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   const requestLocation = async () => {
     try {
       await getCurrentLocation();
-    } catch (error) {
-      Alert.alert('Location Error', 'Failed to get your current location');
+    } catch {
+      showDialog({
+        title: 'Cannot find you',
+        message:
+          'Your phone did not report a location. Check that location is on, then try again.',
+        tone: 'warn',
+        icon: 'location-outline',
+      });
     }
   };
 
@@ -592,7 +626,12 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   ) => {
     const fromLoc = start || currentLocation;
     if (!fromLoc) {
-      Alert.alert("Location Missing", "Please select a source location.");
+      showDialog({
+        title: 'No starting point',
+        message: 'Pick where you are setting off from, or wait for your location to arrive.',
+        tone: 'warn',
+        icon: 'navigate-outline',
+      });
       return;
     }
 
@@ -609,10 +648,22 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       if (routes.length > 0) {
         setSelectedRouteIndex(0);
       } else {
-        Alert.alert("No Routes", "Could not calculate a safe route.");
+        showDialog({
+          title: 'No route found',
+          message:
+            'Nothing connects those two points by road. Try a destination nearer a main road.',
+          tone: 'warn',
+          icon: 'map-outline',
+        });
       }
-    } catch (error) {
-      Alert.alert("Error", "Failed to calculate routes.");
+    } catch {
+      showDialog({
+        title: 'Could not plan the route',
+        message:
+          'The server did not answer. Check your connection and try again.',
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     } finally {
       setIsRouting(false);
     }
@@ -652,9 +703,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         return;
       }
 
-      const since = new Date(
-        Date.now() - REPORT_HISTORY_DAYS * 24 * 60 * 60 * 1000,
-      ).toISOString();
+      const since = isoDaysAgo(REPORT_HISTORY_DAYS);
 
       const { data, error } = await supabase
         .from('crime_reports')
@@ -992,7 +1041,13 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
 
     const here = currentLocation ?? (await getCurrentLocation());
     if (!here) {
-      Alert.alert('Location unavailable', 'Could not work out where you are.');
+      showDialog({
+        title: 'Cannot find you',
+        message:
+          'Your phone did not report a location. Check that location is on, then try again.',
+        tone: 'warn',
+        icon: 'location-outline',
+      });
       return;
     }
     setSourceLocation(here);
@@ -1108,8 +1163,13 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
    */
   useEffect(() => {
     if (!follow.error) return;
-    Alert.alert('Cannot follow this route', follow.error);
-  }, [follow.error]);
+    showDialog({
+      title: 'Cannot follow this route',
+      message: follow.error,
+      tone: 'warn',
+      icon: 'navigate-outline',
+    });
+  }, [follow.error, showDialog]);
 
   /**
    * The phone reporting in while it moves. JG2.
@@ -2655,6 +2715,9 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         actions={[{ label: 'OK', primary: true }]}
         onClose={() => setJourneyNotice(null)}
       />
+
+      {/* Everything else this screen says. */}
+      <Dialog {...dialogProps} />
     </View>
   );
 };

@@ -44,6 +44,12 @@ export interface DialogAction {
   onPress?: () => void;
   /** The filled one. At most one per dialog; the last action if none is marked. */
   primary?: boolean;
+  /**
+   * Only drawn when the actions are stacked, where each one is a full-width row
+   * with space for it. In a two-button row an icon is decoration competing with
+   * the one the title already has.
+   */
+  icon?: keyof typeof Ionicons.glyphMap;
 }
 
 export interface DialogProps {
@@ -85,11 +91,30 @@ export const Dialog: React.FC<DialogProps> = ({
   const accentSoft = tone === 'danger' ? t.dangerSoft : tone === 'warn' ? t.warnSoft : t.brandSoft;
 
   const buttons: DialogAction[] = actions?.length ? actions : [{ label: 'OK', primary: true }];
-  // The last one is primary unless somebody said otherwise, because the
+
+  // Three or more will not fit side by side at phone width without truncating
+  // the labels, and a choice you cannot read is not a choice. Stacked, each one
+  // is a full-width row — which is also the right shape for a chooser, where
+  // the options are destinations rather than yes and no.
+  //
+  // Decided from the count rather than from a prop: a caller who passes three
+  // actions has already decided this, and a `stacked` flag would only allow the
+  // combination that does not work.
+  const stacked = buttons.length > 2;
+
+  // In a row, the last one is primary unless somebody said otherwise: the
   // rightmost button is where a thumb goes and the affirmative belongs there.
+  //
+  // **Stacked, that rule is wrong and is not applied.** A chooser's last row is
+  // normally "Cancel", and filling it would make the way out look like the
+  // thing to do. Nothing is filled unless the caller says which — the order
+  // stays exactly as it was passed, because in a list the order *is* the
+  // meaning.
   const primaryIndex = buttons.some(a => a.primary)
     ? buttons.findIndex(a => a.primary)
-    : buttons.length - 1;
+    : stacked
+      ? -1
+      : buttons.length - 1;
 
   return (
     <Sheet
@@ -119,7 +144,12 @@ export const Dialog: React.FC<DialogProps> = ({
         <Text style={[type.body, { color: t.textSoft }]}>{message}</Text>
       ) : null}
 
-      <View style={[styles.actions, { gap: space.sm, marginTop: space.xs }]}>
+      <View
+        style={[
+          stacked ? styles.actionsStacked : styles.actions,
+          { gap: space.sm, marginTop: space.xs },
+        ]}
+      >
         {buttons.map((action, i) => {
           const isPrimary = i === primaryIndex;
           return (
@@ -135,13 +165,22 @@ export const Dialog: React.FC<DialogProps> = ({
               accessibilityRole="button"
               style={[
                 styles.button,
+                stacked && styles.buttonStacked,
                 {
                   paddingHorizontal: space.lg,
                   borderRadius: radius.md,
                   backgroundColor: isPrimary ? accent : t.fillSoft,
+                  gap: space.sm,
                 },
               ]}
             >
+              {stacked && action.icon ? (
+                <Ionicons
+                  name={action.icon}
+                  size={18}
+                  color={isPrimary ? t.onBrand : t.textSoft}
+                />
+              ) : null}
               <Text
                 style={[
                   type.label,
@@ -163,8 +202,12 @@ const styles = StyleSheet.create({
   badge: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   title: { flex: 1 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end' },
+  actionsStacked: { flexDirection: 'column' },
   // 44, because this is the only tap target on the screen while it is open.
   button: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  // Full width, and the content centred rather than left-aligned so a stack of
+  // three reads as three buttons and not as a menu that happens to be tappable.
+  buttonStacked: { flexDirection: 'row', alignSelf: 'stretch' },
 });
 
 export default Dialog;

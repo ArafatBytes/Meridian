@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, StyleSheet, Text, Modal, TouchableOpacity, Alert, Animated, Easing, Platform } from 'react-native';
+import { View, StyleSheet, Text, Modal, TouchableOpacity, Animated, Easing, Platform } from 'react-native';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { useTheme } from '../theme/ThemeProvider';
 import { useStyles } from '../theme/useStyles';
