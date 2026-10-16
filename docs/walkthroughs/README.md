@@ -10,6 +10,20 @@ receive Android push (removed in SDK 53) and cannot load a native module like
 delivery waits for the build. Track B walkthroughs are **not part of the finale** — nothing in the
 demo script depends on them.
 
+**Journey Guardian lands as `JG1.md` ... `JG7.md`**, one per phase, written as each phase is
+finished. The phases are in [`../../JOURNEY_GUARDIAN.md`](../../JOURNEY_GUARDIAN.md) and indexed in
+`DEMO_PLAN.md` §6. **Three exist — [`JG1.md`](JG1.md), [`JG2.md`](JG2.md) and [`JG3.md`](JG3.md) —
+and the scope stops there before the finale**; JG4–JG7 should not be created ahead of the work,
+because a walkthrough describes what was built, so writing it first guarantees it describes
+something else.
+
+| | Status |
+|---|---|
+| `JG1.md` | Signed off 15 Oct 2026 |
+| `JG2.md` | Signed off 15 Oct 2026, **with step 9 recorded as failing** — the lock-screen button is usually not drawn, and the journey card answers instead |
+| `JG3.md` | Signed off 16 Oct 2026 — guardian email reaches a real inbox. Steps B10–B11 were retired after the run: the rung that mailed every contact was removed |
+| [`JG-DEMO.md`](JG-DEMO.md) | **Not a proof — a performance.** JG1+JG2+JG3 end to end with a phone and an inbox and **no database access at all**, at real speed (~13 minutes for the escalation). The per-phase pages prove the machinery; this one shows the product |
+
 **A walkthrough is a play-script you run on a phone, as the user, with no knowledge of the code.**
 It is written by the sprint owner, at the end of the sprint, in the same commit as the work, and the
 owner must have actually run it on a real device before pushing. `DEMO_PLAN.md` §0 makes this a

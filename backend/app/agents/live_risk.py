@@ -61,6 +61,7 @@ from app.policy.attribution import (
 )
 from app.policy.attribution import severity_for as severity_for_crime
 from app.policy.framing import to_mobility_statement
+from app.policy.independence import is_vetted
 from app.scoring.fixture import REPLAY_PATH, SEED_KEY_PREFIX
 from app.scoring.kinds import defaults_for, severity_for
 
@@ -965,8 +966,17 @@ def flag_row(
     One incident as an insert-shaped `risk_flags` row.
 
     Same shape as `app/scoring/fixture.py`'s rows. `expires_at` is absent because the
-    database trigger derives it; `status` is `unconfirmed` and `source_count` is 1
-    whatever the input, because this agent has exactly one source per flag.
+    `source_count` is 1 whatever the input, because this agent has exactly one
+    source per flag. `expires_at` is absent because the database trigger derives it.
+
+    **`status` is decided by the publisher**, which changed on 2026-10-16. It was
+    unconditionally `unconfirmed` -- one article is one source, and `confirmed`
+    then meant two independent publishers. It now means "a vetted newsroom or
+    institution published this, or two independent publishers agreed", and every
+    publisher this agent reads is vetted by construction: `SOURCES` is a
+    hand-picked list. The check is still made against
+    `policy.independence.VETTED_PUBLISHERS` rather than assumed, because the
+    assumption is exactly what would be wrong the day something un-vetted is read.
     """
     kind = IncidentKind(incident.kind)
     defaults = defaults_for(kind)
@@ -974,7 +984,7 @@ def flag_row(
     return {
         "event_key": f"{LIVE_KEY_PREFIX}{doc.doc_id[:16]}-{index}",
         "kind": kind.value,
-        "status": "unconfirmed",
+        "status": "confirmed" if is_vetted([doc.source_id]) else "unconfirmed",
         "lat": place.lat,
         "lon": place.lon,
         # The wider of the event's reach and our uncertainty about where it is: a

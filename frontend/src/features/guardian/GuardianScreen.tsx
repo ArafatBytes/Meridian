@@ -37,7 +37,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   RefreshControl,
   ScrollView,
@@ -52,6 +51,8 @@ import { Accelerometer } from 'expo-sensors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
+import Dialog from '../../components/Dialog';
+import { useDialog } from '../../components/useDialog';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
@@ -165,6 +166,8 @@ export const GuardianScreen: React.FC<Props> = ({ navigation }) => {
   // Zone alerts
   // -----------------------------------------------------------------------
 
+  const dialog = useDialog();
+
   const onToggleZones = async (value: boolean) => {
     setZoneBusy(true);
     try {
@@ -178,33 +181,49 @@ export const GuardianScreen: React.FC<Props> = ({ navigation }) => {
       setZoneStatus(status);
       if (status.permission !== 'granted') {
         setZoneAlertsEnabled(false);
-        Alert.alert(
-          'Location permission needed',
-          status.permission === 'no-background'
-            ? 'Zone alerts need location access "all the time". Android only offers that ' +
-                'in system settings — open Meridian\'s permissions and choose ' +
-                '"Allow all the time", then switch this on again.'
-            : 'Meridian needs location access to know when you are near a flagged road.',
-          [
-            { text: 'Not now', style: 'cancel' },
-            { text: 'Open settings', onPress: () => Linking.openSettings() },
+        dialog.show({
+          title: 'Location permission needed',
+          message:
+            status.permission === 'no-background'
+              ? 'Zone alerts need location access "all the time". Android only offers that '
+                + 'in system settings — open Meridian\'s permissions and choose '
+                + '"Allow all the time", then switch this on again.'
+              : 'Meridian needs location access to know when you are near a flagged road.',
+          tone: 'warn',
+          icon: 'location-outline',
+          actions: [
+            { label: 'Not now' },
+            {
+              label: 'Open settings',
+              primary: true,
+              onPress: () => Linking.openSettings(),
+            },
           ],
-        );
+        });
         return;
       }
       setZoneAlertsEnabled(true);
       if (status.regionCount === 0) {
-        Alert.alert(
-          'Nothing to watch yet',
-          'No live risk flags near you cleared the threshold, so there is nothing to ' +
-            'monitor. Zone alerts are on and will pick up new flags next time you open ' +
-            'the app.',
-        );
+        dialog.show({
+          title: 'Nothing to watch yet',
+          message:
+            'No live risk flags near you cleared the threshold, so there is nothing to '
+            + 'monitor. Zone alerts are on and will pick up new flags next time you open '
+            + 'the app.',
+          icon: 'shield-checkmark-outline',
+        });
       }
       await loadZoneState();
     } catch (problem: any) {
       setZoneAlertsEnabled(false);
-      Alert.alert('Could not start zone alerts', problem?.message ?? 'Unknown error.');
+      dialog.show({
+        title: 'Could not start zone alerts',
+        message:
+          problem?.message
+          ?? 'Something went wrong starting them. Zone alerts are still off.',
+        tone: 'danger',
+        icon: 'warning-outline',
+      });
     } finally {
       setZoneBusy(false);
     }
@@ -221,13 +240,20 @@ export const GuardianScreen: React.FC<Props> = ({ navigation }) => {
     setZoneBusy(true);
     try {
       const result = await simulateNearestZoneCrossing();
-      Alert.alert(
-        result.ok ? 'Zone alert sent' : 'Nothing sent',
-        result.detail,
-      );
+      dialog.show({
+        title: result.ok ? 'Zone alert sent' : 'Nothing sent',
+        message: result.detail,
+        tone: result.ok ? 'info' : 'warn',
+        icon: result.ok ? 'notifications-outline' : 'notifications-off-outline',
+      });
       await loadZoneState();
     } catch (problem: any) {
-      Alert.alert('Test failed', problem?.message ?? 'Unknown error.');
+      dialog.show({
+        title: 'Could not send the test',
+        message: problem?.message ?? 'Something went wrong sending it.',
+        tone: 'danger',
+        icon: 'warning-outline',
+      });
     } finally {
       setZoneBusy(false);
     }
@@ -239,7 +265,14 @@ export const GuardianScreen: React.FC<Props> = ({ navigation }) => {
       setZoneStatus(await refreshZones());
       await loadZoneState();
     } catch (problem: any) {
-      Alert.alert('Refresh failed', problem?.message ?? 'Unknown error.');
+      dialog.show({
+        title: 'Could not refresh the zones',
+        message:
+          problem?.message
+          ?? 'The server did not answer. The zones you have are unchanged.',
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     } finally {
       setZoneBusy(false);
     }
@@ -259,15 +292,24 @@ export const GuardianScreen: React.FC<Props> = ({ navigation }) => {
   const onDownloadPack = async () => {
     try {
       const result = await downloadOfflineModel('en-US');
-      Alert.alert(
-        'Offline language pack',
-        result.status === 'opened_dialog'
-          ? 'Android has opened its download dialog. Finish it, then come back and arm ' +
-              'Voice SOS again — the system does not tell the app when it is done.'
-          : `${result.status.replace('_', ' ')}: ${result.message}`,
-      );
+      dialog.show({
+        title: 'Offline language pack',
+        message:
+          result.status === 'opened_dialog'
+            ? 'Android has opened its download dialog. Finish it, then come back and arm '
+              + 'Voice SOS again — the system does not tell the app when it is done.'
+            : `${result.status.replace('_', ' ')}: ${result.message}`,
+        icon: 'download-outline',
+      });
     } catch (problem: any) {
-      Alert.alert('Could not request the language pack', problem?.message ?? 'Unknown error.');
+      dialog.show({
+        title: 'Could not request the language pack',
+        message:
+          problem?.message
+          ?? 'Android did not respond to the request. Voice SOS is unchanged.',
+        tone: 'danger',
+        icon: 'warning-outline',
+      });
     }
   };
 
@@ -625,6 +667,8 @@ export const GuardianScreen: React.FC<Props> = ({ navigation }) => {
           </>
         )}
       </ScrollView>
+
+      <Dialog {...dialog.props} />
     </Aurora>
   );
 };

@@ -30,6 +30,7 @@ const healthy: PushDiagnosis = {
   lastRejection: null,
   maxAlertsPerHour: 3,
   alertRadiusM: 500,
+  batteryOptimized: false,
 };
 
 describe('blockingPushProblem', () => {
@@ -143,5 +144,49 @@ describe('blockingPushProblem', () => {
     });
     expect(problem).toMatch(/notifications/i);
     expect(problem).not.toContain('InvalidCredentials');
+  });
+
+  /**
+   * Battery optimisation. The ninth prerequisite, added after a device run
+   * where every other one was green: Expo said `ok`, the FCM receipt said `ok`,
+   * and the notification still did not arrive until the screen was woken --
+   * because Android had frozen the app process, and `expo-notifications` builds
+   * the notification inside it. See `features/alerts/background.ts`.
+   */
+  describe('battery optimisation', () => {
+    it('is reported when nothing else is wrong', () => {
+      const problem = blockingPushProblem({ ...healthy, batteryOptimized: true });
+      expect(problem).toMatch(/wake the phone/i);
+    });
+
+    it('names the symptom the person noticed, not the Android setting', () => {
+      // Somebody reading this has observed notifications arriving when they
+      // pick the phone up. A sentence opening with "battery optimisation" is
+      // about Android; one opening with what they saw is about them.
+      const problem = blockingPushProblem({ ...healthy, batteryOptimized: true }) ?? '';
+      expect(problem.toLowerCase().indexOf('wake the phone')).toBeLessThan(
+        problem.toLowerCase().indexOf('android'),
+      );
+    });
+
+    it('comes last, because every other blocker means nothing arrives at all', () => {
+      // This one means the notification arrives and waits. Anything above it
+      // means there is no notification, which is the worse problem and the one
+      // to name first.
+      const problem = blockingPushProblem({
+        ...healthy,
+        batteryOptimized: true,
+        lastRejection: 'InvalidCredentials: no FCM key',
+      });
+      expect(problem).toContain('InvalidCredentials');
+    });
+
+    it('says nothing on a phone that is already exempt, or where it cannot be asked', () => {
+      // `null` is iOS, or a query that threw. Telling an iPhone user to find an
+      // Android battery setting is worse than saying nothing, and so is nagging
+      // somebody who has already granted it.
+      expect(blockingPushProblem({ ...healthy, batteryOptimized: false })).toBeNull();
+      expect(blockingPushProblem({ ...healthy, batteryOptimized: null })).toBeNull();
+    });
   });
 });

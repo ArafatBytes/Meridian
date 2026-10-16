@@ -61,7 +61,16 @@ module.exports = {
     {
       // Jest globals are only in scope in test files and the setup file.
       // Declaring them repo-wide would mask a stray `jest.*` call in app code.
-      files: ['**/*.test.ts', '**/*.test.tsx', 'jest.setup.js', 'jest.config.js'],
+      // `**/*.test.js` is here for app.config.test.js: the thing it tests is a
+      // Node config file, so its test is .js too, and without this every
+      // `it`/`expect` in it is a no-undef error.
+      files: [
+        '**/*.test.ts',
+        '**/*.test.tsx',
+        '**/*.test.js',
+        'jest.setup.js',
+        'jest.config.js',
+      ],
       env: { jest: true, node: true },
     },
     {

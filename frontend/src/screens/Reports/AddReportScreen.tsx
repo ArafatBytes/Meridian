@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -23,6 +22,8 @@ import DateTimePicker, {
   DateTimePickerChangeEvent,
 } from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
+import Dialog from '../../components/Dialog';
+import { useDialog } from '../../components/useDialog';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
@@ -223,6 +224,8 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
     setShowSuggestions(false);
   };
 
+  const dialog = useDialog();
+
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
 
@@ -256,13 +259,20 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
         });
         setSearchQuery(''); // Clear search bar after successful search
       } else {
-        Alert.alert(
-          'Not Found',
-          'Location not found. Please try a different search term.',
-        );
+        dialog.show({
+          title: 'No such place',
+          message: 'Nothing matched that search. Try a landmark or a road name.',
+          tone: 'warn',
+          icon: 'search-outline',
+        });
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to search location. Please try again.');
+      dialog.show({
+        title: 'Could not search',
+        message: 'The server did not answer. Check your connection and try again.',
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     }
   };
 
@@ -341,10 +351,12 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
         await ImagePicker.requestCameraPermissionsAsync();
 
       if (permissionResult.granted === false) {
-        Alert.alert(
-          'Permission Required',
-          'Camera access is needed to capture crime scene photos.',
-        );
+        dialog.show({
+          title: 'Camera access needed',
+          message: 'Meridian needs the camera to attach a photo to this report.',
+          tone: 'warn',
+          icon: 'camera-outline',
+        });
         return;
       }
 
@@ -363,7 +375,12 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
         await analyzeImage(imageUri);
       }
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to capture photo: ' + error.message);
+      dialog.show({
+        title: 'Could not take the photo',
+        message: error.message,
+        tone: 'danger',
+        icon: 'camera-outline',
+      });
     }
   };
 
@@ -373,10 +390,12 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
         await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (permissionResult.granted === false) {
-        Alert.alert(
-          'Permission Required',
-          'Photo library access is needed to select crime scene photos.',
-        );
+        dialog.show({
+          title: 'Photo access needed',
+          message: 'Meridian needs your photos to attach one to this report.',
+          tone: 'warn',
+          icon: 'images-outline',
+        });
         return;
       }
 
@@ -395,7 +414,12 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
         await analyzeImage(imageUri);
       }
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to pick image: ' + error.message);
+      dialog.show({
+        title: 'Could not open your photos',
+        message: error.message,
+        tone: 'danger',
+        icon: 'images-outline',
+      });
     }
   };
 
@@ -410,12 +434,14 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
 
       if (!result.success) {
         setShowAIResults(false);
-        Alert.alert(
-          'Could not analyse the photo',
-          (result.message || 'No analysis is available right now.') +
-            '\n\nYour photo will still be attached. Please fill the form in yourself.',
-          [{ text: 'OK' }],
-        );
+        dialog.show({
+          title: 'Could not analyse the photo',
+          message:
+            (result.message || 'No analysis is available right now.')
+            + '\n\nYour photo is still attached — fill the form in yourself.',
+          tone: 'warn',
+          icon: 'sparkles-outline',
+        });
         return;
       }
 
@@ -434,12 +460,14 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
       }
     } catch (error: any) {
       setShowAIResults(false);
-      Alert.alert(
-        'Could not analyse the photo',
-        (error.message || 'Something went wrong.') +
-          '\n\nYour photo will still be attached.',
-        [{ text: 'OK' }],
-      );
+      dialog.show({
+        title: 'Could not analyse the photo',
+        message:
+          (error.message || 'Something went wrong.')
+          + '\n\nYour photo is still attached.',
+        tone: 'warn',
+        icon: 'sparkles-outline',
+      });
     } finally {
       setIsAnalyzing(false);
     }
@@ -457,24 +485,16 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
   };
 
   const showImageOptions = () => {
-    Alert.alert(
-      'Add Crime Scene Photo',
-      'Choose an option to add a photo for AI analysis',
-      [
-        {
-          text: 'Take Photo',
-          onPress: handleTakePhoto,
-        },
-        {
-          text: 'Choose from Library',
-          onPress: handlePickImage,
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
+    dialog.show({
+      title: 'Add a photo',
+      message: 'Meridian will read it and suggest a category. You can change anything it suggests.',
+      icon: 'camera-outline',
+      actions: [
+        { label: 'Take a photo', icon: 'camera-outline', onPress: handleTakePhoto },
+        { label: 'Choose from your photos', icon: 'images-outline', onPress: handlePickImage },
+        { label: 'Cancel', icon: 'close-outline' },
       ],
-    );
+    });
   };
 
   // ============================================================================
@@ -484,19 +504,39 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
   const handleSubmit = async () => {
     // Validation
     if (!selectedCategory) {
-      Alert.alert('Error', 'Please select a crime category');
+      dialog.show({
+        title: 'Pick a category',
+        message: 'Choose what kind of incident this was.',
+        tone: 'warn',
+        icon: 'create-outline',
+      });
       return;
     }
     if (!title.trim()) {
-      Alert.alert('Error', 'Please enter a title');
+      dialog.show({
+        title: 'Add a title',
+        message: 'One line saying what happened.',
+        tone: 'warn',
+        icon: 'create-outline',
+      });
       return;
     }
     if (!description.trim()) {
-      Alert.alert('Error', 'Please provide a description');
+      dialog.show({
+        title: 'Add a description',
+        message: 'What happened, in your own words.',
+        tone: 'warn',
+        icon: 'create-outline',
+      });
       return;
     }
     if (!selectedLocation) {
-      Alert.alert('Error', 'Please select a location on the map');
+      dialog.show({
+        title: 'Pick a location',
+        message: 'Tap the map, search for a place, or use your current location.',
+        tone: 'warn',
+        icon: 'create-outline',
+      });
       return;
     }
 
@@ -566,27 +606,35 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
       // report — a GD is drafted from a filed one, and splitting their
       // attention while they are still describing the incident helps nobody.
       const filedId = filed?.id;
-      Alert.alert(
-        'Report submitted',
-        filedId
-          ? 'Do you want to file this with the police? Meridian can write the General Diary application in formal Bangla — you read it, approve it and take it to the thana.'
-          : 'Your report has been submitted successfully',
-        filedId
+      dialog.show({
+        title: 'Report submitted',
+        message: filedId
+          ? 'Do you want to file this with the police? Meridian can write the General '
+            + 'Diary application in formal Bangla — you read it, approve it and take it '
+            + 'to the thana.'
+          : 'Thank you. It is on the map for other people now.',
+        tone: 'info',
+        icon: 'checkmark-circle-outline',
+        actions: filedId
           ? [
-              { text: 'Not now', style: 'cancel', onPress: () => navigation.goBack() },
+              { label: 'Not now', onPress: () => navigation.goBack() },
               {
-                text: 'Create General Diary',
-                onPress: () =>
-                  navigation.replace('GdDraft', { reportId: filedId }),
+                label: 'Create General Diary',
+                primary: true,
+                onPress: () => navigation.replace('GdDraft', { reportId: filedId }),
               },
             ]
-          : [{ text: 'OK', onPress: () => navigation.goBack() }],
-      );
+          : [{ label: 'Done', primary: true, onPress: () => navigation.goBack() }],
+      });
     } catch (error: any) {
-      Alert.alert(
-        'Submission Failed',
-        error.message || 'Failed to submit report. Please try again.',
-      );
+      dialog.show({
+        title: 'Could not submit the report',
+        message:
+          error.message
+          || 'The server did not answer. Nothing was lost — try again.',
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -623,7 +671,14 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
         }
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to get current location. Please try again.');
+      dialog.show({
+        title: 'Cannot find you',
+        message:
+          'Your phone did not report a location. Check that location is on, '
+          + 'or tap the map instead.',
+        tone: 'warn',
+        icon: 'location-outline',
+      });
     } finally {
       setIsFetchingLocation(false);
     }
@@ -1166,6 +1221,8 @@ const AddReportScreen: React.FC<AddReportScreenProps> = ({ navigation }) => {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <Dialog {...dialog.props} />
     </KeyboardAvoidingView>
   );
 };

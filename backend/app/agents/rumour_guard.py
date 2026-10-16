@@ -79,7 +79,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.contracts.risk import IncidentKind
 from app.core.config import settings
-from app.policy.independence import independent_publishers
+from app.policy.independence import independent_publishers, is_confirmable
 
 logger = logging.getLogger(__name__)
 
@@ -446,7 +446,15 @@ async def merge_into(
     source_count = max(1, len(publishers))
 
     was_confirmed = match.status == "confirmed"
-    confirmed = was_confirmed or source_count >= settings.MIN_SOURCES_FOR_CONFIRMED
+    # `is_confirmable` rather than a bare count since 2026-10-16: one vetted
+    # publisher is enough, and corroboration remains the route for anything
+    # that is not on that list. Never demotes -- `was_confirmed` wins -- because
+    # a flag that was confirmed does not become doubtful when another outlet
+    # agrees with it.
+    confirmed = was_confirmed or is_confirmable(
+        (str(ref.get("source_id", "")) for ref in refs if ref.get("source_id")),
+        minimum=settings.MIN_SOURCES_FOR_CONFIRMED,
+    )
     status = "confirmed" if confirmed else "unconfirmed"
     promoted = confirmed and not was_confirmed
 

@@ -79,6 +79,22 @@ export interface GlassProps {
   sheen?: boolean;
   /** A drop shadow beneath the pane. Off for anything that moves. */
   elevated?: boolean;
+  /**
+   * Fill with `surfaceRaised` instead of `glassFill`.
+   *
+   * For a pane with `blur={false}` that carries text over something busy. The
+   * fill is 62% white in light mode and 58% navy in dark, which is right when a
+   * blur underneath is doing the legibility work and wrong when nothing is: over
+   * a Google map, the remaining 38% is road labels and place names showing
+   * through the words on the card. It reads as noise, and no amount of tuning
+   * the alpha fixes it, because the thing behind it is text.
+   *
+   * `Sheet` found this first — 62% white over a 45% scrim came out "the colour of
+   * wet newspaper" — and the answer is the same here: the light edge, the top
+   * sheen and the shadow carry the material on their own. It still reads as a
+   * pane, it just reads as an opaque one.
+   */
+  opaque?: boolean;
 }
 
 export const Glass: React.FC<GlassProps> = ({
@@ -91,6 +107,7 @@ export const Glass: React.FC<GlassProps> = ({
   blur = true,
   sheen = true,
   elevated = false,
+  opaque = false,
 }) => {
   const { t, g, space, radius } = useTheme();
   const blurProps = useBlurProps();
@@ -105,7 +122,7 @@ export const Glass: React.FC<GlassProps> = ({
     // `hidden` so the blur and the sheen are clipped to the radius. Without it
     // the sheen paints a square corner over a rounded pane.
     overflow: 'hidden',
-    backgroundColor: t.glassFill,
+    backgroundColor: opaque ? t.surfaceRaised : t.glassFill,
   };
 
   // `boxShadow`, not `elevation`, and that is the whole fix for the grey wash

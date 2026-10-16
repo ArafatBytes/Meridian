@@ -457,6 +457,26 @@ describe('nextTurn', () => {
     expect(hint?.direction).toContain('right');
   });
 
+  it('is not reset by a straight stretch in the middle of a bend', () => {
+    // `Math.sign(0)` is `0`, so a segment with no bend at all used to look like a
+    // change of direction and discard the accumulation. The headings below bend
+    // 20 degrees, run true for one segment, then bend 10 more: 30 degrees in
+    // total, which is a turn, where the 10 on its own is not. The bug reported
+    // this as "straight" and the corner was never announced.
+    const headings = [0, 10, 20, 20, 30, 30, 30];
+    const path: LatLng[] = [at(0, 0)];
+    let north = 0;
+    let east = 0;
+    for (const heading of headings) {
+      north += 40 * Math.cos((heading * Math.PI) / 180);
+      east += 40 * Math.sin((heading * Math.PI) / 180);
+      path.push(at(north, east));
+    }
+    const cumulative = cumulativeDistances(path);
+    const hint = nextTurn(path, cumulative, initialProgress(path, cumulative));
+    expect(hint?.direction).toBe('slight right');
+  });
+
   it('gives a bearing to head on now', () => {
     const path = [at(0, 0), at(300, 0), at(300, 300)];
     const cumulative = cumulativeDistances(path);

@@ -452,22 +452,39 @@ EXPO_PROJECT_ID=<the id from app.json>
 Expo's push service hands Android notifications to FCM, so FCM has to know about
 the app.
 
+> ⚠️ **One Firebase project for the team, not one each.** Expo holds a single FCM
+> V1 service-account key per Expo project, and `app.json`'s `owner` is
+> `warfather0991` — so the key that sends is from **that** account's Firebase
+> project. A `google-services.json` downloaded from a second Firebase project
+> carries a different sender ID, and every send is then rejected per-device as
+> `MismatchSenderId`. If somebody on the team has already done section B, do not
+> repeat it: ask them for their `google-services.json` and skip to step 5.
+
 1. <https://console.firebase.google.com> → **Add project** (any name).
 2. Inside it: **Add app → Android**. Package name **must be exactly**
    `com.Meridian.app` — it is in `app.json` under `android.package`, and a
    mismatch here is the `MismatchSenderId` rejection.
 3. Download **`google-services.json`** and put it at
    `D:\Meridian\frontend\google-services.json`.
-4. Point `app.json` at it. Add this inside `expo.android`:
+4. Nothing to do: `app.json` already points at it, under `expo.android`:
 
    ```json
    "googleServicesFile": "./google-services.json"
    ```
 
-   > It is **not** already in `app.json`, on purpose: a `googleServicesFile`
-   > pointing at a file that does not exist makes the Android build fail
-   > outright, which would have broken a working app for everyone who pulled
-   > this branch before doing this step.
+   > This step used to say the opposite — "it is **not** already in `app.json`,
+   > on purpose" — because a pointer at a file that is not there does not
+   > degrade the Android build, it kills it (`ENOENT ... × Prebuild failed`). The
+   > pointer was committed anyway in JG2, and since the file itself is
+   > gitignored, that is exactly what happened on the second machine: a merged
+   > `develop` that could not build at all.
+   >
+   > `frontend/app.config.js` now resolves that tension instead of this
+   > instruction doing it: the pointer is kept when the file exists and dropped
+   > with a loud warning when it does not. So the build works before you do
+   > section B, picks FCM up the moment you finish it, and no longer depends on
+   > anyone editing `app.json` by hand. `frontend/app.config.test.js` pins both
+   > halves.
 
 5. Firebase Console → ⚙ **Project settings → Service accounts → Generate new
    private key**. Save the JSON somewhere outside the repo.
@@ -484,23 +501,34 @@ the app.
 ## C. Build and install the development build
 
 ```powershell
-cd D:\Meridian\frontend
-npx expo prebuild --clean       # regenerates android/ from app.json
-npx expo run:android            # builds and installs on the attached phone
+.\scripts\run.ps1
 ```
 
-Needs Android Studio's SDK and a phone in USB-debugging mode. If you would rather
-not build locally:
+That is the whole step. `run.ps1` keeps a stamp of `sha256(app.json +
+package.json)` at `frontend/android/.meridian-build-stamp`, and A and B above both
+change `app.json` -- so it will report *"app.json or package.json changed since
+the last build"* and run `expo prebuild` then `expo run:android` itself, in that
+order. The order is the point: `expo run:android` only prebuilds when `android/`
+is **missing**, so running it alone against an existing folder compiles the old
+manifest and leaves you with a stamp claiming the phone matches an `app.json` it
+does not. Needs the phone in USB-debugging mode; 2-6 minutes cold.
+
+If you would rather not build locally:
 
 ```powershell
 npx eas-cli@latest build --platform android --profile development
 ```
 
-That produces an installable APK in the cloud (slower, no Android SDK needed).
+That produces an installable APK in the cloud, and needs an `eas.json` with a
+`development` profile, which this project does not have yet.
 
-> `prebuild --clean` **regenerates `android/`**. That directory is committed on
-> this project, so check `git diff --stat android/` afterwards and make sure
-> nothing hand-edited was lost.
+> **`android/` is gitignored, not committed** -- `git ls-files frontend/android`
+> returns nothing. An earlier version of this page said the opposite and told you
+> to check `git diff --stat android/` afterwards for lost hand edits; there is
+> nothing there to lose, and `run.ps1` says as much in its own comments. The two
+> things in that folder that look hand-made are not: `debugOptimized/` is a build
+> variant Expo's own template generates, and `.meridian-build-stamp` is written
+> by `run.ps1` at the end of a build that succeeded.
 
 ## D. Switch delivery on
 

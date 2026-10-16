@@ -3,9 +3,11 @@ Invariants for the Live Risk Agent (D04). No database, no network, no model.
 
 Three commitments, each of which the agent could quietly break:
 
-1. **Verification before publication.** One news article is one source, so every
-   flag the agent builds is `unconfirmed` with `source_count == 1` — whatever the
-   model said. D05's Rumour Guard is the only path to `confirmed`.
+1. **One article is one source, and the status follows the publisher.** Every
+   flag the agent builds has `source_count == 1` whatever the model said. Its
+   `status` is `confirmed` when the publisher is one we chose and checked
+   (`policy.independence.VETTED_PUBLISHERS`) and `unconfirmed` otherwise — the
+   2026-10-16 change. What the model says never touches it.
 2. **Unresolvable locations are discarded, never guessed.** Places resolve through
    the gazetteer only; cleaning a place name may remove filler words but never
    substitute a different name; a fabricated place produces no flag.
@@ -86,17 +88,55 @@ def incident(**overrides: object) -> NewsIncident:
 
 @pytest.mark.parametrize("kind", [k.value for k in IncidentKind if k is not IncidentKind.CHRONIC])
 @pytest.mark.parametrize("impact", [i for i in MobilityImpact if i is not MobilityImpact.NONE])
-def test_every_live_flag_is_unconfirmed_with_one_source(kind: str, impact: MobilityImpact) -> None:
+def test_every_live_flag_cites_exactly_one_source(kind: str, impact: MobilityImpact) -> None:
+    """
+    One article is one source, for every kind and every impact.
+
+    `source_count` is the part the model must never be able to move: it is what
+    the flag sheet reports and what `independent_publishers` counts.
+    """
     row = flag_row(
         doc=DOC,
         index=0,
         incident=incident(kind=kind, mobility_impact=impact, confidence=1.0),
         place=PLACE,
     )
-    assert row["status"] == "unconfirmed"
     assert row["source_count"] == 1
     assert len(row["sources"]) == 1
     assert row["event_key"].startswith(LIVE_KEY_PREFIX)
+
+
+def test_a_vetted_publisher_produces_a_confirmed_flag() -> None:
+    """
+    The 2026-10-16 change at the point of writing. `DOC` is Ekattor TV, which is
+    in `SOURCES` and therefore in `VETTED_PUBLISHERS`.
+    """
+    row = flag_row(
+        doc=DOC,
+        index=0,
+        incident=incident(kind="fire", mobility_impact=MobilityImpact.ROAD_BLOCKED),
+        place=PLACE,
+    )
+    assert row["status"] == "confirmed"
+
+
+def test_an_unvetted_publisher_does_not() -> None:
+    """
+    The condition, not the constant.
+
+    Nothing un-vetted is ingested today, so this is the test that stops the
+    condition being optimised away into `"confirmed"` — which is exactly the
+    cheap change that would make the map look better and mean nothing. A source
+    nobody surveyed gets the old treatment: unconfirmed until corroborated.
+    """
+    # Pydantic, not a dataclass.
+    row = flag_row(
+        doc=DOC.model_copy(update={"source_id": "some_blog"}),
+        index=0,
+        incident=incident(kind="fire", mobility_impact=MobilityImpact.ROAD_BLOCKED),
+        place=PLACE,
+    )
+    assert row["status"] == "unconfirmed"
 
 
 def test_a_live_flag_passes_the_fixture_constraints() -> None:

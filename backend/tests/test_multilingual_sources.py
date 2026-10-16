@@ -404,11 +404,17 @@ def test_every_source_declares_a_language_the_schema_allows() -> None:
 
 def test_the_two_tribunes_do_not_corroborate_each_other() -> None:
     """
-    Both were added in the same change, and they are one house. Letting them confirm
-    each other would manufacture agreement rather than find it.
+    Both were added in the same change, and they are one house. Counting them as
+    two would manufacture agreement rather than find it.
+
+    **What this still means after 2026-10-16.** Both are vetted, so either one
+    alone now confirms a flag and the ownership map no longer decides that. What
+    it decides is `source_count`, which is what the flag sheet shows and what the
+    audit trail answers "how many publishers?" with -- so the pairing still has
+    to be right, or a flag drawn from one newsroom would claim two.
     """
     assert independent_publishers({"dhaka_tribune", "bangla_tribune"}) == {"tribune_group"}
-    assert not is_confirmable({"dhaka_tribune", "bangla_tribune"}, minimum=2)
+    assert len(independent_publishers({"dhaka_tribune", "bangla_tribune"})) == 1
     assert is_confirmable({"dhaka_tribune", "samakal"}, minimum=2)
 
 

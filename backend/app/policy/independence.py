@@ -45,9 +45,11 @@ from typing import Final
 __all__ = [
     "AUTHORITATIVE_PUBLISHERS",
     "UNCONFIRMED_WEIGHT",
+    "VETTED_PUBLISHERS",
     "confidence",
     "independent_publishers",
     "is_confirmable",
+    "is_vetted",
     "owner_of",
 ]
 
@@ -101,6 +103,77 @@ _SAME_OWNER: Final[dict[str, str]] = {
 # Authority — B11a, 2026-10-15
 # ---------------------------------------------------------------------------
 
+VETTED_PUBLISHERS: Final[frozenset[str]] = frozenset(
+    {
+        # Television, chosen 2026-10-08.
+        "ekattor_tv",
+        "independent_tv",
+        "channel24",
+        # Newspapers, chosen 2026-10-14.
+        "prothom_alo",
+        "jugantor",
+        "samakal",
+        "ittefaq",
+        "bangla_tribune",
+        "dhaka_tribune",
+        # The institutional tier, 2026-10-15.
+        "dmp_news",
+    }
+)
+"""
+The publishers whose word is enough, on its own, for `status = 'confirmed'`.
+
+**This is the list in `app/ingestion/sources/__init__.py`, restated.** It is
+restated rather than imported because importing `SOURCES` here would drag the
+fetcher, `httpx` and every parser into the routing request path -- which reads
+`confidence()` on every flag of every candidate route.
+`tests/invariants/test_single_source_never_confirmed.py` asserts the two lists
+match, so they cannot drift.
+
+## Why one of these is enough, which was not always the rule
+
+Until 2026-10-16 `confirmed` meant *two independent publishers agreed*, and
+every flag built from one article was `unconfirmed` -- drawn as a hollow pin
+with a question mark and scored at `UNCONFIRMED_WEIGHT` in routing.
+
+That rule was written before anyone had decided which publishers the surface
+would read. It treated every outlet as an anonymous claimant. In fact all ten
+were chosen by hand against stated criteria, with the ten that failed recorded
+by name and reason -- Prothom Alo, Channel 24 and the Dhaka Metropolitan Police
+are not anonymous claimants, and a national newsroom does not invent a fire.
+
+Measured on live data the day it changed: of 19 flags built from news, **15 had
+a single source**. So the old rule left 79% of the live surface hollow and
+discounted, including a Prothom Alo report of a fire.
+
+## What this gives up, recorded because it is not nothing
+
+A second independent newsroom was never only a check on honesty. It was the one
+independent check on **our own extraction**: two newsrooms, read separately by
+the model, landing on the same kind, place and six-hour window is evidence the
+pipeline read both correctly. One source gives that up, and what remains against
+a mis-extraction is `MIN_CONFIDENCE`, the gazetteer's refusal to guess a
+location, and the mobility-impact filter -- all inside `live_risk.py`.
+
+Rumour Guard keeps its job: merging four accounts of one fire into one flag is
+what stops the map showing four fires, and `source_count` still counts
+independent publishers. It no longer gates the badge.
+
+## What `unconfirmed` still means
+
+A **community report** -- a resident's account, with no newsroom behind it.
+That is the distinction users most need drawn, and it is now the one the pin
+style actually draws.
+
+## Adding to this list is a policy decision
+
+An entry here *increases* what a single source is worth, which is the direction
+`_SAME_OWNER` cannot go. A publisher reaches this list by going through the
+survey in `sources/__init__.py` -- robots.txt, a machine-readable listing,
+body text in the HTML -- not by being added here.
+"""
+
+
 AUTHORITATIVE_PUBLISHERS: Final[frozenset[str]] = frozenset({"dmp_news"})
 """
 Publishers that are the **primary record** of what they report, not a claim about it.
@@ -112,35 +185,41 @@ got it from the release. Corroboration between a press release and its reprints 
 agreement manufactured by syndication, which is the same hazard `_SAME_OWNER`
 guards against wearing different clothes.
 
-**What this grants, and what it deliberately does not.**
+**Kept as a separate set from `VETTED_PUBLISHERS`, which now contains it.**
 
-It grants *weight*: `confidence()` returns 1.0 instead of `UNCONFIRMED_WEIGHT`, so
-an official report is not discounted as though it were an unverified rumour.
+Since 2026-10-16 every vetted publisher is enough for `confirmed`, so this set
+grants nothing `VETTED_PUBLISHERS` does not. It stays because the two say
+different things and will diverge again the moment a non-vetted source is added:
+`VETTED_PUBLISHERS` means *we chose this outlet and checked it*, while this means
+*this body is the primary record of what it reports, so a newspaper repeating it
+adds no independent verification*. Only the second is a reason to distrust
+corroboration between a release and its reprints.
 
-It does **not** grant `status = 'confirmed'`. That was the owner's first choice on
-15 Oct and it cannot be done honestly: `confirmed` is enforced in the database by
-
-    risk_flags_confirmed_needs_two_sources
-    CHECK ((status <> 'confirmed') OR (source_count >= 2))
-
-so a single-source confirmed flag is rejected on insert. The two ways round it are
-both worse than the thing they buy -- a migration weakening the CHECK, while
-`tests/invariants/test_single_source_never_confirmed.py` asserts it by reading the
-*original* migration's text and would keep passing over the hole; or writing
-`source_count = 2` for one source, which `risk_flags_sources_match_count` would
-permit and which is simply false data. The owner chose weight on 15 Oct once the
-constraint was shown.
-
-So `confirmed` keeps meaning exactly one thing, at every layer: **two independent
-publishers agreed.**
-
-**This set is dangerous in the direction `_SAME_OWNER` is not.** An entry in the
-ownership map can only ever *reduce* the flags we are willing to trust; an entry
-here *increases* the weight of a single source. There is no permissive default to
-fall back on. So it holds one member, it is asserted to hold one member by
-`tests/invariants/test_single_source_never_confirmed.py`, and adding a second is a
-policy decision about a specific institution -- not a configuration change.
+The history is worth keeping. On 15 Oct the owner asked for DMP to be
+`confirmed` at one source; the database CHECK
+`risk_flags_confirmed_needs_two_sources` made that impossible without a migration,
+and weight was taken instead. On 16 Oct the question came back for the whole
+publisher list, with the measurement that 79% of live flags were hollow, and the
+CHECK was replaced by
+`20261016150000__a_vetted_newsroom_is_confirmation.sql`.
 """
+
+
+def is_vetted(source_ids: Iterable[str]) -> bool:
+    """
+    Is any of these a publisher we chose and checked?
+
+    One is enough, which is the whole of the 2026-10-16 change. See
+    `VETTED_PUBLISHERS`.
+
+    >>> is_vetted(["prothom_alo"])
+    True
+    >>> is_vetted(["some_blog"])
+    False
+    >>> is_vetted([])
+    False
+    """
+    return any(source_id in VETTED_PUBLISHERS for source_id in source_ids)
 
 
 def owner_of(source_id: str) -> str:
@@ -169,10 +248,32 @@ def is_confirmable(source_ids: Iterable[str], *, minimum: int) -> bool:
     """
     Would these sources justify `status = 'confirmed'`?
 
-    `minimum` is passed in rather than read from settings here, so that this module
-    has no configuration dependency and the threshold is visible at the call site.
+    True on **either** ground:
+
+    * one of them is a vetted publisher -- a newsroom or institution we chose
+      and checked (`VETTED_PUBLISHERS`); or
+    * `minimum` or more *independent* publishers agree, which is the original
+      rule and still the one that applies to anything not on that list.
+
+    Keeping the second clause is not decoration. Community clusters and any
+    future un-vetted source still reach `confirmed` only by corroboration, so
+    the mechanism is there the moment something is read that was not hand-picked.
+
+    `minimum` is passed in rather than read from settings here, so that this
+    module has no configuration dependency and the threshold is visible at the
+    call site.
+
+    >>> is_confirmable(["prothom_alo"], minimum=2)
+    True
+    >>> is_confirmable(["some_blog"], minimum=2)
+    False
+    >>> is_confirmable(["some_blog", "another_blog"], minimum=2)
+    True
     """
-    return len(independent_publishers(source_ids)) >= minimum
+    ids = list(source_ids)
+    if is_vetted(ids):
+        return True
+    return len(independent_publishers(ids)) >= minimum
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +327,12 @@ def confidence(status: str, source_ids: Iterable[str] = ()) -> float:
     if status == "confirmed":
         return 1.0
     if status == "unconfirmed":
-        if any(source_id in AUTHORITATIVE_PUBLISHERS for source_id in source_ids):
+        # Belt and braces. Since 2026-10-16 a vetted publisher's flag is promoted
+        # to `confirmed` at write time, so this branch should not be reached for
+        # one -- but a row written before that change, or one whose promotion was
+        # refused by a constraint, must not be discounted as though a newsroom
+        # were a rumour.
+        if is_vetted(source_ids):
             return 1.0
         return UNCONFIRMED_WEIGHT
     return 0.0

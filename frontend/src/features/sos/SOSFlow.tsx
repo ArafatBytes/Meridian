@@ -21,6 +21,7 @@ import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
 import { fontFamily, radius, space, type } from '../../theme/type';
 import { Sheet } from '../../components/motion';
+import Dialog from '../../components/Dialog';
 import { TAB_BAR_HEIGHT } from '../../navigation/metrics';
 import { SOSCameraModal } from '../../components/SOSCameraModal';
 import type { SosController } from './useSOS';
@@ -245,6 +246,21 @@ export const SOSFlow: React.FC<{ sos: SosController }> = ({ sos }) => {
           <Text style={styles.buttonText}>{ok ? 'Done' : 'Close'}</Text>
         </TouchableOpacity>
       </Sheet>
+
+      {/*
+        The camera could not record, and the alert went out without a video.
+        Previously an `Alert.alert`, which is the one surface in this flow that
+        is not the app's own — appearing, in a grey system box, in the middle of
+        the most frightening thing the product does.
+      */}
+      <Dialog
+        visible={sos.cameraNotice !== null}
+        title="Sending without video"
+        message={sos.cameraNotice ?? ''}
+        tone="warn"
+        icon="videocam-off"
+        onClose={sos.dismissCameraNotice}
+      />
     </>
   );
 };

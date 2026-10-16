@@ -47,6 +47,7 @@ import { Platform } from 'react-native';
 
 import apiService from './api.service';
 import { ALERT_CHANNELS, channelForType, createAlertChannels } from '../features/alerts/channels';
+import { isBatteryOptimized } from '../features/alerts/background';
 import type {
   AlertHistoryEntry,
   AlertPreferences,
@@ -79,15 +80,89 @@ export interface AlertTap {
   lat?: number;
   lon?: number;
   category?: string;
+
+  /**
+   * JG2. The journey a check-in was about, when there was one.
+   */
+  journeyId?: string;
+
+  /**
+   * Which control was pressed: an action button's id, or
+   * `Notifications.DEFAULT_ACTION_IDENTIFIER` for a tap on the notification
+   * itself.
+   *
+   * Carried through rather than collapsed, because JG2's answer is a button and
+   * JG6 will add a second one that looks identical and means something else
+   * entirely. A handler that could not tell them apart would be unable to
+   * implement the one feature the distinction exists for.
+   */
+  actionIdentifier?: string;
 }
 
 type TapHandler = (tap: AlertTap) => void;
+
+/**
+ * One notification response, in our terms.
+ *
+ * Pulled out of the listener so the live path and the cold-start read build the
+ * same object. They used to be one inline literal, which was fine while there
+ * was one source; a second source copying it would be two mappings free to
+ * disagree about which fields they carry, and `journeyId` going missing from one
+ * of them is a dropped safety answer.
+ */
+function toAlertTap(response: Notifications.NotificationResponse): AlertTap {
+  const data = (response.notification.request.content.data ?? {}) as Record<string, unknown>;
+  return {
+    type: String(data.type ?? 'unknown'),
+    flagId: typeof data.flagId === 'string' ? data.flagId : undefined,
+    lat: typeof data.lat === 'number' ? data.lat : undefined,
+    lon: typeof data.lon === 'number' ? data.lon : undefined,
+    category: typeof data.category === 'string' ? data.category : undefined,
+    journeyId: typeof data.journeyId === 'string' ? data.journeyId : undefined,
+    actionIdentifier: response.actionIdentifier,
+  };
+}
+
+/**
+ * A stable id for one response, for the dedupe between the two sources.
+ *
+ * The notification's request identifier and the action together: the same
+ * notification answered twice is the same id, but JG6's two buttons on one
+ * notification must not be mistaken for each other.
+ */
+function responseId(response: Notifications.NotificationResponse): string | null {
+  const id = response.notification.request.identifier;
+  return id ? `${id}:${response.actionIdentifier ?? ''}` : null;
+}
 
 class NotificationService {
   private notificationListener?: Notifications.Subscription;
   private responseListener?: Notifications.Subscription;
   private tapHandler?: TapHandler;
   private cachedToken: string | null = null;
+
+  /**
+   * Taps that arrived before anything was listening.
+   *
+   * `initialize()` attaches the OS listener; `onAlertTap` installs the handler;
+   * and `App.tsx` does them in that order, with awaits in between. A tap landing
+   * in the gap used to hit `this.tapHandler?.(...)` and be dropped silently --
+   * the `?.` making it look deliberate.
+   *
+   * It is not a theoretical gap. A journey check-in answered from the lock
+   * screen is *precisely* the tap that arrives while the app is starting,
+   * because answering is what starts it.
+   */
+  private pendingTaps: AlertTap[] = [];
+
+  /**
+   * The last response delivered, so the cold-start read and the live listener
+   * cannot both report the same one. `getLastNotificationResponseAsync` keeps
+   * returning the launching response for the life of the process, so without
+   * this a check-in would be answered twice -- and the second answer is a 409
+   * that `useJourney` then has to go and ask the server about.
+   */
+  private lastDeliveredId: string | null = null;
   private warnedNoProjectId = false;
 
   /**
@@ -103,6 +178,10 @@ class NotificationService {
       await createAlertChannels();
       const granted = await this.requestPermission();
       this.setupListeners();
+      // After the listener, so a response arriving in between is seen once by
+      // the listener and then skipped here by the dedupe, rather than missed by
+      // both. Queued until `onAlertTap` installs a handler.
+      await this.consumePendingResponse();
       if (granted) {
         await this.getExpoPushToken();
       }
@@ -314,6 +393,12 @@ class NotificationService {
       console.warn('Could not read notification config:', error);
     }
 
+    // Asked of the device, not the server, and the only field here that is.
+    // Android can accept, queue and then sit on a notification until something
+    // wakes the phone, which no amount of server-side configuration reveals --
+    // the push is `ok` at Expo and `ok` at FCM and still does not arrive.
+    const batteryOptimized = await isBatteryOptimized();
+
     return {
       isPhysicalDevice: Device.isDevice,
       // Expo Go dropped Android remote push in SDK 53. Reported rather than
@@ -332,6 +417,7 @@ class NotificationService {
       lastRejection: config?.last_rejection ?? null,
       maxAlertsPerHour: config?.max_alerts_per_hour ?? null,
       alertRadiusM: config?.alert_radius_m ?? null,
+      batteryOptimized,
     };
   }
 
@@ -342,6 +428,50 @@ class NotificationService {
   /** Register a handler for notification taps. Replaces any previous one. */
   onAlertTap(handler: TapHandler): void {
     this.tapHandler = handler;
+    // Anything that arrived while nothing was listening, including the response
+    // that launched the app. Spliced out before delivery so a handler that
+    // throws cannot leave the queue to be replayed.
+    const waiting = this.pendingTaps.splice(0);
+    for (const tap of waiting) handler(tap);
+  }
+
+  /**
+   * Deliver a tap, or hold it until somebody is listening.
+   *
+   * One funnel for both sources -- the live listener and the cold-start read --
+   * so the dedupe and the queue cannot disagree about what has been handled.
+   */
+  private deliver(tap: AlertTap, id: string | null): void {
+    if (id && id === this.lastDeliveredId) return;
+    if (id) this.lastDeliveredId = id;
+    if (this.tapHandler) {
+      this.tapHandler(tap);
+      return;
+    }
+    this.pendingTaps.push(tap);
+  }
+
+  /**
+   * Read the notification response that was waiting when this process started.
+   *
+   * `addNotificationResponseReceivedListener` only fires while the JS runtime is
+   * alive. A lock-screen action pressed against a frozen or killed app is
+   * delivered to Android, dismisses the notification, and is then held by
+   * `expo-notifications` as the *last* response -- which nothing in this app read
+   * until JG2's fifth device run, so the answer was dropped and the person had
+   * to open the app and press the button a second time.
+   *
+   * That is the whole of `opensAppToForeground: false` working as designed on
+   * Android: the app is not brought forward, so there is no foreground listener
+   * to receive it. Something has to go and ask.
+   */
+  private async consumePendingResponse(): Promise<void> {
+    try {
+      const response = await Notifications.getLastNotificationResponseAsync();
+      if (response) this.deliver(toAlertTap(response), responseId(response));
+    } catch (error) {
+      console.warn('Could not read the launching notification response:', error);
+    }
   }
 
   private setupListeners(): void {
@@ -357,17 +487,7 @@ class NotificationService {
 
     this.responseListener = Notifications.addNotificationResponseReceivedListener(
       response => {
-        const data = (response.notification.request.content.data ?? {}) as Record<
-          string,
-          unknown
-        >;
-        this.tapHandler?.({
-          type: String(data.type ?? 'unknown'),
-          flagId: typeof data.flagId === 'string' ? data.flagId : undefined,
-          lat: typeof data.lat === 'number' ? data.lat : undefined,
-          lon: typeof data.lon === 'number' ? data.lon : undefined,
-          category: typeof data.category === 'string' ? data.category : undefined,
-        });
+        this.deliver(toAlertTap(response), responseId(response));
       },
     );
   }

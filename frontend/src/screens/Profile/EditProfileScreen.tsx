@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
   Image,
   ActivityIndicator,
   Platform,
@@ -14,6 +13,8 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Dialog from '../../components/Dialog';
+import { useDialog } from '../../components/useDialog';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
@@ -57,14 +58,18 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPasswordSection, setShowPasswordSection] = useState(false);
 
+  const dialog = useDialog();
+
   const pickImage = async () => {
     // Request permission
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
-        'Permission needed',
-        'Please grant camera roll permissions to upload a profile picture.',
-      );
+      dialog.show({
+        title: 'Photo access needed',
+        message: 'Meridian needs your photos to set a profile picture.',
+        tone: 'warn',
+        icon: 'images-outline',
+      });
       return;
     }
 
@@ -108,9 +113,13 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
       const publicUrl = await uploadAvatar(authUser.id, uri);
 
       setAvatar(publicUrl);
-      Alert.alert('Success', 'Profile picture uploaded successfully!');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to upload image');
+      dialog.show({
+        title: 'Could not upload that picture',
+        message: error.message || 'The server did not answer. Try again.',
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     } finally {
       setIsUploadingImage(false);
     }
@@ -119,7 +128,12 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
   const handleSaveProfile = async () => {
     // Validate name
     if (!name.trim()) {
-      Alert.alert('Error', 'Name is required and cannot be empty');
+      dialog.show({
+        title: 'Add your name',
+        message: 'This is the name your contacts see on an alert.',
+        tone: 'warn',
+        icon: 'person-outline',
+      });
       return;
     }
 
@@ -128,15 +142,22 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
       const phoneDigits = phone.replace(/\D/g, ''); // Remove non-digits
 
       if (phoneDigits.length !== 11) {
-        Alert.alert('Error', 'Phone number must be exactly 11 digits');
+        dialog.show({
+          title: 'That number does not look right',
+          message: 'A Bangladeshi mobile number is 11 digits, starting 01.',
+          tone: 'warn',
+          icon: 'call-outline',
+        });
         return;
       }
 
       if (!phoneDigits.startsWith('01')) {
-        Alert.alert(
-          'Error',
-          'Phone number must start with 01 (Bangladeshi format)',
-        );
+        dialog.show({
+          title: 'That number does not look right',
+          message: 'A Bangladeshi mobile number starts with 01.',
+          tone: 'warn',
+          icon: 'call-outline',
+        });
         return;
       }
 
@@ -152,7 +173,12 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
         secondDigit !== '8' &&
         secondDigit !== '9'
       ) {
-        Alert.alert('Error', 'Invalid Bangladeshi phone number format');
+        dialog.show({
+          title: 'That number does not look right',
+          message: 'Check it against the format 01XXXXXXXXX.',
+          tone: 'warn',
+          icon: 'call-outline',
+        });
         return;
       }
     }
@@ -216,14 +242,19 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
         });
       }
 
-      Alert.alert('Success', 'Profile updated successfully!', [
-        {
-          text: 'OK',
-          onPress: () => navigation.goBack(),
-        },
-      ]);
+      dialog.show({
+        title: 'Profile saved',
+        tone: 'info',
+        icon: 'checkmark-circle-outline',
+        actions: [{ label: 'Done', primary: true, onPress: () => navigation.goBack() }],
+      });
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to update profile');
+      dialog.show({
+        title: 'Could not save your profile',
+        message: error.message || 'The server did not answer. Nothing was changed.',
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -231,30 +262,52 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
 
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all password fields');
+      dialog.show({
+        title: 'Fill in all three fields',
+        message: 'Current password, new password, and the new one again.',
+        tone: 'warn',
+        icon: 'key-outline',
+      });
       return;
     }
 
     if (currentPassword.length < 6) {
-      Alert.alert('Error', 'Please enter your current password');
+      dialog.show({
+        title: 'Enter your current password',
+        message: 'This proves the account is yours.',
+        tone: 'warn',
+        icon: 'key-outline',
+      });
       return;
     }
 
     if (newPassword.length < 8) {
-      Alert.alert('Error', 'New password must be at least 8 characters');
+      dialog.show({
+        title: 'Too short',
+        message: 'A password needs at least 8 characters.',
+        tone: 'warn',
+        icon: 'key-outline',
+      });
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert('Error', 'New passwords do not match');
+      dialog.show({
+        title: 'Those do not match',
+        message: 'Type the new password the same way twice.',
+        tone: 'warn',
+        icon: 'key-outline',
+      });
       return;
     }
 
     if (newPassword === currentPassword) {
-      Alert.alert(
-        'Error',
-        'New password must be different from current password',
-      );
+      dialog.show({
+        title: 'That is your current password',
+        message: 'Choose a different one.',
+        tone: 'warn',
+        icon: 'key-outline',
+      });
       return;
     }
 
@@ -277,7 +330,12 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
       });
 
       if (signInError) {
-        Alert.alert('Error', 'Current password is incorrect');
+        dialog.show({
+          title: 'That password is not right',
+          message: 'Check your current password and try again.',
+          tone: 'warn',
+          icon: 'key-outline',
+        });
         setIsLoading(false);
         return;
       }
@@ -291,13 +349,22 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
         throw error;
       }
 
-      Alert.alert('Success', 'Password changed successfully!');
+      dialog.show({
+        title: 'Password changed',
+        message: 'Use the new one next time you sign in.',
+        icon: 'checkmark-circle-outline',
+      });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setShowPasswordSection(false);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to change password');
+      dialog.show({
+        title: 'Could not change your password',
+        message: error.message || 'The server did not answer. Your password is unchanged.',
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -520,6 +587,8 @@ const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      <Dialog {...dialog.props} />
     </View>
   );
 };

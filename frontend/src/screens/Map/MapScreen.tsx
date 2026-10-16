@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
+  AppState,
   View,
   StyleSheet,
   Pressable,
   TouchableOpacity,
   Text,
-  Alert,
   ScrollView,
   ActivityIndicator,
   TextInput,
@@ -44,6 +44,8 @@ import { geoService } from '../../services/geo.service';
 import RiskFlagSheet, { riskBand } from '../../components/RiskFlagSheet';
 import { RiskFlagMarker, isConfirmedFlag } from '../../components/RiskFlagMarker';
 import RouteComparisonCard, { safetyColour } from '../../components/RouteComparisonCard';
+import Dialog from '../../components/Dialog';
+import { useDialog } from '../../components/useDialog';
 import { TAB_BAR_CLEARANCE } from '../../navigation/metrics';
 import PlaceSearch from '../../components/PlaceSearch';
 import { AS_OF_PRESETS, asOfSummary } from '../../features/risk/scheduled';
@@ -55,6 +57,18 @@ import type { NewsCrimeIncident } from '../../types/contracts/newsCrime';
 import { useNavigation as useRouteFollow } from '../../features/navigation/useNavigation';
 import { NavigationBanner } from '../../features/navigation/NavigationBanner';
 import { FollowMarker } from '../../features/navigation/FollowMarker';
+import { useJourney } from '../../features/journey/useJourney';
+import { goesTo, startedAtLabel } from '../../features/journey/resume';
+import { guardianLine } from '../../features/journey/escalation';
+import { useGuardians } from '../../features/journey/useGuardians';
+import { shouldSuggest } from '../../features/search/suggest';
+import {
+  DEADLINE_CHOICES,
+  HEARTBEAT_INTERVAL_MS,
+  SERVER_GRACE_MINUTES,
+  deadlineLabel,
+  isAwaitingAnswer,
+} from '../../features/journey/deadline';
 
 /**
  * A report as this screen draws it -- and every one of these belongs to the signed-in
@@ -160,6 +174,7 @@ const FAB_GAP = 14;
  */
 const SEARCH_CARD_FALLBACK = 46;
 
+
 /**
  * An "hours from now" offset as the instant to ask the surface about.
  *
@@ -215,6 +230,18 @@ type MapScreenNavigationProp = CompositeNavigationProp<
 interface Props {
   navigation: MapScreenNavigationProp;
 }
+
+/**
+ * An ISO instant `days` ago.
+ *
+ * At module scope rather than inline, because the React compiler analyses every
+ * expression in a component body and cannot tell that this one runs inside an
+ * async callback rather than during render -- it reads `Date.now()` as an impure
+ * call and says so. Out here it is simply a function, and the call site says
+ * what it means instead of doing arithmetic on milliseconds.
+ */
+const isoDaysAgo = (days: number): string =>
+  new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
 const MapScreen: React.FC<Props> = ({ navigation }) => {
   const { t, mode } = useTheme();
@@ -371,7 +398,13 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     if (!destination) return;
     const here = from ?? currentLocation ?? (await getCurrentLocation());
     if (!here) {
-      Alert.alert('Location unavailable', 'Could not work out where you are.');
+      showDialog({
+        title: 'Cannot find you',
+        message:
+          'Your phone did not report a location. Check that location is on, then try again.',
+        tone: 'warn',
+        icon: 'location-outline',
+      });
       return;
     }
     setSourceLocation(here);
@@ -391,6 +424,64 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     onReroute: recalculateFrom,
   });
 
+  /**
+   * The journey the server is holding. JG1.
+   *
+   * It is read on mount, so a force-stop mid-walk is recoverable: the row
+   * outlived the process, and the card below offers it back. Nothing watches it
+   * -- there is no deadline and no check-in until JG2.
+   */
+  const journey = useJourney();
+
+  /**
+   * Measured height of the resume card, so the FAB column below it moves down
+   * instead of being covered. Zero when the card is not showing, which is the
+   * usual case. Same idiom and same reason as `searchHeight`.
+   */
+  const [resumeHeight, setResumeHeight] = useState(0);
+
+  /**
+   * Which deadline chip is selected, as an index into `DEADLINE_CHOICES`. JG2.
+   *
+   * An index rather than the minutes, so "the default" and "sixty minutes" stay
+   * distinguishable -- the default sends `null` and lets the server apply its own
+   * grace period, and a client that resolved it to a number here would be a
+   * second definition of that grace period, free to drift.
+   *
+   * Reset to 0 whenever route mode is left, so a two-minute leash chosen for one
+   * trip is never silently inherited by the next.
+   */
+  const [deadlineChoice, setDeadlineChoice] = useState(0);
+
+  /**
+   * Who this journey will be told to, or null for nobody. JG3.
+   *
+   * **Null is the initial value and it is reset to null when route mode is
+   * left**, for the same reason `deadlineChoice` goes back to 0: a guardian
+   * chosen for a walk home at 11pm must not be inherited by tomorrow's trip to
+   * the shop. Emailing the wrong person is not recoverable -- the message has
+   * already arrived -- so the sticky version of this control would be a
+   * convenience bought with somebody else's trust.
+   */
+  const [guardianId, setGuardianId] = useState<string | null>(null);
+
+  /**
+   * The contacts the picker offers. Read once, from the table the contacts
+   * screen writes. See `useGuardians` for why it is read directly and why a
+   * contact with no email is shown rather than hidden.
+   */
+  const guardians = useGuardians();
+
+  /**
+   * Everything this screen has to say, in the app's own material rather
+   * than the operating system's. See `components/Dialog.tsx` for why that
+   * is worth a hook: `Alert.alert` draws a Material 3 box that has never
+   * seen `palette.ts`, and on some Android skins ignores dark mode — a
+   * white card over a dark map, at the moment the app most needs to look
+   * deliberate.
+   */
+  const { show: showDialog, props: dialogProps } = useDialog();
+
   // Search State
   const [sourceLocation, setSourceLocation] = useState<Location | null>(null);
   const [sourceQuery, setSourceQuery] = useState('My Location');
@@ -400,14 +491,58 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   const [activeSearch, setActiveSearch] = useState<'source' | 'destination' | null>(null);
   const [isSearching, setIsSearching] = useState(false);
 
+  /**
+   * Whether the text in the active field was typed by a person.
+   *
+   * The suggestion list is driven by the *contents* of the two fields, and the
+   * code writes to those fields too: a map tap puts "Selected Location" in the
+   * destination, a POI tap puts the place's name there, Resume puts the stored
+   * destination label there. Without this flag every one of those is treated as
+   * a search, and the geocoder answers the string it was handed -- which is how
+   * a tap on open ground in Dhaka produced a suggestion for *"A location
+   * selected by Seoul for its scenic views"*. It was not a wrong geocode; it was
+   * an honest answer to a question nobody asked.
+   *
+   * `activeSearch` cannot carry this on its own. The destination field has
+   * `autoFocus`, so on Resume its `onFocus` fires *after* the label is written
+   * and sets `activeSearch` back to 'destination' by itself.
+   */
+  const [typedQuery, setTypedQuery] = useState(false);
+
+  /**
+   * Answers already in flight are abandoned by bumping this, not cancelled.
+   * A request fired while someone was still typing can land after they have
+   * tapped the map, and the list it populates is the same unasked-for list.
+   */
+  const searchRun = useRef(0);
+
+  /**
+   * "The field now holds a choice, not a question." Called from every place that
+   * writes a destination into the box on the person's behalf.
+   */
+  const stopSuggesting = () => {
+    searchRun.current += 1;
+    setTypedQuery(false);
+    setSuggestions([]);
+    // The abandoned answer will not clear this on its way out, and a spinner
+    // that never stops is worse than one that stops a moment early.
+    setIsSearching(false);
+  };
+
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const requestLocation = async () => {
     try {
       await getCurrentLocation();
-    } catch (error) {
-      Alert.alert('Location Error', 'Failed to get your current location');
+    } catch {
+      showDialog({
+        title: 'Cannot find you',
+        message:
+          'Your phone did not report a location. Check that location is on, then try again.',
+        tone: 'warn',
+        icon: 'location-outline',
+      });
     }
   };
 
@@ -417,23 +552,29 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       setSuggestions([]);
       return;
     }
+    const run = ++searchRun.current;
     setIsSearching(true);
     try {
       // D06, defect 10: through our own proxy, not nominatim.openstreetmap.org direct.
       // One identifying User-Agent, one shared Redis cache, and traffic the server can
       // see — rather than every phone spending the per-IP rate limit separately with
       // React Native's default agent.
-      setSuggestions(await geoService.search(query));
+      const results = await geoService.search(query);
+      // Superseded while this was in flight: either a newer keystroke, or a
+      // choice that means there is no longer a question to answer.
+      if (run === searchRun.current) setSuggestions(results);
     } finally {
-      setIsSearching(false);
+      if (run === searchRun.current) setIsSearching(false);
     }
   };
 
   useEffect(() => {
     const query = activeSearch === 'source' ? sourceQuery : destQuery;
     const timeoutId = setTimeout(() => {
-      // Don't search if it's "My Location" or empty
-      if (activeSearch && query.trim().length >= 3 && query !== 'My Location') {
+      // Only text a person typed is a search. Everything else in these fields was
+      // put there by the code, and already knows its own coordinates. See
+      // `shouldSuggest` for the Seoul viewpoint this is named after.
+      if (shouldSuggest({ typed: typedQuery, active: activeSearch, query })) {
         fetchSuggestions(query);
       } else {
         setSuggestions([]);
@@ -441,7 +582,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [sourceQuery, destQuery, activeSearch]);
+  }, [sourceQuery, destQuery, activeSearch, typedQuery]);
 
   const handleSuggestionSelect = (suggestion: any) => {
     const loc = {
@@ -473,7 +614,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       }
     }
 
-    setSuggestions([]);
+    stopSuggesting();
     setActiveSearch(null);
     Keyboard.dismiss();
   };
@@ -485,7 +626,12 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   ) => {
     const fromLoc = start || currentLocation;
     if (!fromLoc) {
-      Alert.alert("Location Missing", "Please select a source location.");
+      showDialog({
+        title: 'No starting point',
+        message: 'Pick where you are setting off from, or wait for your location to arrive.',
+        tone: 'warn',
+        icon: 'navigate-outline',
+      });
       return;
     }
 
@@ -502,10 +648,22 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       if (routes.length > 0) {
         setSelectedRouteIndex(0);
       } else {
-        Alert.alert("No Routes", "Could not calculate a safe route.");
+        showDialog({
+          title: 'No route found',
+          message:
+            'Nothing connects those two points by road. Try a destination nearer a main road.',
+          tone: 'warn',
+          icon: 'map-outline',
+        });
       }
-    } catch (error) {
-      Alert.alert("Error", "Failed to calculate routes.");
+    } catch {
+      showDialog({
+        title: 'Could not plan the route',
+        message:
+          'The server did not answer. Check your connection and try again.',
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     } finally {
       setIsRouting(false);
     }
@@ -545,9 +703,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         return;
       }
 
-      const since = new Date(
-        Date.now() - REPORT_HISTORY_DAYS * 24 * 60 * 60 * 1000,
-      ).toISOString();
+      const since = isoDaysAgo(REPORT_HISTORY_DAYS);
 
       const { data, error } = await supabase
         .from('crime_reports')
@@ -815,6 +971,12 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     if (routeMode) {
       // Exit route mode
       follow.stop();
+      // Leaving route mode ends the journey, because it throws away the route and
+      // the destination that the journey is about. A no-op when there is no open
+      // journey, which is the usual case. `cancelled` rather than `arrived` is the
+      // truth about it: the one thing JG2 and JG3 must be able to tell apart is
+      // "got there" from "stopped telling us", so the two states never merge.
+      void journey.cancel();
       setFollowCamera(true);
       setRouteMode(false);
       setDestination(null);
@@ -822,12 +984,85 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       setDestQuery('');
       setSourceQuery('My Location');
       setSourceLocation(null);
+      // Back to the route's own ETA. A two-minute leash chosen for one trip must
+      // not be silently inherited by the next one -- that is a setting the person
+      // made about a journey, not a preference about themselves.
+      setDeadlineChoice(0);
+      stopSuggesting();
+      // And back to Nobody, which is the stronger version of the same argument:
+      // a deadline inherited by the wrong trip is a nuisance, a guardian
+      // inherited by the wrong trip is an email somebody did not mean to send.
+      setGuardianId(null);
     } else {
       setRouteMode(true);
+      // Re-read the contacts as the picker comes into view. Somebody who
+      // notices they have nobody to pick will go and add a contact, and the
+      // list was read once at mount -- so without this the person who just
+      // fixed the problem is the one who still sees it.
+      void guardians.reload();
     }
   };
 
-  const handleMapPress = async (e: any) => {
+  /**
+   * Put a journey the server was holding back on the screen. JG1.
+   *
+   * It restores route mode, the destination and the profile, then routes again
+   * **from where the person is now**. The route is not stored and deliberately
+   * so: a polyline from twenty minutes ago starts at an origin they have left, so
+   * following it would snap them to a point far behind and narrate a turn they
+   * already took. The journey is the destination and the clock, not the line.
+   *
+   * It stops at the route card rather than starting to follow by itself. Two
+   * reasons, and the second is the honest one. A fresh route is a fresh set of
+   * candidates, and which one to take is a question the user should see the
+   * answer to. And `follow.start` closes over the path in the current render, so
+   * calling it in the same tick as the route arriving would be following the path
+   * from *before* -- a stale-closure bug that would look like Resume silently
+   * doing nothing. Pressing `Start` on the card is one tap and no such hazard,
+   * and it does not create a second journey: `goesTo` recognises this one.
+   */
+  const resumeJourney = async () => {
+    const open = journey.journey;
+    if (!open) return;
+
+    const dest = {
+      latitude: open.destination_latitude,
+      longitude: open.destination_longitude,
+    };
+    const profile: 'driving' | 'foot' = open.route_profile === 'foot' ? 'foot' : 'driving';
+
+    setRouteMode(true);
+    setRouteProfile(profile);
+    setDestination(dest);
+    setDestQuery(open.destination_label);
+    // The stored label is a record of where they were already going, not a
+    // search for somewhere new -- and the field it lands in takes focus by itself.
+    stopSuggesting();
+
+    const here = currentLocation ?? (await getCurrentLocation());
+    if (!here) {
+      showDialog({
+        title: 'Cannot find you',
+        message:
+          'Your phone did not report a location. Check that location is on, then try again.',
+        tone: 'warn',
+        icon: 'location-outline',
+      });
+      return;
+    }
+    setSourceLocation(here);
+    setSourceQuery('My Location');
+    // The override is passed explicitly: `setRouteProfile` above has not reached
+    // state yet, and routing a walk as a drive would quietly treble the ETA.
+    await calculateRouteTo(here, dest, profile);
+  };
+
+  /**
+   * Route to a point the user tapped on the map.
+   *
+   * Reached from two events, not one. See `handlePoiPress`.
+   */
+  const selectDestination = (coord: Location, label: string) => {
     if (!routeMode || !currentLocation) return;
 
     // While following, a tap on the map means "let me look around" and nothing
@@ -839,12 +1074,40 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       return;
     }
 
-    const coord = e.nativeEvent.coordinate;
     const dest = { latitude: coord.latitude, longitude: coord.longitude };
     setDestination(dest);
-    setDestQuery("Selected Location"); // Placeholder text
+    setDestQuery(label);
+    // A tap on the map is a choice, exactly like picking a suggestion: the
+    // coordinate is already known, so the label is a caption, not a query.
+    stopSuggesting();
+    Keyboard.dismiss();
     calculateRouteTo(sourceLocation || currentLocation, dest);
   };
+
+  /** A tap on open ground. The coordinate is all there is to say about it. */
+  const handleMapPress = (e: any) =>
+    selectDestination(e.nativeEvent.coordinate, 'Selected Location');
+
+  /**
+   * A tap on one of Google's own labelled places -- a restaurant, a mosque, a
+   * school.
+   *
+   * This is a **separate event**, and that is the whole bug it fixes: the Maps
+   * SDK dispatches `onPoiClick` for a labelled place and `onPress` only for
+   * empty ground, so with `onPress` alone every named place on the map was
+   * untappable while the blank pavement beside it worked. Reported as "it only
+   * selects if I miss the label", which is exactly what was happening.
+   *
+   * The event carries the place's `name`, so this is also better than what it
+   * fixes: the destination field reads "Star Kabab" rather than "Selected
+   * Location". `name` is still defended against, because the payload is the
+   * SDK's and an unnamed POI is possible.
+   */
+  const handlePoiPress = (e: any) =>
+    selectDestination(
+      e.nativeEvent.coordinate,
+      e.nativeEvent.name || 'Selected Location',
+    );
 
   useEffect(() => {
     requestLocation();
@@ -900,8 +1163,121 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
    */
   useEffect(() => {
     if (!follow.error) return;
-    Alert.alert('Cannot follow this route', follow.error);
-  }, [follow.error]);
+    showDialog({
+      title: 'Cannot follow this route',
+      message: follow.error,
+      tone: 'warn',
+      icon: 'navigate-outline',
+    });
+  }, [follow.error, showDialog]);
+
+  /**
+   * The phone reporting in while it moves. JG2.
+   *
+   * This is the only thing in the app that extends a deadline without somebody
+   * pressing a button, and the asymmetry it creates is the whole design: a phone
+   * in a jam talks and the clock follows it; a phone in a ditch does not and the
+   * clock runs out. **Deleting this effect would make every journey due exactly
+   * when it said it would be**, which is a worse product and not a broken one --
+   * worth knowing, because that is what a dropped heartbeat looks like.
+   *
+   * Only while actually following. A journey resumed to the route card but not
+   * started is a journey the person is not walking, and reporting progress for it
+   * would be the app vouching for someone who is standing still.
+   *
+   * `remainingSeconds` is the navigator's own estimate from measured GPS
+   * progress, not the route's original promise -- which is what lets a jam
+   * extend the deadline honestly.
+   */
+  useEffect(() => {
+    if (!follow.active || !journey.journey) return;
+
+    const beat = () => {
+      const left = follow.remainingSeconds;
+      if (typeof left !== 'number' || !Number.isFinite(left)) return;
+      // The navigator's own last fix, which costs nothing: it is already
+      // subscribed for the progress line, so there is no second location
+      // watcher and no extra battery. `useJourney` drops it when the journey
+      // has no guardian -- JG3's privacy rule lives there rather than here,
+      // because it is a property of the journey and not of this screen.
+      void journey.heartbeat(left, follow.position);
+    };
+
+    // Not fired immediately: the deadline was set seconds ago from this same
+    // route, so the first beat would move it by the width of one render.
+    const timer = setInterval(beat, HEARTBEAT_INTERVAL_MS);
+    return () => clearInterval(timer);
+    // `follow.remainingSeconds` is deliberately absent. It changes on every GPS
+    // fix, and including it would tear the interval down and rebuild it each
+    // time -- so the timer would never reach a full minute and the phone would
+    // report on every fix instead of once a minute.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [follow.active, journey.journey?.journey_id]);
+
+  /**
+   * Look again when the app comes back. JG2.
+   *
+   * The escalation state changes on the *server* -- the sweep sets
+   * `check_in_sent` with no request from this app -- so a card that only ever
+   * read what it was given at launch would never learn a question had been
+   * asked. This is not a poll: it fires when the app is brought to the
+   * foreground, which is the moment somebody is looking at it.
+   */
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', next => {
+      if (next === 'active') void journey.refresh();
+    });
+    return () => subscription.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * You arrived, so the journey is closed. JG1.
+   *
+   * The navigator decides this -- `hasArrived`, within 40 m of the final point --
+   * and it is the only thing in JG1 that ends a journey without the user pressing
+   * anything. From JG2 onward it is also what stops the clock, which is why it
+   * goes through `arrive` and not `cancel`: a journey that ended by arriving and
+   * one that ended by being abandoned are the two cases the whole feature exists
+   * to tell apart.
+   *
+   * Safe to fire more than once. `useJourney` clears its own state first, so a
+   * second call has no journey to close.
+   */
+  useEffect(() => {
+    if (follow.phase !== 'arrived') return;
+    void journey.arrive();
+    // `journey.arrive` is stable (`useCallback`), and listing `journey` itself
+    // would re-run this on every journey state change -- including the one this
+    // effect causes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [follow.phase]);
+
+  /**
+   * The journey could not be recorded, and the person is about to walk off.
+   *
+   * Said out loud rather than swallowed, because the consequence is specific and
+   * invisible: the directions work, and nothing will remember this trip if the
+   * app restarts. A silent failure here is the feature pretending to be on.
+   *
+   * Filled in by the Start handler from what `journey.start` returned, not by an
+   * effect watching the hook -- see `JourneyWrite`. Cleared when the dialog is
+   * dismissed, so it is a record of what has not been read yet rather than of
+   * what is wrong.
+   *
+   * The title and body travel together rather than the body alone with a fixed
+   * title and a fixed closing sentence in the JSX. Two different failures reach
+   * this dialog -- a journey that could not be written at Start, and a check-in
+   * that could not be sent -- and with one hardcoded tail the second one told
+   * the person *"Journey not recorded ... this journey will not be here if the
+   * app restarts"* about a journey that was recorded and running. Copy written
+   * for one failure is not merely unhelpful when shown for another; here it
+   * asserted the opposite of the truth about somebody's safety check-in.
+   */
+  const [journeyNotice, setJourneyNotice] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
 
   // Leaving route mode stops the GPS. Without this, backing out of routing would
   // leave a high-accuracy subscription running behind the browse map.
@@ -943,7 +1319,49 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   // Laid out as a stack rather than as independent guesses — see the geometry note
   // at the top of this file.
   const searchTop = insets.top + space.xs;
-  const fabColumnTop = searchTop + searchHeight + space.sm;
+  // The resume card sits between the search card and the buttons, so the buttons
+  // move down by its height when it is there.
+  //
+  // `showResume` and not `resumeHeight > 0` alone: `onLayout` does not fire on
+  // unmount, so the measured height survives the card disappearing, and the
+  // buttons would stay pushed down over a gap. Deriving the offset from whether
+  // the card is rendered makes it correct in both directions.
+  const resumeTop = searchTop + searchHeight + space.sm;
+
+  /**
+   * A question is outstanding, so the card becomes the answer. JG2.
+   *
+   * Derived rather than stored: the server owns this, and the only ways it
+   * changes are the launch read, the foreground refresh and the check-in's own
+   * response. A copy in state would be a fourth source that could disagree with
+   * all three.
+   */
+  const awaitingAnswer = !!journey.journey && isAwaitingAnswer(journey.journey);
+
+  /**
+   * The journey card. Normally the resume card, and in JG2 also the answer.
+   *
+   * `|| awaitingAnswer` is the part that matters: the deadline most often passes
+   * while somebody is *still walking*, which is route mode, which is exactly when
+   * this card used to be hidden. Without it the only way to answer mid-journey
+   * would be the notification, and the notification is the half of this feature
+   * most likely to be missing on a given handset -- a denied permission, Expo Go,
+   * a dead token. A safety question with one way to answer it is one permission
+   * dialog away from being unanswerable.
+   */
+  const showResume = (!routeMode || awaitingAnswer) && !journey.loading && !!journey.journey;
+
+  /**
+   * Where that card sits.
+   *
+   * In route mode the search card is not rendered and neither is the planner
+   * once following starts, so the top of the screen is free and the card goes
+   * straight under the inset. `resumeTop` cannot be used there: it is built from
+   * `searchHeight`, which `onLayout` left behind when the search card unmounted.
+   */
+  const journeyCardTop = routeMode ? searchTop : resumeTop;
+  const fabColumnTop =
+    resumeTop + (showResume && resumeHeight > 0 ? resumeHeight + space.sm : 0);
   // Every bottom overlay measures from here rather than from `insets.bottom`.
   // The tab bar now floats *over* this screen instead of sitting below it, so
   // the safe floor moved up by its height — and because the geometry note above
@@ -1020,6 +1438,8 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         showsMyLocationButton={false}
         showsCompass={false}
         onPress={handleMapPress}
+        // Labelled places come through here instead of `onPress`, never both.
+        onPoiClick={handlePoiPress}
       >
         {/* Source Marker */}
         {sourceLocation && (
@@ -1285,8 +1705,153 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       )}
 
-      {/* Route Search Interface (Google Maps Style) */}
-      {routeMode && (
+      {/* A journey the server was still holding. JG1, and the whole visible
+          output of that phase.
+
+          Shown only outside route mode, which is exactly the state a cold start
+          lands in -- so force-stopping the app mid-walk and reopening it finds
+          this instead of an empty map. `loading` keeps it off the screen until
+          the launch read has answered, so it does not flash in and out.
+
+          `opaque` for the reason the search card above gives: with the blur off,
+          the fill is all that separates this card's text from the map's. */}
+      {showResume && journey.journey && (
+        <View
+          style={[styles.searchContainer, { top: journeyCardTop }]}
+          onLayout={event => setResumeHeight(event.nativeEvent.layout.height)}
+        >
+          <Glass
+            style={styles.searchBox}
+            padding={space.md}
+            radius={radius.card}
+            blur={false}
+            opaque
+            elevated
+          >
+            {/* The card itself opens the journey screen. JG3.
+
+                Not a button: by JG3 this card carries five possible states and
+                a history behind each, and the one thing a person wants when
+                they see "Ammu has been emailed" is to know when that happened
+                and what happens next. A chevron on the row would be a third
+                control beside two that already matter more. */}
+            <TouchableOpacity
+              style={styles.resumeRow}
+              onPress={() => navigation.navigate('Journey')}
+              accessibilityRole="button"
+              accessibilityLabel="Open this journey"
+            >
+              <Ionicons
+                name={
+                  awaitingAnswer
+                    ? 'help-circle'
+                    : journey.journey.route_profile === 'foot'
+                      ? 'walk'
+                      : 'navigate'
+                }
+                size={18}
+                color={awaitingAnswer ? t.warn : t.brand}
+              />
+              <View style={styles.resumeText}>
+                <Text style={styles.resumeTitle} numberOfLines={1}>
+                  {awaitingAnswer ? 'Are you there yet?' : 'Journey in progress'}
+                </Text>
+                {/* The route's own estimate and the time it was taken, not a
+                    countdown. A "7 min left" here would be a number nothing is
+                    maintaining: JG2 put a deadline on the server, and the
+                    deadline is what the card shows -- an instant, which stays
+                    true while nobody is looking, rather than a duration, which
+                    does not. */}
+                <Text style={styles.resumeDetail} numberOfLines={1}>
+                  {`${Math.round(journey.journey.duration_minutes)} min to ${journey.journey.destination_label}`}
+                  {startedAtLabel(journey.journey.deadline_at)
+                    ? ` · check in by ${startedAtLabel(journey.journey.deadline_at)}`
+                    : ''}
+                </Text>
+                {/* One line, and only when there is somebody to name. JG3.
+
+                    It is on the card rather than only on the journey screen
+                    because this is the card somebody sees at a glance while
+                    walking, and "is Ammu being told about this?" is a question
+                    with a real consequence attached -- the answer being
+                    invisible is how a feature like this surprises people. */}
+                {guardianLine(journey.journey) && (
+                  <Text style={styles.resumeGuardian} numberOfLines={1}>
+                    {guardianLine(journey.journey)}
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
+            <View style={styles.resumeActions}>
+              {/* The same answer as the lock-screen button, through the same
+                  endpoint. It is here because the notification is the part of
+                  this feature most likely to fail on a given handset -- a denied
+                  permission, Expo Go, a dead token -- and a safety question with
+                  exactly one way to answer it is one permission dialog away from
+                  being unanswerable. */}
+              {awaitingAnswer ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    void (async () => {
+                      // `checkIn` is false only when the server still says a
+                      // question is outstanding, so this no longer fires for an
+                      // answer that landed by the notification instead -- which
+                      // is the common race, not a rare one. See `useJourney`.
+                      if (!(await journey.checkIn())) {
+                        setJourneyNotice({
+                          title: 'Check-in not sent',
+                          message:
+                            'Meridian could not reach the server, so this ' +
+                            'check-in was not recorded. The journey is still ' +
+                            'running — try again in a moment.',
+                        });
+                      }
+                    })();
+                  }}
+                  style={styles.resumeGo}
+                  accessibilityRole="button"
+                  accessibilityLabel="I'm fine"
+                >
+                  <Text style={styles.resumeGoText}>I&apos;m fine</Text>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    onPress={() => void journey.cancel()}
+                    style={styles.resumeEnd}
+                    accessibilityRole="button"
+                    accessibilityLabel="End this journey"
+                  >
+                    <Text style={styles.resumeEndText}>End</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => void resumeJourney()}
+                    style={styles.resumeGo}
+                    accessibilityRole="button"
+                    accessibilityLabel="Resume this journey"
+                  >
+                    <Text style={styles.resumeGoText}>Resume</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </Glass>
+        </View>
+      )}
+
+      {/* Route Search Interface (Google Maps Style).
+
+          Hidden once following starts. The route comparison card below already
+          had `!follow.active`; this one did not, so pressing Start left the
+          planner sitting over the map with the navigation banner underneath it
+          -- two cards, and the source and destination fields are not something
+          anyone edits mid-walk.
+
+          It also removes the only way to reach the close button below while
+          walking, which is the second half of the same report: that button exits
+          route mode completely. The exit while following is the banner's own,
+          which stops following and brings this back. */}
+      {routeMode && !follow.active && (
         <View style={[styles.searchContainer, { top: searchTop }]}>
           {/* `padding` on the prop, never in `searchBox` -- see that style.
 
@@ -1302,14 +1867,28 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
               Nothing is lost visually either way: Dimezis blurs the target's own
               canvas, a Google map draws on a surface that canvas never sees, so the
               blur of a map is the blur of nothing -- which comes out black, not
-              transparent. See the note in `Aurora.tsx`. */}
-          <Glass style={styles.searchBox} padding={space.md} radius={radius.card} blur={false} elevated>
+              transparent. See the note in `Aurora.tsx`.
+
+              `opaque` because with the blur gone the fill is all that separates
+              this card's text from the map's. See `Glass.tsx`. */}
+          <Glass
+            style={styles.searchBox}
+            padding={space.md}
+            radius={radius.card}
+            blur={false}
+            opaque
+            elevated
+          >
             {/* Source input, with the way out of route mode on the same row.
                 A "Plan a route" title used to sit above this in a header of its
                 own, which spent a whole row saying what two labelled fields and a
-                Driving/Walking pair already say. The close control stays -- route
-                mode has no other exit, and a reload was once the only escape --
-                it just no longer needs a row to itself. */}
+                Driving/Walking pair already say. The close control stays -- it is
+                how you leave route mode, and a reload was once the only escape --
+                it just no longer needs a row to itself.
+
+                It leaves route mode outright, which is why this whole card is
+                hidden while following: there, "close" has to mean stop walking,
+                and that button is on the navigation banner. */}
             <View style={styles.inputRow}>
               <View style={[styles.inputDot, styles.sourceDot]} />
               <TextInput
@@ -1318,6 +1897,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                 onChangeText={(text) => {
                   setSourceQuery(text);
                   setActiveSearch('source');
+                  setTypedQuery(true);
                 }}
                 onFocus={() => setActiveSearch('source')}
                 placeholder="Start location"
@@ -1348,6 +1928,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                 onChangeText={(text) => {
                   setDestQuery(text);
                   setActiveSearch('destination');
+                  setTypedQuery(true);
                 }}
                 onFocus={() => setActiveSearch('destination')}
                 placeholderTextColor={t.textSoft}
@@ -1394,14 +1975,188 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                 );
               })}
             </View>
+
+            {/* The deadline. JG2.
+
+                Only once a route exists, because until then there is no ETA to
+                pre-fill it from and the row would be offering to schedule a
+                journey that has no shape yet.
+
+                The clock time is the point of this row -- "Check in by 10:40" is
+                a thing a person can judge at a glance, and "+10 minutes" is not.
+                It is recomputed on every render from `Date.now()`, which is
+                deliberate and is the reason for the eslint exception: the chips
+                are offsets from *now*, so a cached time would quietly become
+                wrong while the card sat on screen waiting to be read. */}
+            {calculatedRoutes.length > 0 && (
+              <View style={styles.deadlineBlock}>
+                <Text style={styles.deadlineLead}>
+                  {'Check in by '}
+                  <Text style={styles.deadlineTime}>
+                    {deadlineLabel({
+                      // Deliberately impure, and the one place in this screen
+                      // where that is the correct behaviour: the chips are
+                      // offsets from *now*, so a value cached at mount would
+                      // quietly become wrong while the card sat waiting to be
+                      // read. The cost of being re-evaluated on every render is
+                      // one `Date.now()`.
+                      // eslint-disable-next-line react-hooks/purity
+                      now: Date.now(),
+                      minutes: DEADLINE_CHOICES[deadlineChoice].minutes,
+                      durationMinutes:
+                        calculatedRoutes[selectedRouteIndex]?.duration_minutes ?? 0,
+                      graceMinutes: SERVER_GRACE_MINUTES,
+                    })}
+                  </Text>
+                </Text>
+                <View style={styles.deadlineRow}>
+                  {DEADLINE_CHOICES.map((choice, index) => {
+                    const chosen = index === deadlineChoice;
+                    return (
+                      <TouchableOpacity
+                        key={choice.label}
+                        style={[styles.deadlineChip, chosen && styles.deadlineChipActive]}
+                        onPress={() => setDeadlineChoice(index)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: chosen }}
+                        accessibilityLabel={`Check in after ${choice.label}`}
+                      >
+                        <Text
+                          style={[
+                            styles.deadlineChipText,
+                            chosen && styles.deadlineChipTextActive,
+                          ]}
+                        >
+                          {choice.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {/* Who gets told. JG3.
+
+                Under the deadline because it reads in that order: how long I am
+                giving myself, and who hears about it if I go past that.
+
+                **Nobody is selected until somebody picks a person**, and it goes
+                back to Nobody when route mode is left. Defaulting to the first
+                contact would be the app sending an email on somebody's behalf
+                because of a list order they never saw -- and unlike almost every
+                other default in this app, that one cannot be undone after the
+                fact. The whole feature is worth less if people stop trusting it
+                to stay quiet.
+
+                Contacts with no email address are shown and disabled rather than
+                hidden: JG3 sends email and nothing else, so one of those cannot
+                be a guardian (the server answers 422), but a contact somebody
+                deliberately saved should not silently vanish from a list of
+                their contacts. */}
+            {calculatedRoutes.length > 0 && (
+              <View style={styles.guardianBlock}>
+                <Text style={styles.deadlineLead}>
+                  {'If you go quiet, tell '}
+                  <Text style={styles.deadlineTime}>
+                    {guardianId
+                      ? guardians.options.find(o => o.id === guardianId)?.name ?? 'nobody'
+                      : 'nobody'}
+                  </Text>
+                </Text>
+                <View style={styles.guardianRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.guardianChip,
+                      guardianId === null && styles.deadlineChipActive,
+                    ]}
+                    onPress={() => setGuardianId(null)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: guardianId === null }}
+                    accessibilityLabel="Tell nobody about this journey"
+                  >
+                    <Text
+                      style={[
+                        styles.deadlineChipText,
+                        guardianId === null && styles.deadlineChipTextActive,
+                      ]}
+                    >
+                      Nobody
+                    </Text>
+                  </TouchableOpacity>
+
+                  {guardians.options.map(option => {
+                    const chosen = option.id === guardianId;
+                    return (
+                      <TouchableOpacity
+                        key={option.id}
+                        style={[
+                          styles.guardianChip,
+                          chosen && styles.deadlineChipActive,
+                          !option.usable && styles.guardianChipUnusable,
+                        ]}
+                        disabled={!option.usable}
+                        onPress={() => setGuardianId(option.id)}
+                        accessibilityRole="button"
+                        accessibilityState={{
+                          selected: chosen,
+                          disabled: !option.usable,
+                        }}
+                        accessibilityLabel={
+                          option.usable
+                            ? `Tell ${option.name} about this journey`
+                            : `${option.name} has no email address and cannot be told`
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.deadlineChipText,
+                            chosen && styles.deadlineChipTextActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {option.usable ? option.name : `${option.name} · no email`}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* What picking somebody actually does, in one line, before it
+                    happens rather than after. Three emails is the entire extent
+                    of it, and saying so is what makes the choice informed --
+                    "share my journey" could mean live tracking, and this is not
+                    that. */}
+                {guardianId !== null && (
+                  <Text style={styles.guardianNote}>
+                    They get an email when you set off, when you arrive, and if you
+                    stop answering check-ins.
+                  </Text>
+                )}
+                {guardianId === null && !guardians.loading && guardians.options.length === 0 && (
+                  <Text style={styles.guardianNote}>
+                    Add an emergency contact with an email address to use this.
+                  </Text>
+                )}
+              </View>
+            )}
           </Glass>
 
           {/* Suggestions List.
 
               `blur={false}` for the reason on the card above: over a map, on a
-              screen with no backdrop of its own, the blur is a crash. */}
+              screen with no backdrop of its own, the blur is a crash -- and
+              `opaque` for the other half of it, because a list of place names
+              over a map full of place names is unreadable at 62%. */}
           {suggestions.length > 0 && (
-            <Glass style={styles.suggestionsContainer} padding={0} radius={radius.md} blur={false} elevated>
+            <Glass
+              style={styles.suggestionsContainer}
+              padding={0}
+              radius={radius.md}
+              blur={false}
+              opaque
+              elevated
+            >
               <ScrollView keyboardShouldPersistTaps="always">
                 {suggestions.map((item, index) => (
                   <TouchableOpacity
@@ -1495,9 +2250,69 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           // high-accuracy fixes every two seconds because a route happens to be
           // drawn would flatten a battery for someone who was only comparing
           // options.
+          // JG1. The journey is written *before* following starts, because that
+          // ordering is what makes it survive -- the row has to exist before the
+          // thing that could be killed begins.
+          //
+          // It does not block following. A phone with no signal at the moment
+          // someone presses Start is a phone whose owner still needs directions,
+          // and refusing to navigate because we could not record the journey
+          // would be the safety feature making the person less safe. `start`
+          // resolves to null instead of throwing, and the effect above says so.
           onStart={() => {
             setFollowCamera(true);
-            void follow.start();
+            const open = journey.journey;
+            const route = calculatedRoutes[selectedRouteIndex];
+            const from = sourceLocation ?? follow.position ?? currentLocation;
+
+            // Already recorded: this is the journey being resumed, reached
+            // through the same button. Recording a second one would move
+            // `started_at` to now, and from JG2 onward that is the instant the
+            // deadline is measured from.
+            const alreadyOpen = !!open && !!destination && goesTo(open, destination);
+
+            void (async () => {
+              if (!alreadyOpen && destination && from && route) {
+                const written = await journey.start({
+                  origin_latitude: from.latitude,
+                  origin_longitude: from.longitude,
+                  destination_latitude: destination.latitude,
+                  destination_longitude: destination.longitude,
+                  // Falls back rather than sending an empty string, which the
+                  // server rejects: a map tap on open ground leaves `destQuery`
+                  // as 'Selected Location', but a cleared field leaves it blank.
+                  destination_label: destQuery.trim() || 'Selected Location',
+                  route_id: route.route_id ?? null,
+                  route_profile: routeProfile,
+                  distance_km: route.distance_km,
+                  duration_minutes: route.duration_minutes,
+                  safety_score: route.safety_score ?? null,
+                  // `null` for the default chip rather than a number computed
+                  // here: the route's ETA plus the grace period is the server's
+                  // sum, and a second copy of it on the client is a second
+                  // definition free to drift from the first.
+                  deadline_minutes: DEADLINE_CHOICES[deadlineChoice].minutes,
+                  // JG3. Null unless somebody was picked, which is the default.
+                  // The server checks that this contact belongs to the caller
+                  // before it writes it -- an id from another account would have
+                  // Meridian email a stranger about a trip they know nothing
+                  // about -- so this is a choice being sent, not a fact.
+                  guardian_contact_id: guardianId,
+                });
+                // Here, and not in an effect watching the hook: a failure message
+                // held in state is the same string every time, so the second
+                // failed Start would change nothing for an effect to notice and
+                // the screen would sit silent through it. See `JourneyWrite`.
+                if (written.error)
+                  setJourneyNotice({
+                    title: 'Journey not recorded',
+                    message:
+                      `${written.error}\n\nDirections will still work, but this ` +
+                      'journey will not be here if the app restarts.',
+                  });
+              }
+              void follow.start();
+            })();
           }}
         />
       )}
@@ -1516,6 +2331,12 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           onRecalculate={() => recalculateFrom(follow.position)}
           onStop={() => {
             follow.stop();
+            // Stopping the navigator ends the journey. The banner's cross is the
+            // user saying they are done walking this route, which is the same
+            // statement as closing the journey -- and leaving an active row
+            // behind would make the next launch offer to resume a journey that
+            // was deliberately abandoned.
+            void journey.cancel();
             setFollowCamera(true);
           }}
         />
@@ -1883,6 +2704,20 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
             )}
           </View>
       </Sheet>
+
+      {/* JG1/JG2. A journey write or a check-in did not reach the server. */}
+      <Dialog
+        visible={!!journeyNotice}
+        tone="warn"
+        icon="cloud-offline"
+        title={journeyNotice?.title ?? ''}
+        message={journeyNotice?.message ?? ''}
+        actions={[{ label: 'OK', primary: true }]}
+        onClose={() => setJourneyNotice(null)}
+      />
+
+      {/* Everything else this screen says. */}
+      <Dialog {...dialogProps} />
     </View>
   );
 };
@@ -1928,6 +2763,47 @@ StyleSheet.create({
       boxShadow: [{ offsetX: 0, offsetY: 4, blurRadius: 12, color: t.shadow }],
     },
     recentreText: { ...type.caption, color: t.brand },
+    // JG1's resume card. Two rows inside the same `Glass` shell the search box
+    // uses, so the card reads as the same family of surface rather than a new one.
+    resumeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space.sm,
+    },
+    // `flex: 1` so the two labels ellipsize inside the row instead of pushing the
+    // icon off the card. A destination label is whatever the user typed, and some
+    // of them are a full address.
+    resumeText: { flex: 1 },
+    resumeTitle: { ...type.label, color: t.text },
+    resumeDetail: { ...type.caption, color: t.textSoft },
+    // "Telling Ammu". JG3. In the brand colour rather than caption-grey: it is
+    // the one line on this card that says something is leaving the phone, and a
+    // person scanning it should not have to read the third line to notice.
+    resumeGuardian: { ...type.caption, color: t.brand },
+    resumeActions: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      alignItems: 'center',
+      gap: space.sm,
+      marginTop: space.sm,
+    },
+    // End is the quieter of the two. Resuming is the expected action; ending a
+    // journey the app had to ask about should take a deliberate press.
+    resumeEnd: {
+      paddingHorizontal: space.lg,
+      paddingVertical: space.sm,
+      borderRadius: radius.pill,
+      borderWidth: StyleSheet.hairlineWidth * 2,
+      borderColor: t.glassBorder,
+    },
+    resumeEndText: { ...type.caption, color: t.textSoft },
+    resumeGo: {
+      paddingHorizontal: space.lg,
+      paddingVertical: space.sm,
+      borderRadius: radius.pill,
+      backgroundColor: t.brand,
+    },
+    resumeGoText: { ...type.caption, color: t.onBrand },
     riskBadge: {
       position: 'absolute',
       left: space.xl,
@@ -2219,6 +3095,66 @@ StyleSheet.create({
     // and the selected mode became invisible -- the one chip that most needs to be
     // readable was the only unreadable one.
     profileChipTextActive: { color: t.onBrand },
+
+    // ---- the deadline row. JG2 -----------------------------------------
+    deadlineBlock: {
+      paddingTop: space.sm,
+      marginTop: space.sm,
+      borderTopWidth: 1,
+      borderTopColor: t.lineSoft,
+      gap: space.sm,
+    },
+    deadlineLead: { ...type.caption, color: t.textSoft },
+    // The clock time is the one thing on this row somebody actually reads, so it
+    // is the one thing that is not caption-grey.
+    deadlineTime: { ...type.caption, color: t.text },
+    deadlineRow: { flexDirection: 'row', gap: space.xs },
+    deadlineChip: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      // 32 rather than the profile chips' padding-derived height: four chips
+      // across a phone leaves each one about 70pt wide, and a fixed height is
+      // what keeps them a row of equals rather than four boxes of slightly
+      // different sizes depending on their labels.
+      height: 32,
+      borderRadius: radius.md,
+      backgroundColor: t.fillSoft,
+    },
+    deadlineChipActive: { backgroundColor: t.brandStrong },
+    deadlineChipText: { ...type.caption, color: t.textSoft },
+    deadlineChipTextActive: { color: t.onBrand },
+
+    // The guardian picker. JG3.
+    guardianBlock: {
+      paddingTop: space.sm,
+      marginTop: space.sm,
+      borderTopWidth: 1,
+      borderTopColor: t.lineSoft,
+      gap: space.sm,
+    },
+    // Wraps, unlike the deadline row. That row is always four fixed chips; this
+    // one is however many contacts somebody has, with names of any length, so
+    // `flex: 1` across a row would squeeze five contacts into unreadable
+    // slivers. Wrapping grows the card downwards instead, which is the
+    // direction it has room in.
+    guardianRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
+    guardianChip: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: 32,
+      paddingHorizontal: space.md,
+      // Wide enough that a one-letter nickname is still a target rather than a
+      // dot, and capped so one long name cannot push the row off the card.
+      minWidth: 72,
+      maxWidth: 200,
+      borderRadius: radius.md,
+      backgroundColor: t.fillSoft,
+    },
+    // Visibly present and visibly not available. The label says why, so this is
+    // the signal rather than the explanation.
+    guardianChipUnusable: { opacity: 0.45 },
+    guardianNote: { ...type.caption, color: t.textSoft },
     connectorLine: {
       width: 2,
       // Purely decorative -- it says "these two fields are the ends of one
@@ -2233,6 +3169,27 @@ StyleSheet.create({
       ...type.body,
       flex: 1,
       color: t.text,
+
+      // ---- why the next three lines exist ---------------------------------
+      // Android's EditText arrives with its own vertical padding -- roughly
+      // 4-8dp top and bottom, from the platform's text field background -- on
+      // top of the 22pt line box. That measured the input at a little over
+      // 40dp inside a row fixed at 36, and an Android ViewGroup clips what
+      // overflows it. The ascenders had headroom to lose; the descenders did
+      // not, so "Mirpur Bangla School and College" came out with the tails
+      // sliced off both g's and "My Location" lost the tail of its y.
+      //
+      // It is invisible on iOS, where the padding is not there, which is why
+      // this looked like one person's device.
+      //
+      // `paddingVertical: 0` removes the platform's padding, `alignSelf:
+      // 'stretch'` makes the input exactly the row's 36 -- so it can no longer
+      // overflow whatever the row's height becomes -- and `textAlignVertical`
+      // (Android-only; iOS centres a single-line input already) keeps the text
+      // on the row's centre line rather than against its top.
+      paddingVertical: 0,
+      alignSelf: 'stretch',
+      textAlignVertical: 'center',
     },
     suggestionsContainer: {
       marginTop: space.sm,

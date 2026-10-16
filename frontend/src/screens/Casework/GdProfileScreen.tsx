@@ -9,7 +9,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -21,6 +20,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Dialog from '../../components/Dialog';
+import { useDialog } from '../../components/useDialog';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
@@ -94,13 +95,22 @@ const GdProfileScreen: React.FC<Props> = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const { show: showDialog, props: dialogProps } = useDialog();
+
   useEffect(() => {
     caseworkService
       .getProfile()
       .then(setProfile)
-      .catch((error: Error) => Alert.alert('Could not load', error.message))
+      .catch((error: Error) =>
+        showDialog({
+          title: 'Could not load your details',
+          message: error.message,
+          tone: 'danger',
+          icon: 'cloud-offline',
+        }),
+      )
       .finally(() => setLoading(false));
-  }, []);
+  }, [showDialog]);
 
   const save = async () => {
     setSaving(true);
@@ -108,7 +118,12 @@ const GdProfileScreen: React.FC<Props> = ({ navigation }) => {
       await caseworkService.saveProfile(profile);
       navigation.goBack();
     } catch (error: any) {
-      Alert.alert('Could not save', error.message);
+      showDialog({
+        title: 'Could not save your details',
+        message: error.message,
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     } finally {
       setSaving(false);
     }
@@ -185,6 +200,8 @@ const GdProfileScreen: React.FC<Props> = ({ navigation }) => {
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      <Dialog {...dialogProps} />
     </KeyboardAvoidingView>
   );
 };

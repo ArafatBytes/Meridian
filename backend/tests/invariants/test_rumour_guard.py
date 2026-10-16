@@ -59,7 +59,11 @@ def test_one_outlet_reporting_twice_is_one_source() -> None:
     this twice", which is not what the concept document promises.
     """
     assert independent_publishers(["channel24", "channel24", "channel24"]) == {"channel24"}
-    assert not is_confirmable(["channel24", "channel24"], minimum=2)
+    # Since 2026-10-16 this is a rule about `source_count`, not about the badge:
+    # Channel 24 is a vetted publisher, so its flag is confirmed on the strength
+    # of being Channel 24's. The self-corroboration rule still decides the badge
+    # for anything un-vetted, which is where it is asserted.
+    assert not is_confirmable(["some_blog", "some_blog"], minimum=2)
 
 
 def test_two_distinct_outlets_are_two_sources() -> None:

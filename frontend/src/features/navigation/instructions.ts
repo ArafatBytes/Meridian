@@ -85,7 +85,18 @@ function verbFor(step: NavStep): string {
     case 'turn':
     default:
       if (step.modifier === 'uturn') return 'Make a U-turn';
-      return side ? `Turn ${side}` : 'Continue';
+      if (side) return `Turn ${side}`;
+      // No modifier at all, on a manoeuvre OSRM calls a turn. Saying "Continue
+      // onto Mirpur Road" at a corner the user has to turn at is the one wrong
+      // answer available here, because it is confidently the opposite. "Turn"
+      // names the manoeuvre and invents no direction.
+      //
+      // `!step.modifier` rather than `!side`, and the difference is the whole
+      // correctness of this line: `straight` maps to an empty phrase on purpose,
+      // so `side` is also empty for a `turn` that goes straight through a
+      // junction -- which is a continuation, and "Continue" is right for it.
+      // Every other type reaching this branch is a continuation too.
+      return step.maneuver_type === 'turn' && !step.modifier ? 'Turn' : 'Continue';
   }
 }
 

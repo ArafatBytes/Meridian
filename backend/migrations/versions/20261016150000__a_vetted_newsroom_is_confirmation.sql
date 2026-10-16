@@ -1,0 +1,97 @@
+-- ===========================================================================
+-- 20261016150000__a_vetted_newsroom_is_confirmation
+-- One vetted publisher is enough to call a flag confirmed
+-- ===========================================================================
+-- Replaces `risk_flags_confirmed_needs_two_sources`, added in
+-- `20261007120000__risk_flags.sql`, with a weaker rule: a confirmed flag must
+-- cite at least one source, not two.
+--
+-- ---------------------------------------------------------------------------
+-- What changed, and who decided
+-- ---------------------------------------------------------------------------
+-- The old rule read "verification before publication: no single unverified
+-- source produces a confirmed flag", and `unverified` was doing the work. It
+-- treated every publisher as an anonymous claimant, because the surface was
+-- designed before anyone had decided *which* publishers it would read.
+--
+-- It reads ten now, and all ten were chosen by hand on 2026-10-08 and
+-- 2026-10-14 against stated criteria -- robots.txt, a machine-readable listing,
+-- body text in the HTML -- with the ten that failed recorded by name and reason
+-- in `app/ingestion/sources/__init__.py`. Prothom Alo, Channel 24 and the Dhaka
+-- Metropolitan Police are not anonymous claimants. The owner's position,
+-- 2026-10-16: a national newsroom does not invent a fire, so a flag built from
+-- one of their reports should look and weigh like what it is.
+--
+-- Measured on live data before the change: of 19 flags built from news, 15 had
+-- one source and 4 had two or more. The old rule left **79% of the live
+-- surface** drawn as a hollow pin with a question mark and scored at 0.6 of its
+-- severity in routing -- including a Prothom Alo report of a fire.
+--
+-- This reverses a decision taken on 2026-10-15, one migration series earlier,
+-- when the same question was asked about DMP alone and answered with weight
+-- instead of status because this very CHECK made status impossible. The history
+-- is kept in `app/policy/independence.py` rather than erased, because "we tried
+-- it the strict way first and measured what it cost" is the honest account.
+--
+-- ---------------------------------------------------------------------------
+-- What `confirmed` means now
+-- ---------------------------------------------------------------------------
+-- "A vetted newsroom or institution published this, or two independent
+-- publishers agreed." The list of who counts is `VETTED_PUBLISHERS` in
+-- `app/policy/independence.py`, and
+-- `tests/invariants/test_confirmation_requires_a_vetted_source.py` asserts it
+-- matches `SOURCES` exactly -- in both directions, because a publisher ingested
+-- but not vetted is drawn hollow, and a publisher vetted but not ingested is an
+-- outlet nobody surveyed being granted single-source confirmation.
+--
+-- `unconfirmed` keeps a real meaning, which is why the column and the hollow pin
+-- stay: it is what a **community report** is. A resident's account of a
+-- snatching has no newsroom behind it, and the line between "a newspaper
+-- reported this" and "someone nearby told us" is the one users most need drawn.
+--
+-- ---------------------------------------------------------------------------
+-- The honest cost, recorded because it is not nothing
+-- ---------------------------------------------------------------------------
+-- A second independent newsroom was never only a check on honesty. It was the
+-- one independent check on **our own extraction**: two newsrooms, read
+-- separately by the model, landing on the same kind, the same place and the same
+-- six-hour window is evidence the pipeline read both correctly. One source gives
+-- that up, and what remains against a mis-extraction is `MIN_CONFIDENCE`, the
+-- gazetteer's refusal to guess a location, and the mobility-impact filter.
+--
+-- Two guards also stop affecting the badge, and neither is deleted: `_SAME_OWNER`
+-- (Dhaka Tribune and Bangla Tribune are one house) and the rule that one outlet
+-- publishing twice is one source. Both still govern `source_count`, which is
+-- what the flag sheet shows and what the audit trail answers "how many
+-- publishers?" with -- so the ownership map still has to be right, or a flag
+-- drawn from one newsroom would claim two.
+--
+-- Rumour Guard keeps its job: merging four accounts of one fire into one flag is
+-- what stops the map showing four fires, and `source_count` still counts
+-- independent publishers. It simply no longer gates the badge.
+--
+-- ---------------------------------------------------------------------------
+-- Why a CHECK is kept at all rather than dropped
+-- ---------------------------------------------------------------------------
+-- `source_count >= 1` is not a tautology: `risk_flags_sources_match_count` ties
+-- `source_count` to the length of the `sources` array, so this says a confirmed
+-- flag must cite **somebody**. A confirmed flag with an empty `sources` array
+-- would be an unattributable claim, which `app/policy/attribution.py` refuses to
+-- publish anyway. Two layers, one rule.
+--
+-- ---------------------------------------------------------------------------
+-- Existing rows
+-- ---------------------------------------------------------------------------
+-- Deliberately untouched. Flags already written as `unconfirmed` stay that way:
+-- the new rule describes how the agent decides a status at write time, and
+-- back-dating it would rewrite history rather than change policy. The live
+-- surface fills in with correctly-marked flags as the sweep runs. Anyone who
+-- wants the old rows promoted should do it as a separate, deliberate UPDATE.
+-- ===========================================================================
+
+alter table public.risk_flags
+    drop constraint if exists risk_flags_confirmed_needs_two_sources;
+
+alter table public.risk_flags
+    add constraint risk_flags_confirmed_cites_a_source
+        check (status <> 'confirmed' or source_count >= 1);

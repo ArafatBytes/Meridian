@@ -22,6 +22,7 @@
     },
     "android": {
       "package": "com.Meridian.app",
+      "googleServicesFile": "./google-services.json",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyCjukEKDDRzK1PZTbRPJCCHZyzccVhxjaM"
@@ -38,7 +39,8 @@
         "POST_NOTIFICATIONS",
         "VIBRATE",
         "RECEIVE_BOOT_COMPLETED",
-        "WAKE_LOCK"
+        "WAKE_LOCK",
+        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
       ]
     },
     "plugins": [
@@ -96,8 +98,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": ""
+        "projectId": "e6d4c6f9-a422-4a63-8119-b70d26ccdc2f"
       }
-    }
+    },
+    "owner": "warfather0991"
   }
 }

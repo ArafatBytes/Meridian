@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   Image,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -14,6 +13,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { ReportsStackParamList } from '../../types';
+import Dialog from '../../components/Dialog';
+import { useDialog } from '../../components/useDialog';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
@@ -91,57 +92,85 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
    * `crime_reports.status` -- that column-level revoke is what closed the hole where
    * any account could self-award `verified = true` on its own row.
    */
+  const dialog = useDialog();
+
   const handleWithdraw = () => {
-    Alert.alert(
-      'Withdraw Report',
-      'This keeps your report but stops it counting toward what other people see on ' +
-        'the map. You can still delete it afterwards.',
-      [
-        { text: 'Cancel', style: 'cancel' },
+    dialog.show({
+      title: 'Withdraw this report?',
+      message:
+        'This keeps your report but stops it counting toward what other people see on '
+        + 'the map. You can still delete it afterwards.',
+      tone: 'warn',
+      icon: 'eye-off-outline',
+      actions: [
+        { label: 'Keep it' },
         {
-          text: 'Withdraw',
+          label: 'Withdraw',
+          primary: true,
           onPress: async () => {
             try {
               const withdrawn = await crimeService.withdrawReport(reportId);
               if (!withdrawn) {
                 // False is a legitimate answer, not an error: already withdrawn,
                 // already removed, or not yours. Re-reading says which.
-                Alert.alert('Already withdrawn', 'This report is no longer on record.');
+                dialog.show({
+                  title: 'Already withdrawn',
+                  message: 'This report is no longer on record.',
+                  icon: 'checkmark-circle-outline',
+                });
               }
               await fetchReportDetails();
             } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to withdraw this report');
+              dialog.show({
+                title: 'Could not withdraw it',
+                message:
+                  err.message || 'The server did not answer. Your report is unchanged.',
+                tone: 'danger',
+                icon: 'cloud-offline',
+              });
             }
           },
         },
       ],
-    );
+    });
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      'Delete Report',
-      'Are you sure you want to delete this report? This action cannot be undone.',
-      [
+    dialog.show({
+      title: 'Delete this report?',
+      // Names what is lost rather than asking "are you sure": the corroboration
+      // is the part somebody would not think of, and it is not recoverable.
+      message:
+        'The report and anything it contributed to the map go for good. '
+        + 'This cannot be undone.',
+      tone: 'danger',
+      icon: 'trash-outline',
+      actions: [
+        { label: 'Keep it' },
         {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
+          label: 'Delete',
+          primary: true,
           onPress: async () => {
             try {
               await crimeService.deleteReport(reportId);
-              Alert.alert('Success', 'Report deleted successfully');
+              // Straight back, with no "Success" box in the way. The report
+              // disappearing from the list behind is the confirmation, and a
+              // dialog that has to be dismissed before you can see that is a
+              // step between you and the thing you asked for.
               navigation.goBack();
             } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to delete report');
+              dialog.show({
+                title: 'Could not delete it',
+                message:
+                  err.message || 'The server did not answer. Your report is unchanged.',
+                tone: 'danger',
+                icon: 'cloud-offline',
+              });
             }
           },
         },
       ],
-    );
+    });
   };
 
   const formatDate = (dateString: string) => {
@@ -488,6 +517,8 @@ const ReportDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
           <Ionicons name="chevron-forward" size={20} color={t.onBrand} />
         </TouchableOpacity>
       </ScrollView>
+
+      <Dialog {...dialog.props} />
     </View>
   );
 };

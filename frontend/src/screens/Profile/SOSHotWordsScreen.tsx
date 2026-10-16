@@ -29,13 +29,14 @@ import {
   TouchableOpacity,
   TextInput,
   FlatList,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Dialog from '../../components/Dialog';
+import { useDialog } from '../../components/useDialog';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
@@ -94,9 +95,16 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
       setHotWords(data || []);
     } catch (error: any) {
       console.error('Error fetching hot words:', error);
-      Alert.alert('Error', 'Failed to load SOS hot words');
+      dialog.show({
+        title: 'Could not load your phrases',
+        message: 'The server did not answer. Check your connection and try again.',
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     }
   };
+
+  const dialog = useDialog();
 
   const addHotWord = async () => {
     // Validated before the insert, with a reason. The old check was
@@ -105,7 +113,12 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
     // shadowed by a shorter one, which can never fire. See `hotWordProblem`.
     const problem = hotWordProblem(newHotWord, hotWords.map(hw => hw.hot_word));
     if (problem) {
-      Alert.alert('Cannot use that phrase', problem);
+      dialog.show({
+        title: 'Cannot use that phrase',
+        message: problem,
+        tone: 'warn',
+        icon: 'mic-off-outline',
+      });
       return;
     }
 
@@ -128,24 +141,33 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
 
       setHotWords([data, ...hotWords]);
       setNewHotWord('');
-      Alert.alert('Success', 'SOS hot word added successfully');
     } catch (error: any) {
       console.error('Error adding hot word:', error);
-      Alert.alert('Error', 'Failed to add SOS hot word');
+      dialog.show({
+        title: 'Could not add that phrase',
+        message: 'The server did not answer. Your phrases are unchanged.',
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     } finally {
       setLoading(false);
     }
   };
 
   const deleteHotWord = async (id: string) => {
-    Alert.alert(
-      'Delete Hot Word',
-      'Are you sure you want to delete this SOS hot word?',
-      [
-        { text: 'Cancel', style: 'cancel' },
+    dialog.show({
+      title: 'Delete this phrase?',
+      // Says what stops working, which "are you sure" does not. This is a
+      // safety trigger: somebody deleting one should know the shout stops
+      // raising an SOS, not merely that a row disappears.
+      message: 'Saying it out loud will no longer raise an SOS.',
+      tone: 'danger',
+      icon: 'trash-outline',
+      actions: [
+        { label: 'Keep it' },
         {
-          text: 'Delete',
-          style: 'destructive',
+          label: 'Delete',
+          primary: true,
           onPress: async () => {
             try {
               const { error } = await supabase
@@ -156,15 +178,19 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
               if (error) throw error;
 
               setHotWords(hotWords.filter(hw => hw.id !== id));
-              Alert.alert('Success', 'SOS hot word deleted');
             } catch (error: any) {
               console.error('Error deleting hot word:', error);
-              Alert.alert('Error', 'Failed to delete SOS hot word');
+              dialog.show({
+                title: 'Could not delete that phrase',
+                message: 'The server did not answer. The phrase is still active.',
+                tone: 'danger',
+                icon: 'cloud-offline',
+              });
             }
           },
         },
       ],
-    );
+    });
   };
 
   /**
@@ -188,15 +214,22 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
     try {
       const result = await dictateOnce();
       if (!result.transcript) {
-        Alert.alert('Nothing heard', 'Please try again and speak clearly.');
+        dialog.show({
+          title: 'Nothing heard',
+          message: 'Try again, and speak clearly.',
+          tone: 'warn',
+          icon: 'mic-outline',
+        });
         return;
       }
       setNewHotWord(result.transcript);
     } catch (error: any) {
-      Alert.alert(
-        'Cannot dictate on this phone',
-        error?.message ?? 'Type the phrase instead.',
-      );
+      dialog.show({
+        title: 'Cannot dictate on this phone',
+        message: error?.message ?? 'Type the phrase instead.',
+        tone: 'warn',
+        icon: 'mic-off-outline',
+      });
     } finally {
       setIsTranscribing(false);
     }
@@ -338,6 +371,7 @@ const SOSHotWordsScreen: React.FC<Props> = ({ navigation }) => {
       {/* Without this the camera and progress modals never render and
           `sos.start()` silently does nothing -- the same wiring HomeScreen and
           MapScreen do. */}
+      <Dialog {...dialog.props} />
     </KeyboardAvoidingView>
   );
 };

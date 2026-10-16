@@ -271,6 +271,9 @@ SMTP.
 | Metro crashes or behaves oddly | Node 24 is ahead of what Expo SDK 57 targets | Install Node 22 LTS |
 | *"Project is incompatible with this version of Expo Go"* | Expo Go is older than SDK 57 | Update Expo Go from the store |
 | `pose_analysis` is `null` in every AI result | `mediapipe` 1.x removed `mp.solutions`, so pose never loads | Known — defect 29, fixed in S06. Not a detection miss |
+| `ENOENT ... google-services.json` → `× Prebuild failed` | `app.json` points at a **gitignored** file, so it is on one machine and not yours | Already handled: `app.config.js` drops the pointer and warns. If you still see it, your checkout predates that file |
+| `Unable to resolve path to module 'expo-battery'` (or `expo-intent-launcher`) | `package.json` gained a dependency in a merge; `node_modules` is stale | `cd frontend; npm install` — then **prebuild again**, because both are native |
+| `[meridian] ./google-services.json is missing, so this build has no FCM` | Expected, on any machine that has not done `docs/walkthroughs/B6a.md` §B | Remote push is off. Get the file from whoever owns the Expo project — **not** a fresh Firebase project, see the warning in B6a §B |
 
 **Reading logs**
 
@@ -398,6 +401,15 @@ costs you working hot reload.
 Backend code changes reload automatically — `backend/app` is bind-mounted and
 uvicorn watches it. Frontend changes hot-reload through Metro. Only dependency
 or Dockerfile changes need `-Rebuild`.
+
+> ⚠️ **After merging or switching branches, run `npm install` in `frontend/`
+> before `run.ps1`.** `package.json` is tracked and `node_modules` is not, so a
+> merge that adds a dependency leaves you with a lockfile asking for packages
+> you do not have. Metro then fails to resolve an import that is correct, which
+> reads as a code error rather than a missing install — the JG merge did this
+> with `expo-battery` and `expo-intent-launcher`. If the new package is native
+> (most `expo-*` are), the APK must also be rebuilt for autolinking to see it;
+> `run.ps1` does that by itself, because `package.json` is in the build stamp.
 
 > ⚠️ **`.env` changes are the exception** — `docker compose restart` does not
 > re-read the env file. Use `docker compose up -d api worker`. A flag that reads

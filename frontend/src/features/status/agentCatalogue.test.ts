@@ -27,14 +27,18 @@ describe('every catalogue entry', () => {
     }
   });
 
-  it('covers the five agents the backend registers', () => {
+  it('covers every agent the backend registers', () => {
     // Kept in step from the other side too: `backend/tests/test_agent_health.py`
     // asserts every registered agent has a cadence this app can describe, and
     // the catalogue coverage check lives there because only the backend knows
     // the real list. This is the client-side half of the same pair.
+    //
+    // `journey_watch` joined the list when JG2 landed, and this test is how the
+    // app found out: the backend half failed first, naming the missing key.
     expect(Object.keys(AGENT_CATALOGUE).sort()).toEqual([
       'alert_dispatch',
       'expiry_sweep',
+      'journey_watch',
       'live_risk',
       'report_corroboration',
       'scheduled_risk',

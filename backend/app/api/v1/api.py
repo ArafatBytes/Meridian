@@ -22,6 +22,7 @@ from app.api.v1.endpoints import (
     casework,
     geo,
     ingestion,
+    journeys,
     notifications,
     risk,
     routes,
@@ -81,3 +82,4 @@ api_router.include_router(casework.router, prefix="/casework", tags=["Casework â
 # 56 was a registered route nobody had decided to publish. Adding a line here is
 # the decision.
 api_router.include_router(agents.router, prefix="/agents", tags=["Agent Fleet Status"])
+api_router.include_router(journeys.router, prefix="/journeys", tags=["Journey Guardian"])

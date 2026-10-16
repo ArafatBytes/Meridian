@@ -5,7 +5,6 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Alert,
   TextInput,
   ActivityIndicator,
   Platform,
@@ -34,6 +33,8 @@ import { Ionicons } from '@expo/vector-icons';
 // regression, not a broken feature.
 import * as Contacts from 'expo-contacts/legacy';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Dialog from '../../components/Dialog';
+import { useDialog } from '../../components/useDialog';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
@@ -72,6 +73,8 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
     fetchEmergencyContacts();
   }, []);
 
+  const dialog = useDialog();
+
   const fetchEmergencyContacts = async () => {
     try {
       setIsLoading(true);
@@ -84,7 +87,12 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
       if (error) throw error;
       setContacts(data || []);
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to load emergency contacts');
+      dialog.show({
+        title: 'Could not load your contacts',
+        message: 'The server did not answer. Check your connection and try again.',
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
       console.error('Error fetching emergency contacts:', error);
     } finally {
       setIsLoading(false);
@@ -100,10 +108,12 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
     try {
       const hasPermission = await requestContactsPermission();
       if (!hasPermission) {
-        Alert.alert(
-          'Permission Required',
-          'Please grant contacts permission to add contacts from your device',
-        );
+        dialog.show({
+          title: 'Contacts access needed',
+          message: 'Meridian needs your contacts to pick one from the phone. You can also type one in.',
+          tone: 'warn',
+          icon: 'people-outline',
+        });
         return;
       }
 
@@ -128,7 +138,12 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
           }
 
           if (!phoneNumber) {
-            Alert.alert('Error', 'Selected contact has no phone number');
+            dialog.show({
+              title: 'That contact has no phone number',
+              message: 'Pick another, or type the number in yourself.',
+              tone: 'warn',
+              icon: 'call-outline',
+            });
             return;
           }
 
@@ -138,13 +153,23 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
 
           // Validate phone number
           if (cleanedPhone.length < 10) {
-            Alert.alert('Error', 'Invalid phone number');
+            dialog.show({
+              title: 'That number does not look right',
+              message: 'A Bangladeshi mobile number is 11 digits, starting 01.',
+              tone: 'warn',
+              icon: 'call-outline',
+            });
             return;
           }
 
           // Validate email
           if (!email || !email.includes('@')) {
-            Alert.alert('Error', 'Selected contact must have a valid email address');
+            dialog.show({
+              title: 'That contact has no email address',
+              message: 'Meridian emails your contacts, so it needs one. Pick another, or type it in.',
+              tone: 'warn',
+              icon: 'mail-outline',
+            });
             return;
           }
 
@@ -152,7 +177,12 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
         }
       }
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to pick contact');
+      dialog.show({
+        title: 'Could not read that contact',
+        message: 'Something went wrong reading it from your phone. Try typing it in.',
+        tone: 'danger',
+        icon: 'people-outline',
+      });
       console.error('Error picking contact:', error);
     }
   };
@@ -166,29 +196,54 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
 
   const handleManualAdd = async () => {
     if (!contactName.trim()) {
-      Alert.alert('Error', 'Please enter contact name');
+      dialog.show({
+        title: 'Add a name',
+        message: 'Who is this person?',
+        tone: 'warn',
+        icon: 'person-outline',
+      });
       return;
     }
 
     if (!contactPhone.trim()) {
-      Alert.alert('Error', 'Please enter phone number');
+      dialog.show({
+        title: 'Add a phone number',
+        message: 'So you can call them.',
+        tone: 'warn',
+        icon: 'call-outline',
+      });
       return;
     }
 
     const phoneDigits = contactPhone.replace(/\D/g, '');
 
     if (phoneDigits.length !== 11) {
-      Alert.alert('Error', 'Phone number must be exactly 11 digits');
+      dialog.show({
+        title: 'That number does not look right',
+        message: 'A Bangladeshi mobile number is 11 digits, starting 01.',
+        tone: 'warn',
+        icon: 'call-outline',
+      });
       return;
     }
 
     if (!contactEmail.trim()) {
-      Alert.alert('Error', 'Please enter email address');
+      dialog.show({
+        title: 'Add an email address',
+        message: 'This is where Meridian sends their alert, so it is the one field that has to work.',
+        tone: 'warn',
+        icon: 'mail-outline',
+      });
       return;
     }
 
     if (!contactEmail.includes('@')) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      dialog.show({
+        title: 'That email does not look right',
+        message: 'Check it carefully — an alert sent to the wrong address goes nowhere.',
+        tone: 'warn',
+        icon: 'mail-outline',
+      });
       return;
     }
 
@@ -203,10 +258,12 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
       const existingContact = contacts.find(c => c.phone === phone);
 
       if (existingContact) {
-        Alert.alert(
-          'Error',
-          'This contact is already in your emergency contacts',
-        );
+        dialog.show({
+          title: 'They are already a contact',
+          message: 'This number is already on your list.',
+          tone: 'warn',
+          icon: 'people-outline',
+        });
         setIsModalVisible(false);
         return;
       }
@@ -220,11 +277,15 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
 
       if (error) throw error;
 
-      Alert.alert('Success', 'Emergency contact added successfully');
       setIsModalVisible(false);
       fetchEmergencyContacts();
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to add emergency contact');
+      dialog.show({
+        title: 'Could not add that contact',
+        message: 'The server did not answer. Your contacts are unchanged.',
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
       console.error('Error adding emergency contact:', error);
     } finally {
       setIsSaving(false);
@@ -232,14 +293,19 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const deleteEmergencyContact = (contact: EmergencyContact) => {
-    Alert.alert(
-      'Delete Contact',
-      `Are you sure you want to remove ${contact.name} from emergency contacts?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
+    dialog.show({
+      title: `Remove ${contact.name}?`,
+      // Names the consequence, because this list is what an SOS actually
+      // sends to. Somebody removing their last contact should know the
+      // button stops reaching anybody.
+      message: 'They will no longer be told when you raise an SOS or go quiet on a journey.',
+      tone: 'danger',
+      icon: 'person-remove-outline',
+      actions: [
+        { label: 'Keep them' },
         {
-          text: 'Delete',
-          style: 'destructive',
+          label: 'Remove',
+          primary: true,
           onPress: async () => {
             try {
               const { error } = await supabase
@@ -249,16 +315,20 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
 
               if (error) throw error;
 
-              Alert.alert('Success', 'Emergency contact removed');
               fetchEmergencyContacts();
             } catch (error: any) {
-              Alert.alert('Error', 'Failed to delete emergency contact');
+              dialog.show({
+                title: 'Could not remove them',
+                message: 'The server did not answer. They are still on your list.',
+                tone: 'danger',
+                icon: 'cloud-offline',
+              });
               console.error('Error deleting emergency contact:', error);
             }
           },
         },
       ],
-    );
+    });
   };
 
   const renderEmptyState = () => (
@@ -434,6 +504,8 @@ const EmergencyContactsScreen: React.FC<Props> = ({ navigation }) => {
               </View>
           </TouchableWithoutFeedback>
       </Sheet>
+
+      <Dialog {...dialog.props} />
     </View>
   );
 };

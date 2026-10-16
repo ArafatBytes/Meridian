@@ -1348,6 +1348,44 @@ has been lifted out of it.
 **B0 is not optional and is not last.** It is listed first because it is outstanding owner action on
 a live security incident, and because deferring it has already cost more than doing it would have.
 
+## B10, in seven phases — Journey Guardian
+
+**The case for the feature, and the detail of each phase, is
+[`JOURNEY_GUARDIAN.md`](JOURNEY_GUARDIAN.md).** This table is the index; that document is the plan.
+
+Journey Guardian is the one deferred item that is a *product* rather than a piece of infrastructure,
+and the row above had it as a single line of work. It is not one sprint. It is seven, each ending in
+something that can be shown on a phone — which is the only unit of work this project has found
+trustworthy.
+
+**The phases are deliberately not final.** The shape of a later one will change once an earlier one
+is on a device, and a phase that turns out to be two should be split. What does not move: the order,
+because each depends on the one before it, and the walkthrough, because a phase without one is not
+finished.
+
+| Phase | What it makes showable | Depends on | Walkthrough |
+|---|---|---|---|
+| **JG1** | **The journey that survives.** A trip on the server — who, from, to, which route, started when, ETA, state. The `Start` button writes one before it follows. Force-stop the app and the journey is still there. Nothing watches anything yet. | B8's trips half, which this *is* | `JG1.md` |
+| **JG2** | **The deadline, and one tap to answer.** Server-held deadline from the route ETA, editable at start. Heartbeats slide it forward while the phone moves; **silence never extends it.** `normal → check_in_sent` with the non-response timestamped. The check-in is answerable **from the lock screen**, which also makes it a liveness test — a phone that was merely quiet answers in one tap and nothing escalates. | JG1 | `JG2.md` |
+| **JG3** | **Someone else knows.** A guardian chosen from the existing emergency contacts, told "started" and "arrived" and nothing in between. The rest of the machine — `check_in_repeated → contacts_notified` — every transition gated on a recorded non-response, no step skippable. **The ladder ends at the guardian:** the rung that mailed every contact was removed on 16 Oct, because widening somebody's circle on an unanswered check-in is a decision for the person reading the email, not for a timer. Last known location travels **only once escalation begins.** | JG2 | `JG3.md` |
+| **JG4** | **The risk-weighted leash.** Grace and check-in timing derived from the route's own safety score and the hour, as a pure function so the trial can rewrite the numbers cheaply. The one thing here no generic safety app can do, because it needs the risk surface. | JG3 | `JG4.md` |
+| **JG5** | **Signals better than off-route.** A speed jump from walking to vehicle pace; a stop off the route line with a dark screen; a battery warning to the guardian *before* the phone dies. Each shortens the leash rather than firing on its own, because off-route alone is the normal case in Dhaka. | JG3 | `JG5.md` |
+| **JG6** | **Answering safely.** Two responses that both look like "I'm fine"; one escalates silently. Plus a user-pulled hair trigger — *"someone is following me"* — that shortens the leash to minutes on demand. Off by default. | JG3 | `JG6.md` |
+| **JG7** | **The outer ring.** A witness request to opted-in users recently near the area: a road, not a pin, no identity, asking for information and never for intervention. Fires only on a **confirmed** emergency, never on an unanswered check-in. Replies flow into B13's `community_clusters`. Plus a one-tap 999 call, and the thana email described as the paper trail it is rather than as a dispatch. | JG3, B13 | `JG7.md` |
+
+**JG1–JG3 are the feature**; a demo can stop there. JG4–JG7 are independent of each other and can be
+reordered or dropped without breaking what came before.
+
+**Two things in here are refusals, and they are worth defending out loud.** JG7 asks nearby users for
+*witness information*, never for help at a pin — summoning a crowd to an accusation is how the wrong
+person gets hurt, and that risk is specific and documented in this country. And every escalation step
+past the first requires a recorded non-response, so the machine cannot jump to panic. Both are in the
+concept document already (§9, *graded escalation*); the phases are where they become code.
+
+**The self-trial starts with JG3, not after JG7.** Two weeks on our own commutes with false check-ins
+instrumented, targeting under one per user per week. Every number in JG2 and JG4 is a starting value
+until that trial has run.
+
 ---
 
 # 7. Open decisions

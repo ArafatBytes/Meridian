@@ -163,15 +163,19 @@ export const Sheet: React.FC<SheetProps> = ({
           from `Glass.tsx` -- the light edge, the top sheen, the shadow -- carry
           the material on their own. Which they do: it still reads as a pane,
           it just reads as an opaque one.
+
+          That is the `opaque` prop now, rather than a `backgroundColor` in the
+          style: the map surfaces needed the same thing for the same reason, and
+          four copies of one override is how a workaround becomes folklore.
         */}
         <Glass
           blur={false}
+          opaque
           elevated
           radius={radiusProp ?? (bottom ? radius.sheet : radius.card)}
           padding={padding}
           contentStyle={contentStyle}
           style={[
-            { backgroundColor: t.surfaceRaised },
             bottom ? styles.bottomPane : styles.centerPane,
             style,
           ]}

@@ -22,7 +22,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
+  AppState,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -36,6 +36,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import NotificationService from '../../services/notification.service';
+import { requestBackgroundDelivery } from './background';
+import Dialog from '../../components/Dialog';
+import { useDialog } from '../../components/useDialog';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useStyles } from '../../theme/useStyles';
 import type { Palette } from '../../theme/palette';
@@ -86,6 +89,8 @@ const AlertPreferencesScreen: React.FC<Props> = ({ navigation }) => {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
 
+  const { show: showDialog, props: dialogProps } = useDialog();
+
   const load = useCallback(async () => {
     try {
       const [settings, diag, past] = await Promise.all([
@@ -99,14 +104,18 @@ const AlertPreferencesScreen: React.FC<Props> = ({ navigation }) => {
       setDiagnosis(diag);
       setHistory(past);
     } catch (error: any) {
-      Alert.alert(
-        'Could not load alert settings',
-        error?.message ?? 'The server did not answer.',
-      );
+      showDialog({
+        title: 'Could not load your alert settings',
+        message:
+          error?.message
+          ?? 'The server did not answer. Your settings are unchanged.',
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showDialog]);
 
   useEffect(() => {
     load();
@@ -129,7 +138,14 @@ const AlertPreferencesScreen: React.FC<Props> = ({ navigation }) => {
       setPrefs(await NotificationService.savePreferences(next));
     } catch (error: any) {
       setPrefs(previous);
-      Alert.alert('Not saved', error?.message ?? 'The server rejected the change.');
+      showDialog({
+        title: 'That change was not saved',
+        message:
+          error?.message
+          ?? 'The server rejected it. The setting is back as it was.',
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     } finally {
       setSaving(false);
     }
@@ -144,17 +160,54 @@ const AlertPreferencesScreen: React.FC<Props> = ({ navigation }) => {
     // from the label. Dhaka has dozens of chronic flags, each good for one
     // alert, and they draw on the same hourly budget as alerts about things
     // actually happening now.
-    Alert.alert(
-      'Turn on historical alerts?',
-      'These are long-term patterns, not events happening now. They cover large ' +
-        'areas, there are many of them, and they share your hourly alert limit ' +
-        'with alerts about live incidents.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Turn on', onPress: () => update({ chronic_alerts: true }) },
+    showDialog({
+      title: 'Turn on historical alerts?',
+      message:
+        'These are long-term patterns, not events happening now. They cover large '
+        + 'areas, there are many of them, and they share your hourly alert limit '
+        + 'with alerts about live incidents.',
+      tone: 'warn',
+      icon: 'time-outline',
+      actions: [
+        { label: 'Leave it off' },
+        {
+          label: 'Turn on',
+          primary: true,
+          onPress: () => update({ chronic_alerts: true }),
+        },
       ],
-    );
+    });
   };
+
+  /**
+   * Open Android's exemption dialog, then re-read the device when we get back.
+   *
+   * The intent reports nothing about what the user chose -- there is no result
+   * and no callback -- so the only trustworthy answer is to ask the device
+   * again once the app is in front of us. `AppState` is what tells us that, and
+   * a reload on `active` also covers the user granting it from the OS settings
+   * app without going through this button at all.
+   */
+  const onAllowBackground = async () => {
+    const opened = await requestBackgroundDelivery();
+    if (!opened) {
+      showDialog({
+        title: 'Could not open that setting',
+        message:
+          'Open Settings, then Apps, then Meridian, then Battery, and choose '
+          + 'Unrestricted.',
+        tone: 'warn',
+        icon: 'battery-charging-outline',
+      });
+    }
+  };
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') void load();
+    });
+    return () => sub.remove();
+  }, [load]);
 
   const onTest = async () => {
     setTesting(true);
@@ -163,10 +216,20 @@ const AlertPreferencesScreen: React.FC<Props> = ({ navigation }) => {
       // `detail` is rendered verbatim. The server distinguishes "no device
       // registered" from "rate cap reached" from "Expo rejected it", and
       // collapsing those into "failed" would throw away the diagnosis.
-      Alert.alert(result.sent > 0 ? 'Test alert sent' : 'Nothing sent', result.detail);
+      showDialog({
+        title: result.sent > 0 ? 'Test alert sent' : 'Nothing sent',
+        message: result.detail,
+        tone: result.sent > 0 ? 'info' : 'warn',
+        icon: result.sent > 0 ? 'notifications-outline' : 'notifications-off-outline',
+      });
       setHistory(await NotificationService.getHistory(20));
     } catch (error: any) {
-      Alert.alert('Test failed', error?.message ?? 'The server did not answer.');
+      showDialog({
+        title: 'Could not send the test',
+        message: error?.message ?? 'The server did not answer.',
+        tone: 'danger',
+        icon: 'cloud-offline',
+      });
     } finally {
       setTesting(false);
     }
@@ -210,6 +273,27 @@ const AlertPreferencesScreen: React.FC<Props> = ({ navigation }) => {
             <Ionicons name="alert-circle" size={18} color={t.warn} />
             <Text style={styles.problemText}>{problem}</Text>
           </View>
+        ) : null}
+
+        {/* The one blocking problem the user can fix from here, so it gets a
+            button rather than only a sentence. Every other entry in
+            `blockingPushProblem` needs a rebuild, a server flag or a trip into
+            the OS settings app; this one opens a system dialog and is done.
+
+            Shown on its own condition rather than on `problem`, because battery
+            optimisation is reported last and a louder failure above it would
+            otherwise hide the button — and the two are independent, so a phone
+            can need both fixing. */}
+        {diagnosis?.batteryOptimized === true ? (
+          <TouchableOpacity
+            style={styles.fixButton}
+            onPress={onAllowBackground}
+            accessibilityRole="button"
+            accessibilityLabel="Allow Meridian to run unrestricted"
+          >
+            <Ionicons name="battery-charging-outline" size={18} color={t.onBrand} />
+            <Text style={styles.fixButtonText}>Allow background delivery</Text>
+          </TouchableOpacity>
         ) : null}
 
         {/* The honest limit. Stated first among the explanatory text because it
@@ -350,6 +434,8 @@ const AlertPreferencesScreen: React.FC<Props> = ({ navigation }) => {
           ))
         )}
       </ScrollView>
+
+      <Dialog {...dialogProps} />
     </View>
   );
 };
@@ -467,6 +553,21 @@ StyleSheet.create({
       borderRadius: radius.md,
     },
     testButtonDisabled: { opacity: 0.6 },
+    // Sits directly under the problem banner it answers, so a smaller top
+    // margin than `testButton` -- that one closes a section, this one belongs
+    // to the sentence above it.
+    fixButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: space.sm,
+      backgroundColor: t.brand,
+      paddingVertical: space.md,
+      marginHorizontal: space.xl,
+      marginTop: space.sm,
+      borderRadius: radius.md,
+    },
+    fixButtonText: { ...type.bodyStrong, color: t.onBrand },
     testButtonText: {      ...type.bodyStrong, color: t.onBrand,},
     empty: {
       ...type.caption,
