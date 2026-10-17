@@ -219,6 +219,18 @@ def main() -> int:
             "route -- see docs/video/PLAN.md."
         ),
     )
+    parser.add_argument(
+        "--replay",
+        action="store_true",
+        help=(
+            "also lay down the captured news flags in data/fixtures/live_replay.json. "
+            "Off by default because a database that already holds the live originals "
+            "would then show each real flag twice. Turn it on when ingestion has "
+            "published nothing recent and the surface would otherwise have no real "
+            "news on it at all -- which is the case the video runs into. Capture the "
+            "file with scripts/capture_video_news.py; see docs/video/PLAN.md T10."
+        ),
+    )
     args = parser.parse_args()
 
     fixture_path = None
@@ -234,7 +246,11 @@ def main() -> int:
         print(f"\n  fixture: {fixture_path}")
 
     try:
-        rows = fixture_rows(datetime.now(UTC), fixture_path=fixture_path)
+        rows = fixture_rows(
+            datetime.now(UTC),
+            include_replay=args.replay,
+            fixture_path=fixture_path,
+        )
     except FixtureError as problem:
         print(f"\n  {problem}\n", file=sys.stderr)
         return 2

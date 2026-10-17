@@ -1,25 +1,114 @@
 {
  "_README": "Captured live news flags, replayed by SeededRiskSurface when RISK_SURFACE_IMPL=seeded. Written by `python -m app.agents export-replay`; do not edit by hand. Times are hours relative to `exported_at` and are re-anchored to the moment the backend starts. No mobility_statement: framing.py derives it at load, as for every fixture.",
- "exported_at": "2026-10-08T13:36:25.127352+00:00",
+ "exported_at": "2026-10-17T05:29:24.786119+00:00",
  "flags": [
   {
-   "event_key": "seed-live-d063f13d045da3d6-0",
-   "kind": "fire",
-   "lat": 23.779468,
-   "lon": 90.404631,
-   "radius_m": 1200,
-   "severity_0": 70.0,
-   "half_life_hours": 3.5,
-   "mobility_impact": "road_blocked",
-   "place": "Mohakhali",
-   "observed_offset_hours": -4.1,
+   "event_key": "seed-live-5440969e00a52fda-0",
+   "kind": "blockade",
+   "status": "confirmed",
+   "lat": 23.74584,
+   "lon": 90.394939,
+   "radius_m": 600,
+   "severity_0": 65.0,
+   "half_life_hours": 6.0,
+   "mobility_impact": "delay_likely",
+   "place": "Bangla Motor",
+   "observed_offset_hours": -1.0,
    "source_count": 1,
    "sources": [
     {
-     "source_id": "channel24",
-     "url": "https://www.channel24bd.tv/capital/article/351810/%E0%A6%B0%E0%A6%BE%E0%A6%9C%E0%A6%A7%E0%A6%BE%E0%A6%A8%E0%A7%80%E0%A6%A4%E0%A7%87-%E0%A6%8F%E0%A6%B8%E0%A6%BF-%E0%A6%AC%E0%A6%BE%E0%A6%B8%E0%A7%87-%E0%A6%85%E0%A6%97%E0%A7%8D%E0%A6%A8%E0%A6%BF%E0%A6%95%E0%A6%BE%E0%A6%A3%E0%A7%8D%E0%A6%A1",
-     "title": "রাজধানীতে এসি বাসে অগ্নিকাণ্ড",
-     "published_offset_hours": -4.1
+     "source_id": "jugantor",
+     "url": "https://www.jugantor.com/politics/1169775",
+     "title": "এনসিপির কেন্দ্রীয় কার্যালয়ের সামনে মধ্যরাতে ককটেল বিস্ফোরণ",
+     "published_offset_hours": -0.95
+    }
+   ]
+  },
+  {
+   "event_key": "seed-live-c1034e8ae66c3604-0",
+   "kind": "clash",
+   "status": "confirmed",
+   "lat": 23.756613,
+   "lon": 90.359059,
+   "radius_m": 600,
+   "severity_0": 75.0,
+   "half_life_hours": 8.0,
+   "mobility_impact": "delay_likely",
+   "place": "Mohammadpur Beribadh Connecting Road",
+   "observed_offset_hours": -1.5,
+   "source_count": 1,
+   "sources": [
+    {
+     "source_id": "prothom_alo",
+     "url": "https://www.prothomalo.com/bangladesh/crime/wcnic6vgci",
+     "title": "মোহাম্মদপুরে দুটি সন্ত্রাসী গোষ্ঠীর মধ্যে সংঘর্ষে আহত ২",
+     "published_offset_hours": -1.45
+    }
+   ]
+  },
+  {
+   "event_key": "seed-live-5e1577b839dbda42-0",
+   "kind": "blockade",
+   "status": "confirmed",
+   "lat": 23.86655,
+   "lon": 90.41001,
+   "radius_m": 1200,
+   "severity_0": 84.5,
+   "half_life_hours": 6.0,
+   "mobility_impact": "road_blocked",
+   "place": "Azampur",
+   "observed_offset_hours": -2.0,
+   "source_count": 1,
+   "sources": [
+    {
+     "source_id": "samakal",
+     "url": "https://samakal.com/whole-country/article/378194/%E0%A6%89%E0%A6%A4%E0%A7%8D%E0%A6%A4%E0%A6%B0%E0%A6%BE-%E0%A6%B6%E0%A7%8D%E0%A6%B0%E0%A7%80%E0%A6%AA%E0%A7%81%E0%A6%B0%E0%A7%87-%E0%A6%AA%E0%A7%8B%E0%A6%B6%E0%A6%BE%E0%A6%95-%E0%A6%B6%E0%A7%8D%E0%A6%B0%E0%A6%AE%E0%A6%BF%E0%A6%95%E0%A6%A6%E0%A7%87%E0%A6%B0-%E0%A6%AC%E0%A6%BF%E0%A6%95%E0%A7%8D%E0%A6%B7%E0%A7%8B%E0%A6%AD-%E0%A6%B8%E0%A7%9C%E0%A6%95-%E0%A6%85%E0%A6%AC%E0%A6%B0%E0%A7%8B%E0%A6%A7",
+     "title": "উত্তরা-শ্রীপুরে পোশাক শ্রমিকদের বিক্ষোভ, সড়ক অবরোধ",
+     "published_offset_hours": -1.95
+    }
+   ]
+  },
+  {
+   "event_key": "seed-live-4d14607e489c7ae7-0",
+   "kind": "fire",
+   "status": "confirmed",
+   "lat": 23.898573,
+   "lon": 90.408132,
+   "radius_m": 400,
+   "severity_0": 91.0,
+   "half_life_hours": 3.5,
+   "mobility_impact": "delay_likely",
+   "place": "Tongi",
+   "observed_offset_hours": -2.5,
+   "source_count": 1,
+   "sources": [
+    {
+     "source_id": "ittefaq",
+     "url": "https://www.ittefaq.com.bd/815132/%E0%A6%9F%E0%A6%99%E0%A7%8D%E0%A6%97%E0%A7%80%E0%A6%A4%E0%A7%87-%E0%A6%93%E0%A6%B7%E0%A7%81%E0%A6%A7-%E0%A6%95%E0%A6%BE%E0%A6%B0%E0%A6%96%E0%A6%BE%E0%A6%A8%E0%A6%BE%E0%A7%9F-%E0%A6%86%E0%A6%97%E0%A7%81%E0%A6%A8-%E0%A6%9A%E0%A6%A4%E0%A7%81%E0%A6%B0%E0%A7%8D%E0%A6%A5-%E0%A6%A4%E0%A6%B2%E0%A6%BE-%E0%A6%A5%E0%A7%87%E0%A6%95%E0%A7%87",
+     "title": "টঙ্গীতে ওষুধ কারখানায় আগুন: চতুর্থ তলা থেকে সূত্রপাত, দুই ভবন ক্ষতিগ্রস্ত",
+     "published_offset_hours": -2.45
+    }
+   ]
+  },
+  {
+   "event_key": "seed-live-7090aab560a1c135-1",
+   "kind": "blockade",
+   "status": "confirmed",
+   "lat": 23.864236,
+   "lon": 90.399543,
+   "radius_m": 500,
+   "severity_0": 84.5,
+   "half_life_hours": 6.0,
+   "mobility_impact": "road_blocked",
+   "place": "Raj Laxmi",
+   "observed_offset_hours": -3.0,
+   "source_count": 1,
+   "sources": [
+    {
+     "source_id": "dhaka_tribune",
+     "url": "https://www.dhakatribune.com/bangladesh/dhaka/422154/uttara-garment-workers-block-dhaka-mymensingh",
+     "title": "Uttara garment workers block Dhaka-Mymensingh highway for wage hike",
+     "published_offset_hours": -2.95
     }
    ]
   }

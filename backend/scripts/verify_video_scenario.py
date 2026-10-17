@@ -50,10 +50,29 @@ API: Final = "http://localhost:8000/api/v1/routes/calculate"
 # Ordered best-first. Each was verified to give a clean recommended route against
 # `video_scenario.json`; the first one has the strongest contrast by a wide margin.
 PAIRS: Final = [
-    ("Motijheel", (23.7330, 90.4170), "Kalabagan", (23.7420, 90.3840)),
+    ("Rampura", (23.7620, 90.4190), "Gulshan 2", (23.7925, 90.4145)),
     ("Gulshan 2", (23.7925, 90.4145), "Rampura", (23.7620, 90.4190)),
+    ("Motijheel", (23.7330, 90.4170), "Kalabagan", (23.7420, 90.3840)),
     ("Dhanmondi 27", (23.7465, 90.3830), "Motijheel", (23.7330, 90.4170)),
 ]
+
+# Order matters: `check` reports the first pair that passes as the one to film, and
+# on 17 Oct that is no longer the first pair in this list.
+#
+# `Motijheel -> Kalabagan` was chosen on 16 Oct against four OSRM routes, the worst
+# carrying eight flags against a clean recommendation. OSRM now returns three routes
+# for that pair and the nineteen-minute one through Shahbagh and Gulistan is not
+# among them, so the worst alternative carries one flag and there is no contrast
+# left to film. Nothing in this repository changed to cause that; the route
+# geometry did. Re-swept all 306 ordered pairs across eighteen Dhaka landmarks
+# afterwards: exactly two still produce a clean recommendation with a flagged
+# alternative, and both are the Gulshan 2 / Rampura corridor. Every pair with a
+# wider spread carries four to seven flags on the recommendation too, which reads
+# as "both are bad" -- the same saturation recorded in PLAN.md T2.
+#
+# This is the reason this script exists rather than a note in a document, and the
+# reason it runs before both sessions.
+PREFERRED: Final = "Rampura -> Gulshan 2"
 
 # What segment 3 needs to be worth filming: a clean route, and an alternative
 # carrying enough to look different on the map.

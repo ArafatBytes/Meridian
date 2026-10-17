@@ -34,6 +34,35 @@ export const MIN_QUERY_LENGTH = 3;
  */
 export const NOT_A_PLACE = 'My Location';
 
+/**
+ * Does this field name a place it has not actually chosen?
+ *
+ * The start field holds two things that look identical on screen and mean
+ * opposite things: text a person typed, and a place they picked from the list.
+ * Only the second carries a coordinate. `null` is the start field's way of
+ * saying *"use the GPS"*, which is correct while the field reads `My Location`
+ * and a lie the moment someone types over it.
+ *
+ * That lie had a cost. `calculateRouteTo` fell back to `currentLocation`
+ * whenever no coordinate was bound, so typing `Gulshan 2` and then picking a
+ * destination routed from **wherever the phone actually was**, drew it, scored
+ * it, and showed `Gulshan 2` in the box throughout. Nothing failed; the answer
+ * was simply to a different question. On a demo it reads as the router being
+ * broken, and in use it is worse than an error, because an error can be seen.
+ *
+ * So the fallback is now conditional on this predicate rather than on the
+ * coordinate alone: no coordinate *and* no typed text means the GPS, and no
+ * coordinate *with* typed text means nothing has been chosen yet.
+ */
+export function isUnboundPlace(args: {
+  query: string;
+  location: unknown | null;
+}): boolean {
+  if (args.location) return false;
+  const trimmed = args.query.trim();
+  return trimmed.length > 0 && trimmed !== NOT_A_PLACE;
+}
+
 export function shouldSuggest(args: {
   /** True only if the last change to this field came from a keystroke. */
   typed: boolean;
