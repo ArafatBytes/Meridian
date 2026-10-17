@@ -1,0 +1,104 @@
+# Meridian — production. Run with:
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Differences from docker-compose.yml, all deliberate:
+#   * no source bind mounts   the image carries the code; nothing live-reloads
+#   * no --reload             uvicorn runs a single worker (1 vCPU box)
+#   * no published port 8000  only Caddy is on the internet
+#   * osrm is not a profile    routing is not optional in front of judges
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: meridian-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.api
+    image: meridian-api:prod
+    container_name: meridian-api
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      REDIS_HOST: redis
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      OSRM_BASE_URL: http://osrm:5000
+      PYTHONPATH: /app
+    expose:
+      - "8000"
+    volumes:
+      - ./backend/logs:/app/logs
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    image: meridian-worker:prod
+    container_name: meridian-worker
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      REDIS_HOST: redis
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      OSRM_BASE_URL: http://osrm:5000
+      PYTHONPATH: /app
+    volumes:
+      - model_cache:/cache
+      - ./backend/logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+    healthcheck:
+      disable: true
+
+  redis:
+    image: redis:7-alpine
+    container_name: meridian-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --save 60 1
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  osrm:
+    # Pinned by digest to v5.26.0 -- the version that BUILT osrm-data/.
+    # OSRM refuses to load a graph whose fingerprint came from another
+    # release, and `latest` is years ahead of this data.
+    image: osrm/osrm-backend@sha256:af5d4a83fb90086a43b1ae2ca22872e6768766ad5fcbb07a29ff90ec644ee409
+    container_name: meridian-osrm
+    restart: unless-stopped
+    volumes:
+      - ./osrm-data:/data
+    command: osrm-routed --algorithm mld /data/bangladesh-latest.osrm
+
+volumes:
+  redis_data:
+  model_cache:
+  caddy_data:
+  caddy_config:

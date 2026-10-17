@@ -50,9 +50,18 @@ let warned = false;
 
 module.exports = ({ config }) => {
   const android = { ...(config.android ?? {}) };
-  const declared = android.googleServicesFile;
 
-  if (declared && !fs.existsSync(path.resolve(__dirname, declared))) {
+  // EAS Build uploads the git repository, and google-services.json is
+  // gitignored, so it never arrives that way -- the cloud build would drop the
+  // pointer below and ship without FCM, exactly the "works on my machine"
+  // failure this file exists to prevent. A file-type EAS secret named
+  // GOOGLE_SERVICES_JSON is materialised into the build workspace and its
+  // absolute path exported as this variable, so it takes precedence when set.
+  const declared = process.env.GOOGLE_SERVICES_JSON ?? android.googleServicesFile;
+
+  if (declared && fs.existsSync(path.resolve(__dirname, declared))) {
+    android.googleServicesFile = declared;
+  } else if (declared) {
     delete android.googleServicesFile;
     // Said once per process, and never suppressed entirely: a build that
     // quietly ships without FCM is how push "works on my machine, not yours".
