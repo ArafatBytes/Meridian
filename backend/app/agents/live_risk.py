@@ -1411,7 +1411,28 @@ class LiveRiskAgent(BaseAgent):
 
         status: AgentStatus = "ok"
         if errors:
-            nothing_worked = not fresh and metrics["documents_read"] == 0
+            # `by_source` holds one list per publisher that *completed*: a
+            # publisher that raised never appended. Its length is therefore "how
+            # many publishers answered", and its contents are "what they had" —
+            # two different questions, and only the first is about our health.
+            #
+            # This used to ask the second one (`not fresh`: did anybody hand us a
+            # document). On a Dhaka laptop those answers coincide often enough to
+            # look right. From the deployed host they do not. Five of the eight
+            # publishers sit behind a Cloudflare bot check that answers 403 to
+            # anything without a browser fingerprint — robots.txt included — and
+            # `Fetcher._robots_for` reads a 403 on robots.txt as disallow-all,
+            # which is the correct conservative reading and is not worked around.
+            # So those five refuse on every single run, `errors` is never empty,
+            # and the moment the other three had a quiet half-hour with nothing
+            # new, a fleet that was working as designed reported itself dead.
+            #
+            # Failure is now the two things that really are failures: nobody
+            # answered at all, or everybody answered and not one of the documents
+            # they gave us could be read (an LLM outage, via the
+            # `consecutive_misses` break above). "Some publishers are blocked and
+            # the rest had no news" is `partial`, which is what `partial` is for.
+            nothing_worked = not by_source or (bool(queue) and metrics["documents_read"] == 0)
             status = "failed" if nothing_worked else "partial"
         return AgentResult(
             agent=self.name,

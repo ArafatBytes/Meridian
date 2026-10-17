@@ -635,12 +635,21 @@ class ScheduledRiskAgent(BaseAgent):
 
         status: AgentStatus = "ok"
         if errors:
-            # `any(by_source)` is "did any publisher yield a document at all".
-            # It used to read `not fresh`, against a flat list of every document
-            # ingested; S30's round-robin replaced that list with one list per
-            # publisher and missed this reference, leaving a `NameError` on a
-            # path that only runs when something else has already gone wrong.
-            nothing_worked = not any(by_source) and metrics["documents_read"] == 0
+            # Same rule as `live_risk`, and its comment carries the reasoning:
+            # `by_source` is the publishers that *answered*, not the ones that had
+            # something. Asking `any(by_source)` conflated the two, and this agent
+            # showed it the more plainly of the pair — a future-dated announcement
+            # is rarer than a news story, so the three reachable publishers
+            # routinely list a thousand URLs with no announcement among them. That
+            # is a quiet day, not a broken agent, and it was being reported as
+            # "Not working" on the System Status screen every hour.
+            #
+            # (The condition this replaces was already once wrong in the other
+            # direction: it read `not fresh` against a flat list until S30's
+            # round-robin replaced that list with one per publisher, leaving a
+            # `NameError` on a path that only runs when something else has
+            # already gone wrong.)
+            nothing_worked = not by_source or (bool(queue) and metrics["documents_read"] == 0)
             status = "failed" if nothing_worked else "partial"
         return AgentResult(
             agent=self.name,
