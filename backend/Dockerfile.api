@@ -1,0 +1,44 @@
+# =============================================================================
+# Meridian API — production
+# =============================================================================
+# base.txt plus openai. No torch, no playwright, no YOLO weights: app.main
+# imports none of them, and ADR 0006 deleted the code that did.
+#
+# Three packages from agents.txt are the exception, because app.main reaches
+# them at module scope and would not start without them:
+#   openai          endpoints/ai.py -> app.llm.client
+#   beautifulsoup4  endpoints/ingestion.py -> agents.live_risk -> ingestion.sources
+#   lxml            not needed to import, but every BeautifulSoup(...) call in
+#                   ingestion/sources asks for the "lxml" parser by name
+# Installing agents.txt whole would drag sentence-transformers and torch back
+# in and undo the split, so only what the API actually needs is named here.
+# =============================================================================
+FROM python:3.11-slim
+
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONPATH=/app
+
+# libgl1/libglib2.0-0/libsm6/libxext6/libxrender1 are gone with cv2 and
+# mediapipe. geos and proj are for shapely and pyproj; libmagic1 for
+# python-magic. gcc/g++ are belt and braces for any source build.
+RUN apt-get update && apt-get install --no-install-recommends -y \
+        gcc g++ libpq-dev libgeos-dev libproj-dev libmagic1 curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements/base.txt ./requirements/base.txt
+RUN pip install --no-cache-dir -r requirements/base.txt openai beautifulsoup4 lxml
+
+COPY . .
+RUN mkdir -p logs uploads
+
+EXPOSE 8000
+
+# 20s, not 90s: there is no torch import to wait for any more.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=5).status == 200 else 1)"
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
