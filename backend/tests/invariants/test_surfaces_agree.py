@@ -243,8 +243,23 @@ async def test_served_flags_validate_against_the_contract() -> None:
         assert flag.half_life_hours > 0
         assert flag.radius_m > 0
         assert flag.mobility_statement
-        # Verification before publication: the schema CHECK, restated where the data is.
-        assert flag.status != "confirmed" or flag.source_count >= 2
+        # Verification before publication: the schema CHECK, restated where the data
+        # is. The CHECK is `risk_flags_confirmed_cites_a_source` and it reads
+        # `source_count >= 1`, not `>= 2`.
+        #
+        # This line said `>= 2` until 2026-10-17, restating a constraint that had
+        # been replaced. `e7c4fa3` made one vetted newsroom sufficient for
+        # `confirmed` on 2026-10-16 and renamed the constraint with it; the
+        # assertion was not updated, and it kept passing only because nothing had
+        # yet been served that was confirmed on a single source. The first real
+        # Prothom Alo flag broke it -- which is the correct surface being rejected
+        # by a stale rule, the same failure as in
+        # `test_confirmation_requires_a_vetted_source.py`.
+        #
+        # Whether the *sources* justify the badge is a policy question and belongs
+        # to `is_confirmable`, which that test asserts over the whole table. This
+        # one only restates the schema.
+        assert flag.status != "confirmed" or flag.source_count >= 1
 
 
 @pytest.mark.asyncio

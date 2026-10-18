@@ -1,0 +1,34 @@
+diff --git a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
+index ebf8780..f3a8c03 100644
+--- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
++++ b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
+@@ -1179,11 +1179,24 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+             return;
+         }
+ 
+-        // Ensure the list is large enough to set at the given index
+-        while(features.size() <= index){
+-            features.add(null);
+-        }
+-        features.set(index, mapFeature);
++        // Insert at the index; do NOT overwrite what is already there.
++        //
++        // React's addView(child, index) means "insert at index and shift the rest
++        // right". `features.set(index, ...)` replaced whatever occupied that slot
++        // instead, while `removeFeatureAt` below removes with
++        // `features.remove(index)`, which shifts left. The two therefore disagreed
++        // about every index from the first change onwards.
++        //
++        // The consequence is silent and permanent: an overwritten MapFeature is
++        // still drawn on the GoogleMap, but MapView has dropped its only reference
++        // to it, so `removeFeatureAt` can never reach it again. Polylines, markers
++        // and circles accumulate on the map and cannot be removed -- a deselected
++        // route stays painted, and survives unmounting every route overlay in JS.
++        //
++        // `index <= features.size()` is guaranteed here: the guard above diverts
++        // anything larger to `savedFeatures`. So this is always a legal insert and
++        // the padding loop it replaces is no longer needed.
++        features.add(index, mapFeature);
+     }
+ 
+     public void addFeature(View child, int index) {

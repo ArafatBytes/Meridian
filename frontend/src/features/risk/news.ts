@@ -61,6 +61,31 @@ export const isWebLink = (url: string): boolean => /^https?:\/\//.test(url);
 export const isGeneratedPlaceholder = (source: SourceRef): boolean =>
   !isWebLink(source.url) && (source.title ?? '').startsWith('Sample report');
 
+/**
+ * A reference that was never read in the news — a `sample:` URL from the fixture.
+ *
+ * Extends `isGeneratedPlaceholder` from "placeholders" to "everything the seeder
+ * wrote", and the reason is the sentence at the top of `newsFromFlags`: *this page
+ * is about what was read in the news, not about everything on the map.* A
+ * hand-written fixture headline reads like reporting, but nobody published it and
+ * its link does not open, so listing it answers the page's question wrongly — the
+ * same argument that already excludes the chronic statistics table.
+ *
+ * It also fixes the counter. `n real of m · the rest is sample data` was built for
+ * a surface with no live ingestion behind it; with the fixture entries gone the
+ * page lists articles only, and the count is of articles rather than of a ratio
+ * nobody can act on.
+ *
+ * **This is where the `sample_` marking stops being load-bearing on screen, and
+ * that is a narrowing, not a removal.** `fixture.py` still prefixes every
+ * generated publisher, every seeded URL still uses the `sample:` scheme, and a
+ * seeded flag's own sheet still shows its sources. What changes is that the one
+ * screen whose subject is *the press we read* no longer answers with rows the
+ * press did not write.
+ */
+export const isNotFromThePress = (source: SourceRef): boolean =>
+  !isWebLink(source.url);
+
 /*
  * Why the chronic layer is skipped, even though it has a real https source.
  *
@@ -114,8 +139,8 @@ export function outletName(sourceId: string): string {
  * reports two incidents — the first occurrence wins, because the alternative is
  * the same headline twice on one screen with no way for a reader to tell why.
  *
- * Three things are skipped: flags with no sources, generated fixture placeholders
- * (see `isGeneratedPlaceholder`), and the **chronic layer** (see below). This page
+ * Three things are skipped: flags with no sources, anything the seeder wrote
+ * (see `isNotFromThePress`), and the **chronic layer** (see below). This page
  * is about what was read in the news, not about everything on the map.
  */
 export function newsFromFlags(flags: RiskFlag[]): NewsEntry[] {
@@ -126,7 +151,7 @@ export function newsFromFlags(flags: RiskFlag[]): NewsEntry[] {
     if (flag.kind === 'chronic') continue;
     for (const source of flag.sources as SourceRef[]) {
       if (!source.url || seen.has(source.url)) continue;
-      if (isGeneratedPlaceholder(source)) continue;
+      if (isNotFromThePress(source)) continue;
       seen.add(source.url);
       entries.push({
         key: source.url,

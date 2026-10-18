@@ -61,6 +61,37 @@ _CACHE_PREFIX: Final[str] = "nominatim:v1:"
 _MAX_RESULTS: Final[int] = 5
 
 _REVERSE_PRECISION: Final[int] = 4
+
+_COUNTRY_CODES: Final[str] = "bd"
+"""
+Bangladesh only, on every forward geocode.
+
+Without it `search` is a world query. Typing *Rampura* offered **Rampura, India**
+above Rampura in Dhaka, because the Indian one is the larger place and Nominatim
+ranks by prominence when nothing says otherwise. The same thing put *Seoul* in the
+destination box, recorded in `features/search/suggest.ts`.
+
+This is not a display preference. The route box feeds a destination straight into
+`/routes/calculate`, which scores a path against the Dhaka risk surface; a
+destination in another country produces a route with no flags on it for the wrong
+reason entirely. The app is a Bangladesh product and there is no case where a
+destination outside the country is the answer, so the restriction is on the request
+rather than on the ranking.
+"""
+
+_DHAKA_VIEWBOX: Final[str] = "90.30,23.66,90.52,23.92"
+"""
+`lon_min,lat_min,lon_max,lat_max` around greater Dhaka, used **unbounded**.
+
+With `bounded=0` this is a preference, not a filter: Nominatim boosts results
+inside the box and still returns Chattogram or Sylhet when that is what was asked
+for. Bounded would have been wrong -- a user travelling outside Dhaka is a real
+case, and silently returning nothing for Cox's Bazar is a worse failure than
+ranking it second.
+
+Covers roughly Tongi and Uttara in the north to Jatrabari and Keraniganj in the
+south, which is the area the risk surface has flags for.
+"""
 """
 Decimal places a reverse-geocode coordinate is rounded to for the cache key.
 
@@ -143,8 +174,19 @@ async def search(query: str) -> list[dict[str, Any]]:
 
     payload = await _get(
         "search",
-        {"q": normalised, "limit": _MAX_RESULTS, "addressdetails": 1},
-        f"search:{normalised}",
+        {
+            "q": normalised,
+            "limit": _MAX_RESULTS,
+            "addressdetails": 1,
+            "countrycodes": _COUNTRY_CODES,
+            "viewbox": _DHAKA_VIEWBOX,
+            # Prefer Dhaka, do not require it. See `_DHAKA_VIEWBOX`.
+            "bounded": 0,
+        },
+        # The cache key carries the bias, so entries written before it existed are
+        # not served back. They hold world results for a Bangladesh query and
+        # would outlive this change by `NOMINATIM_CACHE_TTL_SECONDS` otherwise.
+        f"search:bd:{normalised}",
     )
     if not isinstance(payload, list):
         return []

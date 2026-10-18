@@ -43,7 +43,7 @@ import { riskService, type IngestionStatus } from '../../services/risk.service';
 import { geoService } from '../../services/geo.service';
 import RiskFlagSheet, { riskBand } from '../../components/RiskFlagSheet';
 import { RiskFlagMarker, isConfirmedFlag } from '../../components/RiskFlagMarker';
-import RouteComparisonCard, { safetyColour } from '../../components/RouteComparisonCard';
+import RouteComparisonCard from '../../components/RouteComparisonCard';
 import Dialog from '../../components/Dialog';
 import { useDialog } from '../../components/useDialog';
 import { TAB_BAR_CLEARANCE } from '../../navigation/metrics';
@@ -61,7 +61,11 @@ import { useJourney } from '../../features/journey/useJourney';
 import { goesTo, startedAtLabel } from '../../features/journey/resume';
 import { guardianLine } from '../../features/journey/escalation';
 import { useGuardians } from '../../features/journey/useGuardians';
-import { shouldSuggest } from '../../features/search/suggest';
+import {
+  isUnboundPlace,
+  NOT_A_PLACE,
+  shouldSuggest,
+} from '../../features/search/suggest';
 import {
   DEADLINE_CHOICES,
   HEARTBEAT_INTERVAL_MS,
@@ -218,9 +222,16 @@ const NEWS_POLL_LIMIT = 36;
  */
 const withAlpha = (hex: string, alpha: string) => `${hex}${alpha}`;
 
-// `getRouteColor` lived here until D06. It is now `safetyColour`, exported from
-// components/RouteComparisonCard.tsx, so the polyline and the card cannot disagree about
-// what a safety score looks like -- they read one table. Thresholds moved 80 -> 75 with it.
+// `getRouteColor` lived here until D06, when it became `safetyColour` in
+// components/RouteComparisonCard.tsx so the polyline and the card could not disagree
+// about what a safety score looks like.
+//
+// The route lines no longer use it at all: colour there says *which route is
+// selected*, because `safetyColour` buckets and two routes scoring 65 and 63 drew in
+// the same colour, making "3 routes" look like one line. The card still owns it, and
+// is still the only thing that states a score. The flag circles below colour by
+// severity band, which is a different question -- where the danger is, not which line
+// you are looking at.
 
 type MapScreenNavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'Map'>,
@@ -487,9 +498,66 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
   const [sourceQuery, setSourceQuery] = useState('My Location');
   const [destQuery, setDestQuery] = useState('');
 
+  /**
+   * The start field names a place it has not chosen -- typed text with no
+   * coordinate behind it. See `isUnboundPlace`.
+   *
+   * While this is true there is no origin to route from, so no route may be
+   * shown: one drawn from the GPS would contradict the words in the box, which
+   * is the defect this replaces. The field says so itself rather than leaving
+   * the person to notice.
+   */
+  const sourceUnbound = isUnboundPlace({
+    query: sourceQuery,
+    location: sourceLocation,
+  });
+
+  /**
+   * The same state on the destination, which fails more quietly.
+   *
+   * Nothing routes from an unbound destination -- `calculateRouteTo` is simply
+   * never reached -- so unlike the start it cannot produce a wrong answer. What
+   * it produces is nothing at all: type `Rampura`, pick no suggestion, and the
+   * app sits there. Worse, picking a *start* afterwards runs
+   * `if (destination) ...` against a null and returns silently, so the one action
+   * that looks like it should finish the job also does nothing.
+   *
+   * A no-op with no explanation is read as a broken app, so it says so too.
+   */
+  const destUnbound = isUnboundPlace({
+    query: destQuery,
+    location: destination,
+  });
+
+  /**
+   * The person has reopened the two address fields after a route was drawn.
+   *
+   * The planning panel asks four questions -- where from, where to, driving or
+   * walking, and (once a route exists) the check-in deadline and who to tell.
+   * Expanded, that is about 45% of the screen, and it stays expanded after the
+   * routes are drawn, so the map it is planning *onto* gets a strip and the
+   * comparison card gets the rest. Two of those questions are already answered
+   * by then, and their answers fit on one line.
+   *
+   * So the fields collapse to a summary once there is a route, and come back on
+   * a tap. The deadline and guardian rows are deliberately NOT collapsed: they
+   * are the next decision rather than a finished one.
+   */
+  const [editingPlan, setEditingPlan] = useState(false);
+
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [activeSearch, setActiveSearch] = useState<'source' | 'destination' | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+
+  /**
+   * Show the summary line instead of the two address fields.
+   *
+   * Only once a route exists -- there is nothing to summarise before that -- and
+   * never while a field is focused, because collapsing the box someone is typing
+   * in would take the keyboard away mid-word.
+   */
+  const planCollapsed =
+    calculatedRoutes.length > 0 && !editingPlan && activeSearch === null;
 
   /**
    * Whether the text in the active field was typed by a person.
@@ -568,6 +636,20 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
+  /**
+   * Take the route off the map while the start field holds unresolved text.
+   *
+   * A route is an answer about two specific points. The moment someone types
+   * over the start, the lines on screen stop corresponding to the words in the
+   * box -- and a stale route is read as a current one, which is exactly how the
+   * old fallback managed to be wrong without looking wrong. Clearing is what
+   * every mapping app does on an edit, and it costs nothing: choosing a
+   * suggestion recalculates immediately.
+   */
+  useEffect(() => {
+    if (sourceUnbound || destUnbound) setCalculatedRoutes([]);
+  }, [sourceUnbound, destUnbound]);
+
   useEffect(() => {
     const query = activeSearch === 'source' ? sourceQuery : destQuery;
     const timeoutId = setTimeout(() => {
@@ -608,10 +690,12 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     } else {
       setDestination(loc);
       setDestQuery(name);
-      // Trigger route calc if source is ready
-      if (sourceLocation || currentLocation) {
-        calculateRouteTo(sourceLocation || currentLocation, loc);
-      }
+      // Resolve the start first. Previously this read
+      // `sourceLocation || currentLocation`, which is where a typed-but-unchosen
+      // start quietly became "wherever the phone is".
+      void startPoint().then(from => {
+        if (from) calculateRouteTo(from, loc);
+      });
     }
 
     stopSuggesting();
@@ -619,12 +703,60 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     Keyboard.dismiss();
   };
 
+  /**
+   * The coordinate to route **from**, resolving typed text rather than ignoring it.
+   *
+   * Three cases, and the middle one is the defect this exists to close:
+   *
+   * * a place was picked from the list -- use it;
+   * * the field reads `My Location` -- use the GPS, which is what it says;
+   * * the field holds typed text with no coordinate -- **geocode the text**.
+   *
+   * It used to be two cases, with the third falling into the second: anything
+   * without a coordinate meant the GPS. So typing a start and then picking a
+   * destination routed from wherever the phone was, while the box kept showing
+   * the place that had been typed. Returns null, having said why, when the text
+   * resolves to nothing -- a refusal the person can see, rather than an answer to
+   * a question they did not ask.
+   */
+  const startPoint = async (): Promise<Location | null> => {
+    if (sourceLocation) return sourceLocation;
+    if (!sourceUnbound) return currentLocation;
+
+    const typed = sourceQuery.trim();
+    const [best] = await geoService.search(typed);
+    if (!best) {
+      showDialog({
+        title: 'No such starting point',
+        message: `Could not find "${typed}". Pick a start from the list of suggestions, or clear the field to set off from where you are.`,
+        tone: 'warn',
+        icon: 'navigate-outline',
+      });
+      return null;
+    }
+
+    // `NominatimPlace` carries numbers; the proxy parsed them. Unlike the
+    // suggestion rows, which are `any` off the wire and still need parseFloat.
+    const loc = { latitude: best.lat, longitude: best.lon };
+    // Bind it and show the resolved name, so the box now agrees with the route.
+    // A place with no display_name keeps what was typed rather than blanking the
+    // field -- the coordinate is the part that matters and it is now bound.
+    setSourceLocation(loc);
+    setSourceQuery(best.display_name?.split(',')[0] ?? typed);
+    stopSuggesting();
+    return loc;
+  };
+
   const calculateRouteTo = async (
     start: Location | null,
     end: Location,
     profileOverride?: 'driving' | 'foot',
   ) => {
-    const fromLoc = start || currentLocation;
+    // The fallback to the GPS is deliberately unavailable while the start field
+    // holds unresolved text. Every caller resolves through `startPoint` first;
+    // this makes that structural rather than a convention a later caller can
+    // forget, and it is the line whose absence caused the original defect.
+    const fromLoc = start || (sourceUnbound ? null : currentLocation);
     if (!fromLoc) {
       showDialog({
         title: 'No starting point',
@@ -647,6 +779,8 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       setCalculatedRoutes(routes);
       if (routes.length > 0) {
         setSelectedRouteIndex(0);
+        // Answered again, so fold the fields away and give the map back.
+        setEditingPlan(false);
       } else {
         showDialog({
           title: 'No route found',
@@ -984,6 +1118,7 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
       setDestQuery('');
       setSourceQuery('My Location');
       setSourceLocation(null);
+      setEditingPlan(false);
       // Back to the route's own ETA. A two-minute leash chosen for one trip must
       // not be silently inherited by the next one -- that is a setting the person
       // made about a journey, not a preference about themselves.
@@ -1063,7 +1198,9 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
    * Reached from two events, not one. See `handlePoiPress`.
    */
   const selectDestination = (coord: Location, label: string) => {
-    if (!routeMode || !currentLocation) return;
+    // `currentLocation` is no longer required: with a start typed or picked, a
+    // tap on the map is a complete instruction without the GPS having arrived.
+    if (!routeMode) return;
 
     // While following, a tap on the map means "let me look around" and nothing
     // else. It must NOT set a new destination: this handler re-routes, so an
@@ -1081,7 +1218,9 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
     // coordinate is already known, so the label is a caption, not a query.
     stopSuggesting();
     Keyboard.dismiss();
-    calculateRouteTo(sourceLocation || currentLocation, dest);
+    void startPoint().then(from => {
+      if (from) calculateRouteTo(from, dest);
+    });
   };
 
   /** A tap on open ground. The coordinate is all there is to say about it. */
@@ -1461,27 +1600,24 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
           />
         )}
 
-{/* Routes.
-            D06: the line is coloured by `safety_score`, through the same `safetyColour`
-            the card uses. It used to be coloured by rank — blue, amber, grey by index —
-            which encoded *position in the list* and told you nothing about the route. Two
-            routes could look identically "second" while one was safe and one was not. */}
+{/* Routes. Colour and width carry the selection; `lineDashPattern` is
+            deliberately absent because `MapPolyline.applyPattern` opens with
+            `if (patternValues == null) return;` -- a dash pattern can be set on a
+            live polyline but never cleared, so it is the one prop here that cannot
+            be driven both ways. (The default `lineCap` is `RoundCap`, and
+            `applyPattern` emits `Dot()` rather than `Dash()` when the cap is
+            round, so the old `[12, 8]` was drawing 8px-spaced dots and discarding
+            the 12 anyway.) */}
         {calculatedRoutes.map((route, index) => {
           const isSelected = index === selectedRouteIndex;
           // While following, the selected route is drawn in two parts: the stretch
-          // already behind, faint, and the stretch ahead, full strength. That is
-          // what makes the line visibly shrink from the start point as you move,
-          // which is the whole feature.
+          // already behind, faint, and the stretch ahead at full strength. That is
+          // what makes the line visibly shrink from the start point as you move.
           //
-          // The unselected candidates are left whole. They are alternatives being
-          // compared, not routes being followed, and trimming them would imply
-          // progress along a path nobody is on.
           // `behind`, not `ahead`, is the test. At the very end of a route `ahead`
           // collapses to the single snapped point, and keying off it would make the
           // whole untrimmed line reappear at the moment of arrival -- undoing, in
-          // one frame, all the shrinking the user just watched. `behind` only
-          // reaches one point before the first fix, which is exactly when the
-          // untrimmed line IS the right thing to draw.
+          // one frame, all the shrinking the user just watched.
           const following = isSelected && follow.active && follow.behind.length > 1;
 
           if (following) {
@@ -1489,17 +1625,14 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
               <React.Fragment key={route.route_id}>
                 <Polyline
                   coordinates={follow.behind}
-                  strokeColor={withAlpha(safetyColour(route.safety_score, t), '4D')}
+                  strokeColor={withAlpha(t.brand, '4D')}
                   strokeWidth={5}
                   zIndex={8}
                 />
-                {/* A Polyline with fewer than two points draws nothing, so this is
-                    simply absent once the route is finished rather than being a
-                    degenerate line. */}
                 {follow.ahead.length > 1 && (
                   <Polyline
                     coordinates={follow.ahead}
-                    strokeColor={safetyColour(route.safety_score, t)}
+                    strokeColor={t.brand}
                     strokeWidth={7}
                     zIndex={10}
                   />
@@ -1512,11 +1645,10 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
             <Polyline
               key={route.route_id}
               coordinates={route.path.map(p => ({ latitude: p.latitude, longitude: p.longitude }))}
-              strokeColor={safetyColour(route.safety_score, t)}
-              strokeWidth={isSelected ? 6 : 3}
+              strokeColor={isSelected ? t.brand : withAlpha(t.textSoft, '8C')}
+              strokeWidth={isSelected ? 7 : 3}
               onPress={() => setSelectedRouteIndex(index)}
               tappable={true}
-              lineDashPattern={isSelected ? undefined : [10, 5]}
               zIndex={isSelected ? 10 : 1}
             />
           );
@@ -1557,13 +1689,32 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
               const onSelected = selectedIds.has(flag.flag_id);
               return (
                 <Circle
-                  key={`route-flag-${flag.flag_id}-${onSelected ? 'on' : 'off'}`}
+                  // The key must NOT carry `onSelected`. It used to, to force a
+                  // remount so the dash pattern could be cleared -- and a remount
+                  // is a remove plus an add on the map's child list, which is the
+                  // one operation this component cannot survive.
+                  //
+                  // `MapView.java` adds children with `features.set(index, …)` and
+                  // removes them with `features.remove(index)`. `set` overwrites
+                  // rather than inserting, and `remove` shifts everything after it
+                  // left, so the two disagree about every index from the first
+                  // removal onwards. Remounting these circles on every tab tap
+                  // churned that list under the route lines, which are earlier in
+                  // it, and left orphaned polylines drawn on the GoogleMap with
+                  // nothing in JavaScript still holding them. That is why the
+                  // previously selected route stayed painted, and why it survived
+                  // closing route mode entirely.
+                  //
+                  // So the key is stable and the dash pattern is gone with it --
+                  // the thing it was remounting *for*. Stroke width, stroke alpha
+                  // and fill alpha carry the distinction instead, and all three
+                  // apply straight to the live circle.
+                  key={`route-flag-${flag.flag_id}`}
                   center={{ latitude: flag.lat, longitude: flag.lon }}
                   radius={flag.radius_m}
-                  strokeWidth={onSelected ? 2 : 1}
-                  strokeColor={withAlpha(t.danger, onSelected ? 'CC' : '55')}
-                  fillColor={withAlpha(t.danger, onSelected ? '26' : '0D')}
-                  lineDashPattern={onSelected ? undefined : [8, 6]}
+                  strokeWidth={onSelected ? 3 : 1}
+                  strokeColor={withAlpha(t.danger, onSelected ? 'CC' : '44')}
+                  fillColor={withAlpha(t.danger, onSelected ? '2E' : '08')}
                   zIndex={onSelected ? 5 : 2}
                 />
               );
@@ -1889,8 +2040,52 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                 It leaves route mode outright, which is why this whole card is
                 hidden while following: there, "close" has to mean stop walking,
                 and that button is on the navigation banner. */}
+            {planCollapsed ? (
+              /* The two answered questions, on one line, with the way back.
+                 `numberOfLines` on each end so a long resolved name -- Nominatim
+                 returns some -- shortens instead of pushing the edit affordance
+                 off the row. */
+              <TouchableOpacity
+                style={styles.planSummary}
+                onPress={() => setEditingPlan(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Edit start and destination"
+              >
+                <View style={[styles.inputDot, styles.sourceDot]} />
+                <Text style={styles.planSummaryText} numberOfLines={1}>
+                  {sourceQuery}
+                </Text>
+                <Ionicons name="arrow-forward" size={13} color={t.textSoft} />
+                <Text style={styles.planSummaryText} numberOfLines={1}>
+                  {destQuery}
+                </Text>
+                <Ionicons
+                  name={routeProfile === 'driving' ? 'car-outline' : 'walk-outline'}
+                  size={14}
+                  color={t.textSoft}
+                />
+                <Ionicons name="pencil" size={13} color={t.brand} />
+                <TouchableOpacity
+                  onPress={toggleRouteMode}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close route planning"
+                >
+                  <Ionicons name="close" size={18} color={t.textSoft} />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            ) : (
+              <>
             <View style={styles.inputRow}>
-              <View style={[styles.inputDot, styles.sourceDot]} />
+              {/* Filled means "this field holds a place". Hollow means it holds
+                  typed text and nothing has been chosen yet -- the state that
+                  used to be invisible while the router quietly used the GPS. */}
+              <View
+                style={[
+                  styles.inputDot,
+                  sourceUnbound ? styles.dotUnbound : styles.sourceDot,
+                ]}
+              />
               <TextInput
                 style={styles.input}
                 value={sourceQuery}
@@ -1916,11 +2111,40 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
+            {sourceUnbound && (
+              <View style={styles.unboundRow}>
+                <Ionicons name="information-circle-outline" size={13} color={t.warn} />
+                <Text style={styles.unboundText}>Pick a start from the list</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    // Back to the GPS, explicitly. `NOT_A_PLACE` is the field's
+                    // own word for it, and clearing the text is what makes the
+                    // null coordinate mean "use my location" again.
+                    setSourceQuery(NOT_A_PLACE);
+                    setSourceLocation(null);
+                    stopSuggesting();
+                    setActiveSearch(null);
+                    Keyboard.dismiss();
+                  }}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Start from my location instead"
+                >
+                  <Text style={styles.unboundAction}>Use my location</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             <View style={styles.connectorLine} />
 
             {/* Destination Input */}
             <View style={styles.inputRow}>
-              <View style={[styles.inputDot, styles.destDot]} />
+              <View
+                style={[
+                  styles.inputDot,
+                  destUnbound ? styles.dotUnbound : styles.destDot,
+                ]}
+              />
               <TextInput
                 style={styles.input}
                 placeholder="Where to?"
@@ -1936,6 +2160,15 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
               />
               {activeSearch === 'destination' && isSearching && <ActivityIndicator size="small" color={t.brand} />}
             </View>
+
+            {destUnbound && (
+              <View style={styles.unboundRow}>
+                <Ionicons name="information-circle-outline" size={13} color={t.warn} />
+                <Text style={styles.unboundText}>
+                  Pick a destination from the list, or tap the map
+                </Text>
+              </View>
+            )}
 
             {/* Driving / walking. Re-requests immediately when a route is already shown,
                 because a mode switch that needs a second tap to take effect reads as
@@ -1953,8 +2186,12 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                       if (destination) {
                         // `calculateRouteTo` reads `routeProfile` from the closure, so pass
                         // the new value explicitly rather than relying on a state update
-                        // that has not landed yet.
-                        calculateRouteTo(sourceLocation, destination, mode);
+                        // that has not landed yet. Through `startPoint` for the same
+                        // reason as everywhere else: a typed start must be resolved,
+                        // never swapped for the GPS.
+                        void startPoint().then(from => {
+                          if (from) calculateRouteTo(from, destination, mode);
+                        });
                       }
                     }}
                     accessibilityRole="button"
@@ -1975,6 +2212,8 @@ const MapScreen: React.FC<Props> = ({ navigation }) => {
                 );
               })}
             </View>
+              </>
+            )}
 
             {/* The deadline. JG2.
 
@@ -3070,6 +3309,41 @@ StyleSheet.create({
     },
     destDot: {
       backgroundColor: t.danger,
+    },
+    planSummary: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space.sm,
+      paddingVertical: space.xs,
+    },
+    planSummaryText: {
+      ...type.body,
+      color: t.text,
+      // Each end takes half of whatever is left after the icons, so a long
+      // resolved name truncates rather than crowding the other one out.
+      flex: 1,
+    },
+    dotUnbound: {
+      backgroundColor: 'transparent',
+      borderWidth: 1.5,
+      borderColor: t.warn,
+    },
+    unboundRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space.xs,
+      paddingLeft: 8 + space.lg,
+      paddingTop: space.xs,
+    },
+    unboundText: {
+      ...type.caption,
+      color: t.warn,
+      flex: 1,
+    },
+    unboundAction: {
+      ...type.caption,
+      color: t.brand,
+      fontFamily: fontFamily.bodyMedium,
     },
     profileRow: {
       flexDirection: 'row',

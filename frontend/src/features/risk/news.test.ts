@@ -100,10 +100,15 @@ describe('newsFromFlags', () => {
     };
     const entries = newsFromFlags([
       flag({ kind: 'chronic', sources: [stats] as any }),
-      flag({ sources: [source({ url: 'sample:prothom_alo/seed/x' })] as any }),
+      flag({ sources: [source({ url: 'https://prothomalo.com/x' })] as any }),
     ]);
+    // The statistics table is dropped and the article is kept, so the count is of
+    // articles. Before `isNotFromThePress` this case needed a fixture row to make
+    // its point; now a fixture row would be dropped for a second, separate reason
+    // and the test would pass without testing anything.
     expect(entries).toHaveLength(1);
-    expect(realCount(entries)).toBe(0);
+    expect(entries[0].outletId).toBe('prothom_alo');
+    expect(realCount(entries)).toBe(1);
   });
 
   it('puts the newest article first', () => {
@@ -145,30 +150,49 @@ describe('newsFromFlags', () => {
   });
 });
 
-describe('sample data stays countable', () => {
+describe('only what a publisher published is listed', () => {
+  /*
+   * The contract changed on 2026-10-17. It used to be "list the fixture too, and
+   * label it", so that a day with no ingestion could not be mistaken for a busy
+   * one -- the counter read `n real of m · the rest is sample data`.
+   *
+   * It is now "list articles only" (`isNotFromThePress`). The question the page
+   * answers is still answered, and more directly: a day with no ingestion is an
+   * empty page, which cannot be misread at all. What a seeded flag cites is still
+   * visible on that flag's own sheet, where it is provenance rather than a claim
+   * about the press.
+   */
   const fixture = flag({
     sources: [source({ url: 'sample:prothom_alo/seed/bangshal-fire' })] as any,
   });
   const real = flag({ sources: [source({ url: 'https://prothomalo.com/x' })] as any });
 
-  it('marks a fixture source as sample', () => {
-    expect(newsFromFlags([fixture])[0].isSample).toBe(true);
+  it('drops a seeded reference, hand-written headline and all', () => {
+    expect(newsFromFlags([fixture])).toEqual([]);
   });
 
-  it('does not mark a real article as sample', () => {
-    expect(newsFromFlags([real])[0].isSample).toBe(false);
+  it('keeps a real article and does not mark it as sample', () => {
+    const entries = newsFromFlags([real]);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].isSample).toBe(false);
   });
 
-  it('counts only the real ones, which is the number the page exists for', () => {
+  it('counts the articles, because that is all there is to count', () => {
     const entries = newsFromFlags([fixture, real]);
-    expect(entries).toHaveLength(2);
+    expect(entries).toHaveLength(1);
     expect(realCount(entries)).toBe(1);
   });
 
-  it('does not hide sample data — an empty page and a seeded page differ', () => {
-    // Hiding fixtures would make a day with no ingestion look identical to a day
-    // with plenty, which is exactly the question this screen answers.
-    expect(newsFromFlags([fixture])).toHaveLength(1);
+  it('shows an empty page when nothing was ingested, rather than a seeded one', () => {
+    // The replacement for the old "seeded and empty must differ" guarantee: with
+    // no articles there are no cards, so the page cannot overstate the day.
+    expect(newsFromFlags([fixture, fixture])).toEqual([]);
+  });
+
+  it('still reports 0 real if a non-web source ever reached the list', () => {
+    // `realCount` is kept as the backstop it always was. If a future change let a
+    // `sample:` row through, the counter reads 0 rather than counting it.
+    expect(realCount([{ isSample: true } as any])).toBe(0);
   });
 });
 
@@ -197,15 +221,18 @@ describe('generated fixture placeholders are not articles', () => {
     expect(newsFromFlags([flag({ sources: [placeholder] as any })])).toEqual([]);
   });
 
-  it('keeps a hand-written sample headline, which does read like reporting', () => {
+  it('drops a hand-written sample headline too, for the broader reason', () => {
+    // It is not a *placeholder* -- it reads like reporting, and
+    // `isGeneratedPlaceholder` still says so. It is dropped by
+    // `isNotFromThePress` instead: no publisher published it and its link does
+    // not open. Both predicates are kept because they answer different
+    // questions, and this test is what records the difference.
     const written = source({
       url: 'sample:prothom_alo/seed/bangshal-fire',
       title: 'Fire service responds in Bangshal, traffic diverted',
     });
     expect(isGeneratedPlaceholder(written as any)).toBe(false);
-    const entries = newsFromFlags([flag({ sources: [written] as any })]);
-    expect(entries).toHaveLength(1);
-    expect(entries[0].isSample).toBe(true);
+    expect(newsFromFlags([flag({ sources: [written] as any })])).toEqual([]);
   });
 
   it('never discards a real article, whatever it is called', () => {

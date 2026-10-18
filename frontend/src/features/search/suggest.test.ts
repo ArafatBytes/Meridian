@@ -1,4 +1,9 @@
-import { MIN_QUERY_LENGTH, NOT_A_PLACE, shouldSuggest } from './suggest';
+import {
+  MIN_QUERY_LENGTH,
+  NOT_A_PLACE,
+  isUnboundPlace,
+  shouldSuggest,
+} from './suggest';
 
 const typed = (query: string) =>
   shouldSuggest({ typed: true, active: 'destination', query });
@@ -51,5 +56,42 @@ describe('shouldSuggest', () => {
   it('does not geocode the source field’s word for the GPS', () => {
     expect(shouldSuggest({ typed: true, active: 'source', query: NOT_A_PLACE })).toBe(false);
     expect(shouldSuggest({ typed: true, active: 'source', query: 'Gulshan 2' })).toBe(true);
+  });
+});
+
+describe('isUnboundPlace', () => {
+  /*
+   * The start field holds two things that look the same and mean opposite
+   * things: text someone typed, and a place they picked. Only the second has a
+   * coordinate. `null` means "use the GPS" while the field reads `My Location`,
+   * and means "nothing chosen yet" the moment it is typed over -- and the router
+   * used to treat both as the GPS, so typing a start and picking a destination
+   * routed from wherever the phone was while the box showed the typed place.
+   */
+  it('a picked place is bound, whatever the text says', () => {
+    expect(
+      isUnboundPlace({ query: 'Gulshan 2', location: { latitude: 23.79, longitude: 90.41 } }),
+    ).toBe(false);
+  });
+
+  it('`My Location` is not unbound — null there means the GPS, deliberately', () => {
+    expect(isUnboundPlace({ query: NOT_A_PLACE, location: null })).toBe(false);
+  });
+
+  it('an empty field is not unbound either', () => {
+    expect(isUnboundPlace({ query: '', location: null })).toBe(false);
+    expect(isUnboundPlace({ query: '   ', location: null })).toBe(false);
+  });
+
+  it('typed text with no coordinate IS unbound — the case that was invisible', () => {
+    expect(isUnboundPlace({ query: 'Gulshan 2', location: null })).toBe(true);
+  });
+
+  it('is unbound mid-keystroke, so the stale route goes as soon as editing starts', () => {
+    expect(isUnboundPlace({ query: 'G', location: null })).toBe(true);
+  });
+
+  it('ignores surrounding whitespace when deciding', () => {
+    expect(isUnboundPlace({ query: `  ${NOT_A_PLACE}  `, location: null })).toBe(false);
   });
 });
