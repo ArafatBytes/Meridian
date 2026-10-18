@@ -1,6 +1,33 @@
+<div align="center">
+
+<img src="frontend/assets/meridian-logo.jpeg" alt="Meridian logo: a compass star inside a blue and green ring" width="120">
+
 # Meridian
 
-**Agentic safety navigation for Bangladesh.**
+### Agentic safety navigation for Bangladesh
+
+**নিরাপদ পথ, প্রতিটি যাত্রায়** — *a safe road, on every journey*
+
+[![Expo SDK](https://img.shields.io/badge/Expo_SDK-57-0EA5E9?style=flat-square&logo=expo&logoColor=white)](https://expo.dev)
+[![React Native](https://img.shields.io/badge/React_Native-0.86-0369A1?style=flat-square&logo=react&logoColor=white)](https://reactnative.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Python_3.11%2B-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Supabase](https://img.shields.io/badge/Supabase-Postgres_%2B_PostGIS-3ECF8E?style=flat-square&logo=supabase&logoColor=white)](https://supabase.com)
+[![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis&logoColor=white)](https://redis.io)
+[![Celery](https://img.shields.io/badge/Celery-worker_%2B_beat-37814A?style=flat-square&logo=celery&logoColor=white)](https://docs.celeryq.dev)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+[![Gemini](https://img.shields.io/badge/Gemini-%2B_Groq_%C2%B7_Ollama-8E75B2?style=flat-square&logo=googlegemini&logoColor=white)](https://ai.google.dev)
+[![OSRM](https://img.shields.io/badge/OSRM-OpenStreetMap-7EBC6F?style=flat-square&logo=openstreetmap&logoColor=white)](https://project-osrm.org)
+
+**MD Arafat Ullah** · **Nakib Saleh** · **Farhan Ishraq**
+
+<sub>Hack for Humanity 2026 · The AI Collective Bangladesh · Track 3 — Smart Society & Public Services</sub>
+
+[▶ Demo video](https://youtu.be/FvKNAmrX3l0) · [Watch it run](#watch-it-run) · [What it does](#what-it-does) · [Architecture](#architecture) · [Running it](#running-it) · [Agent fleet](#the-agent-fleet) · [Privacy](#privacy-and-the-limits-we-state-out-loud)
+
+</div>
+
+---
 
 Every navigation app in Dhaka answers one question: *what is the fastest route?*
 Meridian answers the one that matters more — *is this road safe right now?*
@@ -22,8 +49,96 @@ Smart Society & Public Services. See
 
 ---
 
+## Watch it run
+
+<div align="center">
+
+<a href="https://youtu.be/FvKNAmrX3l0"><img src="https://img.youtube.com/vi/FvKNAmrX3l0/maxresdefault.jpg" alt="Meridian demo video on YouTube" width="640"></a>
+
+<sub>▶ <b><a href="https://youtu.be/FvKNAmrX3l0">Watch the full demo on YouTube</a></b></sub>
+
+</div>
+
+The same film, cut into the scenes it plays in. Every screen is the running app on
+a handset; every number on it was read off the live system.
+
+### Opening
+
+<table>
+  <tr>
+    <td width="33%" align="center"><img src="docs/demo/01-sign-in.gif" alt="Sign-in screen: Welcome back, email and password, Log in" width="100%"><br><sub><b>Sign in</b><br>Supabase Auth, the only identity provider</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/02-loading.gif" alt="Loading animation: a pulsing shield under the Meridian wordmark" width="100%"><br><sub><b>Setting up your safety zone</b><br>The launch animation</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/03-home.gif" alt="Home screen: SOS Emergency button, 2 of 3 Guardian triggers armed, quick actions" width="100%"><br><sub><b>Safety at a glance</b><br>SOS, Guardian status, four quick actions</sub></td>
+  </tr>
+</table>
+
+### 01 · The city reads itself
+
+<table>
+  <tr>
+    <td width="33%" align="center"><img src="docs/demo/04-flags-live.gif" alt="Map of Dhaka filling with risk flags, counter rising to 28" width="100%"><br><sub><b>The city, flagged live</b><br>Risk flags read from the news</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/05-news-to-flags.gif" alt="What we read screen: Bangla headlines, each turning into a confirmed flag" width="100%"><br><sub><b>News in, risk flags out</b><br>Every article, and the flag it produced</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/06-risk-decay.gif" alt="Flag detail with a severity-over-time chart decaying from 70 towards 8" width="100%"><br><sub><b>Risk fades as news ages</b><br>Severity decays on a half-life</sub></td>
+  </tr>
+</table>
+
+### 02 · One route is clean
+
+<table>
+  <tr>
+    <td width="33%" align="center"><img src="docs/demo/07-route-search.gif" alt="Route panel: typing Gulshan, picking the first suggestion from Rampura" width="100%"><br><sub><b>Type it, pick it</b><br>From Rampura to Gulshan 2</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/08-safety-first.gif" alt="Two routes compared: Recommended 100 with no flags, Option 2 with four flags" width="100%"><br><sub><b>Safety first, speed second</b><br>A minute faster is four flags deep</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/09-journey-start.gif" alt="Navigation starts; journey started and guardian emailed" width="100%"><br><sub><b>Start, and your guardian is told</b><br>One email, no live tracking</sub></td>
+  </tr>
+  <tr>
+    <td width="33%" align="center"><img src="docs/demo/10-check-in.gif" alt="Journey card asks Are you there yet? after no movement" width="100%"><br><sub><b>No movement? Meridian asks</b><br>A check-in push first</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/11-guardian-email.gif" alt="Red email to the guardian: has not arrived and is not answering" width="100%"><br><sub><b>No answer</b><br>Then the guardian gets an email</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/12-home-safe.gif" alt="Arrival at the destination and a green arrived-safely email" width="100%"><br><sub><b>Home safe, guardian told</b><br>The journey ends itself on arrival</sub></td>
+  </tr>
+</table>
+
+### 03 · Help, right now
+
+<table>
+  <tr>
+    <td width="33%" align="center"><img src="docs/demo/13-edit-profile.gif" alt="Edit profile: photo, name and phone; email is locked" width="100%"><br><sub><b>Who you are, kept current</b><br>The name every alert carries</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/14-emergency-contacts.gif" alt="Emergency contacts list, each marked Emailed" width="100%"><br><sub><b>Emergency contacts</b><br>The people who get the call</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/15-your-rules.gif" alt="Profile menu: Guardian, SOS hot words, SOS history, alerts, system status" width="100%"><br><sub><b>Your safety, your rules</b><br>Guardian, hot words, history, status</sub></td>
+  </tr>
+  <tr>
+    <td width="33%" align="center"><img src="docs/demo/16-theme.gif" alt="The same screen in light and dark themes side by side" width="100%"><br><sub><b>Light or dark</b><br>Or follow the system</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/17-hot-words.gif" alt="SOS hot words screen: adding the word Help, then shouting it" width="100%"><br><sub><b>Say the word, help is sent</b><br>Hot words, matched on the device</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/18-three-ways.gif" alt="Three SOS triggers: shout a hot word, shake the phone, press SOS Emergency" width="100%"><br><sub><b>Three ways to call for help</b><br>Shout, shake, or press</sub></td>
+  </tr>
+  <tr>
+    <td width="33%" align="center"><img src="docs/demo/19-recording.gif" alt="Emergency mode: a 10-second countdown while recording evidence" width="100%"><br><sub><b>Recording evidence</b><br>A 10-second clip, sent when it ends</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/20-alert-sent.gif" alt="Uploading and alerting contacts; the SOS email with name, place and video" width="100%"><br><sub><b>Uploaded, then sent</b><br>Name, time, place and video, by email</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/21-sos-history.gif" alt="SOS history list with the alerts-sent counter rising to 14, all delivered" width="100%"><br><sub><b>SOS history</b><br>Every alert, delivered</sub></td>
+  </tr>
+</table>
+
+### 04 · Report it, properly
+
+<table>
+  <tr>
+    <td width="33%" align="center"><img src="docs/demo/22-my-reports.gif" alt="My reports list, with a new report arriving at the top" width="100%"><br><sub><b>Every report, on record</b><br>Your reports, in one list</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/23-photograph.gif" alt="Report form: pick a category, add a photo, AI suggests a category, pin the place" width="100%"><br><sub><b>Photograph it, AI reads it</b><br>Category, photo, place, submit</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/24-never-accuses.gif" alt="The photo with detected people boxed and a neutral one-sentence description" width="100%"><br><sub><b>It describes, it never accuses</b><br>Visible cues, not a crime label</sub></td>
+  </tr>
+  <tr>
+    <td width="33%" align="center"><img src="docs/demo/25-bangla-gd.gif" alt="General Diary narrative being drafted in formal Bangla" width="100%"><br><sub><b>Drafted in Bangla</b><br>The General Diary, written by an agent</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/26-approve.gif" alt="Approve card turning green: Approved, ready to file" width="100%"><br><sub><b>You approve</b><br>Every word, before anything leaves</sub></td>
+    <td width="33%" align="center"><img src="docs/demo/27-print.gif" alt="Print preview of the standard DMP General Diary form in Bangla" width="100%"><br><sub><b>Then you print</b><br>The DMP form, or paste into the police app</sub></td>
+  </tr>
+</table>
+
+<sub>27 clips in [docs/demo/](docs/demo/), in the order the film plays them · 360 px, 8 fps, about 12 MB in all.</sub>
+
+---
+
 ## Contents
 
+- [Watch it run](#watch-it-run)
 - [What it does](#what-it-does)
 - [Architecture](#architecture)
 - [Technology](#technology)
@@ -621,7 +736,6 @@ on a device. D10 is hardening only.
 
 **Open, and tracked:**
 
-- **A logo.** The app ships with no icon set.
 - **Deployment.** Not started, and deliberately *not* via an app store — the goal
   is that a judge anywhere can reach it from their own phone. A hosted backend plus
   a downloadable APK is the likely shape; the OSRM graph is the awkward piece.
