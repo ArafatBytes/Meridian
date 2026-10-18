@@ -40,8 +40,8 @@ Every number here was read off the running system, not invented — re-check wit
 ### On-screen text
 > **MERIDIAN**
 > Safety navigation for Dhaka
-> protected by OAuth Supabase authnetication.
-> Home page with quick action to major features
+> Real accounts, real sign-in — Supabase OAuth
+> Every feature, one tap from home
 
 Over shot 1, cleared before shot 3.
 
@@ -57,10 +57,10 @@ Over shot 1, cleared before shot 3.
 4. Back to the map.
 
 ### On-screen text
-> the map shows incidents across bangladesh as risk flags
-> Meridian reads the city's news before you ask.
-> Across ten newsrooms & TV channels, every fifteen minutes and converts them into risk flags.
-> we can directly view the news source it was picked from by tapping the news.
+> Every incident across Bangladesh, on one map.
+> Meridian reads the news before you ask.
+> Ten newsrooms and TV channels. Every fifteen minutes.
+> And every flag keeps the story it came from.
 
 
 ---
@@ -76,10 +76,10 @@ Over shot 1, cleared before shot 3.
    their life drop off the map. Hold it long enough for one flag to visibly go.
 
 ### On-screen text
-> Our AI agents reads each story and sets the flag, how bad it is, how long it stays.
-> It shows you who said so — the outlet, the headline, the time.
-> Tap it. The newspaper's own article opens.
-> As it ages it fades, then takes itself off the map.
+> AI reads each story and sets the flag — how bad it is, how long it lasts.
+> It shows you who said so: the outlet, the headline, the time.
+> The newspaper's own article, one tap away.
+> As it ages it fades — then takes itself off the map.
 
 ---
 
@@ -111,8 +111,10 @@ Over shot 1, cleared before shot 3.
 **Do not press Start.** That is segment 4.
 
 ### On-screen text
-> Routing recommends optimal path among many. Safety first. Speed second.
-> We can see detailed reason for non suggested paths.
+> It ranks every route safety first, speed second.
+> **100 out of 100 · nothing flagged**
+> The faster road passes four flagged places.
+> And it shows you the one it turned down, and why.
 
 ---
 
@@ -140,11 +142,12 @@ Over shot 1, cleared before shot 3.
 Shots 4, 8 and 11 are the laptop inbox — captured separately, as they land.
 
 ### On-screen text
-> Select Journey Guardians from your emergency contact list as a virtual trip guardian.
-> Inactivity for a long time results in push notification asking if you are fine or not
-> in ability to response to those notifications results in escalation
-> **Journey Guardian gets alerted with all the details**
-> When you reach the destination the notifications stops, guardian gets a confirmation email 
+> Tell one person you're travelling. Just one.
+> **Nothing is shared while everything is fine.**
+> Go quiet, and it asks if you're okay.
+> Still no answer — your guardian is told where you were last.
+> Nobody else. Ever.
+> You arrive, it stands down. One last email, and it's over.
 
 ---
 
@@ -159,9 +162,9 @@ Shots 4, 8 and 11 are the laptop inbox — captured separately, as they land.
    the phrase. Three triggers, three seconds.
 
 ### On-screen text
-> Shake the phone / shout custom sos hot words like "Help". Or press the sos emergency button.
-> **films a 10 seconds video clip, then sent to your designated emergency contacts via email**
-> emergency contacts get your Name · location · the clip in email
+> Three ways to call for help: shake the phone, say your word, or press.
+> **It films ten seconds — then sends it, without being asked again.**
+> Your contacts get your name, your location, and the clip.
 
 ---
 
@@ -181,12 +184,13 @@ Shots 4, 8 and 11 are the laptop inbox — captured separately, as they land.
 8. Tap **Print the form** — Android print preview, Bangla rendering correctly. Back, tap **Copy**.
 
 ### On-screen text
-> Reporting a crime has never been easier
+> Reporting a crime, without the paperwork.
 > Photograph it. The app reads the photo.
-> **It describes what it sees — it does not accuse anyone**
-> General Diary, drafted in Bangla, in the register's own form
-> Nearest police station gets notified of the incident with evidence you provided
-> Print it, or paste it into the police's own app
+> **It describes what it sees — it never accuses anyone.**
+> A General Diary, drafted in Bangla, in the register's own wording.
+> The nearest station, worked out for you.
+> **You have to read it to the end before you can approve it.**
+> Print it, or paste it into the police's own app.
 
 ---
 
