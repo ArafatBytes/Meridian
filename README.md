@@ -10,16 +10,20 @@
 
 [![Expo SDK](https://img.shields.io/badge/Expo_SDK-57-0EA5E9?style=flat-square&logo=expo&logoColor=white)](https://expo.dev)
 [![React Native](https://img.shields.io/badge/React_Native-0.86-0369A1?style=flat-square&logo=react&logoColor=white)](https://reactnative.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Python_3.11%2B-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres_%2B_PostGIS-3ECF8E?style=flat-square&logo=supabase&logoColor=white)](https://supabase.com)
-[![Tests](https://img.shields.io/badge/tests-961_pytest_%C2%B7_550_jest-34D399?style=flat-square)](#testing-and-quality-gates)
-[![Licence](https://img.shields.io/badge/licence-MIT-16184D?style=flat-square)](#licensing)
+[![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis&logoColor=white)](https://redis.io)
+[![Celery](https://img.shields.io/badge/Celery-worker_%2B_beat-37814A?style=flat-square&logo=celery&logoColor=white)](https://docs.celeryq.dev)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+[![Gemini](https://img.shields.io/badge/Gemini-%2B_Groq_%C2%B7_Ollama-8E75B2?style=flat-square&logo=googlegemini&logoColor=white)](https://ai.google.dev)
+[![OSRM](https://img.shields.io/badge/OSRM-OpenStreetMap-7EBC6F?style=flat-square&logo=openstreetmap&logoColor=white)](https://project-osrm.org)
 
 **MD Arafat Ullah** · **Nakib Saleh** · **Farhan Ishraq**
 
 <sub>Hack for Humanity 2026 · The AI Collective Bangladesh · Track 3 — Smart Society & Public Services</sub>
 
-[Watch it run](#watch-it-run) · [What it does](#what-it-does) · [Architecture](#architecture) · [Running it](#running-it) · [Agent fleet](#the-agent-fleet) · [Privacy](#privacy-and-the-limits-we-state-out-loud)
+[▶ Demo video](https://youtu.be/FvKNAmrX3l0) · [Watch it run](#watch-it-run) · [What it does](#what-it-does) · [Architecture](#architecture) · [Running it](#running-it) · [Agent fleet](#the-agent-fleet) · [Privacy](#privacy-and-the-limits-we-state-out-loud)
 
 </div>
 
@@ -47,7 +51,15 @@ Smart Society & Public Services. See
 
 ## Watch it run
 
-The demo film, cut into the scenes it plays in. Every screen is the running app on
+<div align="center">
+
+<a href="https://youtu.be/FvKNAmrX3l0"><img src="https://img.youtube.com/vi/FvKNAmrX3l0/maxresdefault.jpg" alt="Meridian demo video on YouTube" width="640"></a>
+
+<sub>▶ <b><a href="https://youtu.be/FvKNAmrX3l0">Watch the full demo on YouTube</a></b></sub>
+
+</div>
+
+The same film, cut into the scenes it plays in. Every screen is the running app on
 a handset; every number on it was read off the live system.
 
 ### Opening
@@ -120,7 +132,7 @@ a handset; every number on it was read off the live system.
   </tr>
 </table>
 
-<sub>27 clips in [docs/demo/](docs/demo/), in the order the film plays them · 360 px, 8 fps, about 15 MB in all.</sub>
+<sub>27 clips in [docs/demo/](docs/demo/), in the order the film plays them · 360 px, 8 fps, about 12 MB in all.</sub>
 
 ---
 
