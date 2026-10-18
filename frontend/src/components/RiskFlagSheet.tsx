@@ -19,6 +19,7 @@ import {
   isScheduledFlag,
   windowText,
 } from '../features/risk/scheduled';
+import { outletName } from '../features/risk/news';
 
 /**
  * The flag detail sheet. Demo beat 2's container.
@@ -119,18 +120,26 @@ function timeRemaining(expiresAt: string, from: string | null): string | null {
   return days === 1 ? '1 day' : `${days} days`;
 }
 
-/**
- * Publisher ids as people know them. Mirrors `SOURCES` in
- * `backend/app/ingestion/sources/__init__.py`. An id not listed here — including every
- * fixture `sample_*` id — is shown raw, so the fixture stays visibly a fixture.
+/*
+ * Publisher names come from `features/risk/news.ts`, which is the only copy.
+ *
+ * This file used to carry its own three-entry table with a raw-id fallback, on the
+ * reasoning that "an id not listed here — including every fixture `sample_*` id — is
+ * shown raw, so the fixture stays visibly a fixture". Two consequences made that the
+ * wrong trade:
+ *
+ * 1. Two implementations of one function, disagreeing. The shared one maps nine
+ *    publishers; this one mapped three, so a Prothom Alo flag — a real one, from
+ *    live ingestion — rendered as `prothom_alo` on the sheet and as *Prothom Alo* on
+ *    the news screen, in the same session.
+ * 2. `sample_jugantor` on screen reads as a bug, not as a disclosure. The marking it
+ *    was protecting is carried better elsewhere: the news screen lists only what a
+ *    publisher published (`isNotFromThePress`), and a seeded source's `sample:` URL
+ *    still does not open.
+ *
+ * The shared `outletName` strips the prefix and maps the id, so a fixture reference
+ * to Jugantor reads as Jugantor — which is what it denotes.
  */
-const OUTLET_NAMES: Record<string, string> = {
-  ekattor_tv: 'Ekattor TV',
-  independent_tv: 'Independent TV',
-  channel24: 'Channel 24',
-};
-
-const outletName = (sourceId: string) => OUTLET_NAMES[sourceId] ?? sourceId;
 
 /** "40 min ago", "3 h ago" — relative to the instant the surface was evaluated at. */
 function agoText(iso: string | null, from: string | null): string | null {

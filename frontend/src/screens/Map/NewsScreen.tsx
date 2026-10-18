@@ -197,9 +197,16 @@ const NewsScreen: React.FC = () => {
 
           {shown.length > 0 && (
             <Text style={styles.counter}>
-              {/* Said plainly. `0 real of 22` is the honest reading of a seeded
-                  surface, and it is the number that should change next phase. */}
-              {realCount(shown)} real of {shown.length} · the rest is sample data
+              {/* `n real of m · the rest is sample data` was the honest reading
+                  while the list carried fixture rows. It no longer does —
+                  `isNotFromThePress` keeps this page to articles a publisher
+                  actually published — so the ratio has no second term to report
+                  and the count is simply of articles. `realCount` still backs it,
+                  so a non-web source slipping through would read as 0 rather than
+                  being quietly counted. */}
+              {realCount(shown)} article{realCount(shown) === 1 ? '' : 's'} read from{' '}
+              {new Set(shown.map(e => e.outletId)).size} outlet
+              {new Set(shown.map(e => e.outletId)).size === 1 ? '' : 's'}
             </Text>
           )}
 
@@ -283,9 +290,10 @@ const NewsScreen: React.FC = () => {
 
           {shown.length > 0 && (
             <Text style={styles.footnote}>
-              Sample headlines come from the seeded surface and their links do not open.
-              Real articles open in your browser. Flags from the chronic layer are not
-              listed here, because no article produced them.
+              Every headline here was published by one of the newsrooms we read, and
+              tapping it opens that article. Seeded flags and the chronic layer are not
+              listed, because no article produced them — they are on the map, with their
+              own provenance on each flag.
             </Text>
           )}
         </ScrollView>
