@@ -23,7 +23,7 @@
 
 <sub>Hack for Humanity 2026 · The AI Collective Bangladesh · Track 3 — Smart Society & Public Services</sub>
 
-[▶ Demo video](https://youtu.be/FvKNAmrX3l0) · [Watch it run](#watch-it-run) · [What it does](#what-it-does) · [Architecture](#architecture) · [Running it](#running-it) · [Agent fleet](#the-agent-fleet) · [Privacy](#privacy-and-the-limits-we-state-out-loud)
+[⬇ Download the app](#install-it) · [▶ Demo video](https://youtu.be/FvKNAmrX3l0) · [Watch it run](#watch-it-run) · [What it does](#what-it-does) · [Architecture](#architecture) · [Running it](#running-it) · [Agent fleet](#the-agent-fleet) · [Privacy](#privacy-and-the-limits-we-state-out-loud)
 
 </div>
 
@@ -46,6 +46,30 @@ improves the map for the next traveller.
 Built for **Hack for Humanity 2026** (The AI Collective Bangladesh), Track 3 —
 Smart Society & Public Services. See
 [Meridian_Concept_Document.md](Meridian_Concept_Document.md) for the full pitch.
+
+---
+
+## Install it
+
+<div align="center">
+
+### [⬇&nbsp; Download Meridian for Android](https://expo.dev/artifacts/eas/S3LluEatUk8M7JtWYEyuJWunCKhBBGo9_Nuo5icW4UE.apk)
+
+<sub><b>APK · 117 MB · Android</b> — no Play Store, no account, no device registration</sub>
+
+</div>
+
+Open that link on an Android phone and tap the downloaded file. The first time, the
+phone asks whether to allow installs from your browser; that prompt is ordinary for
+an app distributed outside the Play Store.
+
+Nothing needs configuring. The build ships pointed at our live backend, so the Dhaka
+risk surface is already on the map when you sign up — everything in the film below
+is running against the same deployment you get.
+
+The [build page](https://expo.dev/accounts/warfather0991/projects/Meridian/builds/78d7ce46-9348-4872-9be8-cc7fc84cc447) always carries the
+current APK and a QR code for it, which is the link to use if the direct download
+above ever goes stale.
 
 ---
 
@@ -138,6 +162,7 @@ a handset; every number on it was read off the live system.
 
 ## Contents
 
+- [Install it](#install-it)
 - [Watch it run](#watch-it-run)
 - [What it does](#what-it-does)
 - [Architecture](#architecture)
